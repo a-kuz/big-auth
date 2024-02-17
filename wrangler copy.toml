@@ -1,0 +1,28 @@
+name = "registration"
+# name = "magic"
+
+main = "./src/index.ts"
+compatibility_date = "2023-05-17"
+account_id = "8ef32e6718ee4ae45070f737ab1eacf8"
+
+compatibility_flags = ["nodejs_compat"]
+logpush = true
+
+
+[placement]
+mode = "smart"
+
+
+[env.development]
+workers_dev = true
+
+[env.development.vars]
+ENV = "development"
+
+
+[env.production]
+workers_dev = false
+
+
+[env.production.vars]
+ENV = "production"

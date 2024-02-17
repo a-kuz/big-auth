@@ -1,0 +1,37 @@
+name = "big-auth"
+
+compatibility_date = "2024-02-14"
+workers_dev = true
+
+
+main = "./src/index.ts"
+
+
+[vars]
+TWILIO_SERVICE_SID = 'VAb176f1a570fd06d893498a6af5b55b49'
+
+
+
+
+[placement]
+mode = "smart"
+
+
+[env.development]
+workers_dev = true
+
+[env.development.vars]
+ENV = "development"
+
+
+[env.production]
+workers_dev = false
+
+
+[env.production.vars]
+ENV = "production"
+
+[[d1_databases]]
+binding = "DB" # available in your Worker on env.DB
+database_name = "big"
+database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"

@@ -1,0 +1,35 @@
+import { User, UserDB } from "../User";
+import { newId } from "../utils/new-id";
+import { phoneNumberToInt } from "../utils/phone-number-to-int";
+
+export const getUser = async (
+  d1: D1Database,
+  phoneNumberStr: string,
+): Promise<User> => {
+  const phoneNumber = phoneNumberToInt(phoneNumberStr);
+  const query =
+    "SELECT * FROM users WHERE phone_number = ? and deleted_at is null";
+  try {
+    const existingUser = await d1
+      .prepare(query)
+      .bind(phoneNumber)
+      .first<UserDB>();
+
+    if (!existingUser) {
+      // Insert user if not found
+      const insertQuery =
+        "INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)";
+      const id = newId(); // Generate a new UUID
+      const createdAt = Date.now();
+      await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run();
+      return new User({phone_number: phoneNumber, id});
+    } else {
+			return new User(existingUser)
+
+    }
+  } catch (error) {
+    // Handle error
+    console.error(error);
+    throw new Error("Failed to retrieve or insert user by phone number");
+  }
+};

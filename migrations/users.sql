@@ -4,6 +4,7 @@ CREATE TABLE users (
 	username TEXT,
 	first_name TEXT,
 	avatar_url TEXT,
-	created_at INTEGER
+	created_at INTEGER,
+	deleted_at INTEGER
 );
-ALTER TABLE users ADD deleted_at INTEGER;
+

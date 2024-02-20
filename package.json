@@ -5,19 +5,29 @@
 	"description": "big-auth",
 	"keywords": [],
 	"license": "MIT",
-	"author": "",
+	"author": {
+		"email": "a.kuz@outlook.com",
+		"name": "Aleksandr Kuznetsov",
+		"url": "https://a-kuznetsov.cc"
+	},
 	"main": "src/index.ts",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"dependencies": {
 		"@cloudflare/itty-router-openapi": "^1.0.10",
+		"@tsndr/cloudflare-worker-jwt": "^2.4.5",
+		"nanoid": "^5.0.5",
 		"twilio": "^4.22.0"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20240208.0",
 		"@types/service-worker-mock": "^2.0.4",
-		"@types/twilio": "^3.19.3",
+		"@typescript-eslint/parser": "^5.0.1",
+		"eslint": "^8.52.0",
+		"eslint-config-prettier": "^9.1.0",
+		"prettier": "^3.1.0",
+		"prettier-eslint": "^16.3.0",
 		"wrangler": "^3.28.2"
 	}
 }

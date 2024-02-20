@@ -2,15 +2,13 @@ name = "big-auth"
 
 compatibility_date = "2024-02-14"
 workers_dev = true
-
+route = "http://dev.big.a-kuznetsov.cc/*"
 
 main = "./src/index.ts"
 
 
 [vars]
 TWILIO_SERVICE_SID = 'VAb176f1a570fd06d893498a6af5b55b49'
-
-
 
 
 [placement]
@@ -32,6 +30,9 @@ workers_dev = false
 ENV = "production"
 
 [[d1_databases]]
-binding = "DB" # available in your Worker on env.DB
+binding = "DB"                                               # available in your Worker on env.DB
 database_name = "big"
 database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
+preview_database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
+migrations_table = "migrations"                              # Customize this value to change your applied migrations table name
+migrations_dir = "migrations"                                # Customize this value to rename the `migrations` folder

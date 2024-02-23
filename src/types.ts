@@ -6,5 +6,6 @@ export interface Env {
 
   readonly DB: D1Database;
   readonly billing: any;
-  ENV: string;
+	readonly USER_FILES: R2Bucket;
+  readonly ENV: string;
 }

@@ -1,6 +1,7 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
 import { TWILIO_BASE_URL } from "../constants";
 import { Env } from "../types";
+import { errorResponse } from "../utils/error-response";
 
 interface Message {
   phoneNumber: string;
@@ -25,7 +26,7 @@ export class SendCodeHandler extends OpenAPIRoute {
     },
   };
 
-  async handle(request: Request, env: Env, context: any, { body }: Req) {
+  async handle(_request: Request, env: Env, _ctx: any, { body }: Req) {
     const { phoneNumber } = body; // Assuming data is already validated and parsed based on the schema
     const url = `${TWILIO_BASE_URL}/${env.TWILIO_SERVICE_SID}/Verifications`;
     const authHeader =
@@ -48,9 +49,7 @@ export class SendCodeHandler extends OpenAPIRoute {
         status: response.status,
       });
     } catch (error) {
-      return new Response(JSON.stringify({ error: "Failed to send OTP" }), {
-        status: 500,
-      });
+      return errorResponse('Faied to send OTP');
     }
   }
 }

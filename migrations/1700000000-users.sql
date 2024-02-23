@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
 	id TEXT(36) NOT NULL,
 	phone_number INTEGER NOT NULL,
 	username TEXT,

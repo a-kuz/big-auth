@@ -3,6 +3,7 @@ import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
 import { getUser } from "../services/get-user";
 import { Env } from "../types";
 import { token } from "../services/jwt";
+import { errorResponse } from "../utils/error-response";
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string;
@@ -65,9 +66,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       );
     } catch (error) {
       console.error(error);
-      return new Response(JSON.stringify({ error: "Failed to verify OTP" }), {
-        status: 500,
-      });
+      return errorResponse("Failed to verify OTP", 500);
     }
   }
 

@@ -2,6 +2,8 @@ import { OpenAPIRouter } from "@cloudflare/itty-router-openapi";
 import { SendCodeHandler } from "./handlers/SendCodeHandler";
 import { VerifyCodeHandler } from "./handlers/VerifyCodeHandler";
 import { GetProfileHandler } from "./handlers/GetProfileHandler";
+import { UploadFileHandler } from "./handlers/UploadFileHandler";
+import { RetrieveFileHandler } from "./handlers/RetrieveFileHandler";
 
 const router = OpenAPIRouter({
   schema: {
@@ -23,6 +25,8 @@ router.registry.registerComponent(
 router.post("/send-code", SendCodeHandler);
 router.post("/verify-code", VerifyCodeHandler);
 router.get("/profile", GetProfileHandler);
+router.post('/upload', UploadFileHandler,);
+router.get('/user-files/:id/', RetrieveFileHandler,);
 
 // Redirect root request to the /docs page
 router.original.get("/", (request: Request) =>

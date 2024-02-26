@@ -5,11 +5,12 @@ import {
 } from "@cloudflare/itty-router-openapi";
 import { getUserByToken } from "../services/get-user-by-token";
 import { Env } from "../types";
+import { instanceToPlain, serialize } from "class-transformer";
 
 export class GetProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     summary: "Get user profile",
-		tags: ["profile"],
+    tags: ["profile"],
     responses: {
       "200": {
         description: "Profile fetched successfully",
@@ -27,7 +28,7 @@ export class GetProfileHandler extends OpenAPIRoute {
       },
     },
 
-    security: [{ bearerAuth: [] }, {BearerAuth: []}],
+    security: [{ BearerAuth: [] }],
   };
 
   async handle(request: Request, env: Env, context: any) {
@@ -47,7 +48,7 @@ export class GetProfileHandler extends OpenAPIRoute {
           status: 404,
         });
       }
-      return new Response(JSON.stringify(user.profile()), { status: 200 });
+      return new Response(JSON.stringify(instanceToPlain(user)), { status: 200 });
     } catch (error) {
       console.error(error);
       return new Response(

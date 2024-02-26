@@ -49,7 +49,7 @@ export class SendCodeHandler extends OpenAPIRoute {
         status: response.status,
       });
     } catch (error) {
-      return errorResponse('Faied to send OTP');
+      return errorResponse('Failed to send OTP');
     }
   }
 }

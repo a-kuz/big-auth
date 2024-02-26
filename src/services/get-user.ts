@@ -16,15 +16,14 @@ export const getUser = async (
       .first<UserDB>();
 
     if (!existingUser) {
-      // Insert user if not found
       const insertQuery =
         "INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)";
-      const id = newId(); // Generate a new UUID
+      const id = newId();
       const createdAt = Date.now();
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run();
-      return new User({phone_number: phoneNumber, id});
+      return new User(id, phoneNumber);
     } else {
-			return new User(existingUser)
+			return User.fromDb(existingUser)
 
     }
   } catch (error) {

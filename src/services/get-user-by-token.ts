@@ -18,10 +18,10 @@ export const getUserByToken = async (
     if (!existingUser) {
       throw new Error("user not found");
     }
-    return new User(existingUser);
+		return User.fromDb(existingUser);
   } catch (error) {
     // Handle error
     console.error(error);
-    throw new Error("Failed to retrieve or insert user by phone number");
+    throw new Error("Failed to retrieve or insert user by token");
   }
 };

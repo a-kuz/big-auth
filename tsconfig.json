@@ -1,11 +1,14 @@
 {
 	"compilerOptions": {
 		"noEmit": true,
-		"module": "esnext",
+		// "module": "esnext",
 		"allowSyntheticDefaultImports": true,
-		"target": "esnext",
-		"lib": ["esnext"],
+		"target": "ESNext",
+		"lib": ["ESNext"],
+		"experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
 		"strict": true,
+
 		"moduleResolution": "node",
 		"types": ["@cloudflare/workers-types", "@types/service-worker-mock"]
 	},

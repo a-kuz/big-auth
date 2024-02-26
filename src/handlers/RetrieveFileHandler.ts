@@ -1,9 +1,7 @@
 import {
-	Header,
   OpenAPIRoute,
   OpenAPIRouteSchema,
   Path,
-  Query,
   Str,
 } from "@cloudflare/itty-router-openapi";
 import { Env } from "../types";
@@ -23,7 +21,7 @@ export class RetrieveFileHandler extends OpenAPIRoute {
       "400": {
         description: "Bad Request",
         schema: {
-          error: new Str({ example: "ETag is required" }),
+          error: new Str({ example: "id is required" }),
         },
       },
       "404": {
@@ -41,16 +39,14 @@ export class RetrieveFileHandler extends OpenAPIRoute {
     },
   };
 
-  async handle(request: Request, env: Env, ctx: any, data): Promise<Response> {
+  async handle(
+    _request: Request,
+    env: Env,
+    _ctx: any,
+    data: { params: { id: string } },
+  ): Promise<Response> {
     console.log(data);
     let { id } = data.params;
-    // const etag = request.headers.get("If-None-Match");
-    if (!id) {
-      return errorResponse("ETag is required", 400);
-    }
-    const url = new URL(request.url);
-    const objectName = url.pathname.slice(1);
-    console.log(objectName);
     try {
       const fileResponse = await env.USER_FILES.get(id);
       if (!fileResponse) {
@@ -60,20 +56,20 @@ export class RetrieveFileHandler extends OpenAPIRoute {
       if (!fileResponse.httpMetadata) {
         return errorResponse("File metadata not found", 500);
       }
-      const fileName = fileResponse.customMetadata?.fileName ?? 'response'
+      const fileName = fileResponse.customMetadata?.fileName ?? "response";
 
       // Assuming the file's content type and other metadata are correctly set in R2
       const headers = new Headers();
-      await fileResponse.writeHttpMetadata(headers);
+      fileResponse.writeHttpMetadata(headers);
 
-
-      console.log({ headers });
-      return new Response(fileResponse.body, {headers: {
-        id,
-				etag: fileResponse.etag,
-        'file-name': fileName, ... headers
-
-      }}      );
+      return new Response(fileResponse.body, {
+        headers: {
+          id,
+          etag: fileResponse.etag,
+          "file-name": fileName,
+          ...headers,
+        },
+      });
     } catch (error) {
       console.error("Error retrieving file:", error);
       return errorResponse("Failed to retrieve file");

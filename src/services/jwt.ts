@@ -1,7 +1,8 @@
 import jwt from "@tsndr/cloudflare-worker-jwt";
 import { User } from "../User";
+import { newId } from "../utils/new-id";
 
-export const token = async (user: User, secret: string) => {
+export const generateAccessToken = async (user: Pick<User, 'phoneNumber' | 'id'>, secret: string) => {
   // Creating a token
   const token = await jwt.sign(
     {
@@ -13,4 +14,8 @@ export const token = async (user: User, secret: string) => {
     secret,
   );
   return token;
+};
+
+export const generateRefreshToken = async (): Promise<string> => {
+  return newId();
 };

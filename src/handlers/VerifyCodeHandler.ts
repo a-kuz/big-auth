@@ -1,8 +1,9 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
+import { instanceToPlain } from "class-transformer";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
 import { getUser } from "../services/get-user";
+import { generateAccessToken } from "../services/jwt";
 import { Env } from "../types";
-import { token } from "../services/jwt";
 import { errorResponse } from "../utils/error-response";
 
 export interface VerifyOTPRequestBody {
@@ -18,7 +19,7 @@ export interface OTPResponse {
 export class VerifyCodeHandler extends OpenAPIRoute {
   static schema = {
     tags: ["OTP"],
-    summary: "Verify an OTP",
+    summary: "Verify an code",
     requestBody: {
       phoneNumber: new Str({ example: "+34627068478" }),
       code: new Str({ example: "000000" }),
@@ -26,7 +27,12 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     responses: {
       "200": {
         description: "OTP verification successful",
-        schema: { token: new Str() },
+        schema: {
+          token: new Str({
+            example:
+              "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ",
+          }),
+        },
       },
       "400": {
         description: "incorrect code",
@@ -59,8 +65,8 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       const user = await getUser(env.DB, phoneNumber);
       return new Response(
         JSON.stringify({
-          token: await token(user, env.JWT_SECRET),
-          profile: user.profile,
+          token: await generateAccessToken(user, env.JWT_SECRET),
+          profile: instanceToPlain(user),
         }),
         { status: 200 },
       );

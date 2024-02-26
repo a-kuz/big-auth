@@ -30,13 +30,19 @@ workers_dev = false
 ENV = "production"
 
 [[d1_databases]]
-binding = "DB"                                               # available in your Worker on env.DB
+binding = "DB"
 database_name = "big"
 database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
 preview_database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
-migrations_table = "migrations"                              # Customize this value to change your applied migrations table name
+migrations_table = "migrations"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
-binding = 'USER_FILES' # <~ valid JavaScript variable name
+binding = 'USER_FILES'
 bucket_name = 'user-files'
+
+
+[durable_objects]
+bindings = [
+  { name = "REFRESH_TOKEN_STORAGE", class_name = "src/durable-objects/refresh-token.ts" }
+]

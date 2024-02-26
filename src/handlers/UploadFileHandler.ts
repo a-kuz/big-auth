@@ -1,7 +1,7 @@
 import {
-	OpenAPIRoute,
-	OpenAPIRouteSchema,
-	Str,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
 } from "@cloudflare/itty-router-openapi";
 import { Env } from "../types";
 import { errorResponse } from "../utils/error-response";
@@ -22,7 +22,7 @@ export class UploadFileHandler extends OpenAPIRoute {
 
         schema: {
           url: new Str({
-            example: "https://files.big.io/public/xvy6dOXrHtDhHAsm7oBCx",
+            example: "http://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
           }),
         },
       },
@@ -57,7 +57,7 @@ export class UploadFileHandler extends OpenAPIRoute {
           JSON.stringify({
             message: "File uploaded successfully",
 
-            url: `${new URL(request.url).origin}/user-files/${id}`,
+            url: `${new URL(request.url).origin}/public/${id}`,
             etag: uploadResult.etag,
             uploadResult,
           }),

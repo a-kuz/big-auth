@@ -1,40 +1,68 @@
+import {
+  Exclude,
+  Expose,
+  Transform,
+  Type,
+  plainToClass,
+} from "class-transformer";
+import "reflect-metadata";
+import { ObjectCamelToSnakeCase, fromSnakeToCamel } from "./utils/name-сases";
+
+@Exclude()
 export class User {
+  @Expose({})
   id: string;
+  @Expose({})
+  @Transform(({ value }) => `+${value}`, {toPlainOnly:true})
   phoneNumber: number;
+  get() {
+    return `+${this.phoneNumber}`;
+  }
+  @Expose()
+  @Transform(({ value }) => value || undefined)
   username?: string;
+  @Expose()
+  @Transform(({ value }) => value || undefined)
   firstName?: string;
+  @Expose()
+  @Transform(({ value }) => value || undefined)
+  lastName?: string;
+  @Expose()
+  @Transform(({ value }) => value || undefined)
   avatarUrl?: string;
+  @Type()
   createdAt?: number;
+  deletedAt?: number;
 
-	constructor (u: UserDB) {
-		this.id = u.id;
-    this.phoneNumber = u.phone_number;
-    this.username = u.username || undefined
-    this.firstName = u.first_name || undefined;
-    this.avatarUrl = u.avatar_url || undefined;
-    this.createdAt = u.created_at || undefined;
-	}
+  static fromDb(userRow: UserDB) {
+    return plainToClass(User, fromSnakeToCamel(userRow));
+  }
 
-	profile() {
-		return {
-			id: this.id,
-			phoneNumber: `+${this.phoneNumber}`,
-			username: this.username,
-			firstName: this.firstName,
-			avatarUrl: this.avatarUrl
-		}
-	}
+  constructor(id: string, phoneNumber: number) {
+    this.id = id;
+    this.phoneNumber = phoneNumber;
+  }
 }
 
-export type Profile = ReturnType<User['profile']>
+export type UserDB = ObjectCamelToSnakeCase<User>;
 
-export interface UserDB {
-	id: string,
-	phone_number: number,
-	created_at?: number,
-	username?: string,
-	first_name?: string,
-	avatar_url?: string,
-	deleted_at?: number,
+// export interface UserDB = ObjectCamelToSnakeCase<User> {
+// 	id: string,
+// 	phone_number: number,
+// 	created_at?: number,
+// 	username?: string,
+// 	first_name?: string,
+// 	last_name?: string,
+// 	avatar_url?: string,
+// 	deleted_at?: number,
 
-}
+// }
+
+// export interface User {
+// 	id: string,
+//   phoneNumber: number;
+//   username?: string;
+//   firstName?: string;
+//   lastName?: string;
+//   avatarUrl?: string;
+// }

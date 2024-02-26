@@ -17,7 +17,9 @@
 	"dependencies": {
 		"@cloudflare/itty-router-openapi": "^1.0.10",
 		"@tsndr/cloudflare-worker-jwt": "^2.4.5",
+		"class-transformer": "^0.5.1",
 		"nanoid": "^5.0.5",
+		"reflect-metadata": "^0.2.1",
 		"twilio": "^4.22.0"
 	},
 	"devDependencies": {

@@ -1,12 +1,11 @@
 import { User, UserDB } from "../User";
 import { newId } from "../utils/new-id";
-import { phoneNumberToInt } from "../utils/phone-number-to-int";
 
 export const getUser = async (
   d1: D1Database,
-  phoneNumberStr: string,
+  phoneNumber: string,
 ): Promise<User> => {
-  const phoneNumber = phoneNumberToInt(phoneNumberStr);
+
   const query =
     "SELECT * FROM users WHERE phone_number = ? and deleted_at is null";
   try {

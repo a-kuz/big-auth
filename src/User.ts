@@ -13,11 +13,7 @@ export class User {
   @Expose({})
   id: string;
   @Expose({})
-  @Transform(({ value }) => `+${value}`, {toPlainOnly:true})
-  phoneNumber: number;
-  get() {
-    return `+${this.phoneNumber}`;
-  }
+  phoneNumber: string;
   @Expose()
   @Transform(({ value }) => value || undefined)
   username?: string;
@@ -38,7 +34,7 @@ export class User {
     return plainToClass(User, fromSnakeToCamel(userRow));
   }
 
-  constructor(id: string, phoneNumber: number) {
+  constructor(id: string, phoneNumber: string) {
     this.id = id;
     this.phoneNumber = phoneNumber;
   }

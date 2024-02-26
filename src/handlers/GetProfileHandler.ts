@@ -48,7 +48,7 @@ export class GetProfileHandler extends OpenAPIRoute {
           status: 404,
         });
       }
-      return new Response(JSON.stringify(instanceToPlain(user)), { status: 200 });
+      return new Response(JSON.stringify(instanceToPlain( user), {}), { status: 200 });
     } catch (error) {
       console.error(error);
       return new Response(

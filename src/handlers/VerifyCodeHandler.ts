@@ -77,7 +77,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
 			const row = {refreshToken, fingerprint: request.headers.get('fingerprint'), userId: user.id, phoneNumber: user.phoneNumber}
 
       obj.fetch(
-        new Request(`${url.origin}`, {
+        new Request(`${request.url}`, {
           method: "POST",body: JSON.stringify(row)
         }),
       );

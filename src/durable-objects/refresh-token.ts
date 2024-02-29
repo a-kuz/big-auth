@@ -8,29 +8,31 @@ interface SetRequest {
   refreshToken: string;
   ip?: string;
   fingerprint?: string;
-	phoneNumber?: string
+  phoneNumber?: string;
 }
 
 interface Row {
   refreshToken: string;
   ip?: string;
   fingerprint?: string;
-	phoneNumber?: string;
+  phoneNumber?: string;
   createdAt: number;
 }
 export class RefreshTokenDO implements DurableObject {
+  state: DurableObjectState;
   constructor(
-    private readonly state: DurableObjectState,
+    state,
     private readonly env: Env,
-  ) {}
-
+  ) {this.state=state}
   async fetch(request: Request) {
     const url = new URL(request.url);
     const path = url.pathname;
     const userId = url.searchParams.get("userId")!;
 
+    const r = this.get();
+
     if (request.method === "POST") {
-      if (path === "/") {
+      if (path === "/" || path === "/verify-code") {
         const req = await request.json<SetRequest>();
         const row: Row = {
           refreshToken: req.refreshToken,
@@ -45,18 +47,17 @@ export class RefreshTokenDO implements DurableObject {
         const phoneNumber = url.searchParams.get("phoneNumber")!;
 
         return await this.refresh(refreshToken, userId, phoneNumber);
-
-      } else return errorResponse('not found', 404)
+      } else return errorResponse("not found", 404);
     } else {
       const refreshToken = await this.get();
-      return new Response();
+      return new Response(JSON.stringify({refreshToken}));
     }
   }
 
   async refresh(
     refreshToken: string,
     userId: string,
-		phoneNumber: string
+    phoneNumber: string,
   ): Promise<Response> {
     const storedToken = await this.get();
     if (storedToken && storedToken.refreshToken === refreshToken) {
@@ -67,7 +68,10 @@ export class RefreshTokenDO implements DurableObject {
         const newRefreshToken = await generateRefreshToken(userId);
         await this.set(newRefreshToken, phoneNumber);
 
-        const newAccessToken = await generateAccessToken(user, this.env.JWT_SECRET);
+        const newAccessToken = await generateAccessToken(
+          user,
+          this.env.JWT_SECRET,
+        );
 
         return new Response(
           JSON.stringify({
@@ -79,23 +83,26 @@ export class RefreshTokenDO implements DurableObject {
         return new Response("Refresh token expired", { status: 401 });
       }
     } else {
-      return new Response("Invalid refresh token", { status: 401 });
+      return new Response(
+        `Invalid refresh token ${JSON.stringify({ refreshToken })} ${JSON.stringify({ storedToken })}`,
+        { status: 401 },
+      );
     }
   }
 
   // Store the refresh token
   async set(refreshToken: string, phoneNumber: string) {
-		console.log({refreshToken})
-    await this.state.storage.put<Row>(`refreshToken`, {
+    console.log({ refreshToken });
+    await this.state.storage.put<Row>('refreshToken', {
       refreshToken,
       createdAt: Date.now(),
-			phoneNumber
+      phoneNumber,
     });
   }
 
   // Retrieve the refresh token
   async get(): Promise<Row | undefined> {
-    return this.state.storage.get<Row>(`refreshToken`);
+    return this.state.storage.get<Row>('refreshToken');
   }
 
   // async refresh(

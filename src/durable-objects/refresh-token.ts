@@ -19,11 +19,11 @@ interface Row {
   createdAt: number;
 }
 export class RefreshTokenDO implements DurableObject {
-  state: DurableObjectState;
+
   constructor(
-    state,
+    private readonly state: DurableObjectState,
     private readonly env: Env,
-  ) {this.state=state}
+  ) {}
   async fetch(request: Request) {
     const url = new URL(request.url);
     const path = url.pathname;

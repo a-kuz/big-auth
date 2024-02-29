@@ -41,24 +41,3 @@ export class User {
 }
 
 export type UserDB = ObjectCamelToSnakeCase<User>;
-
-// export interface UserDB = ObjectCamelToSnakeCase<User> {
-// 	id: string,
-// 	phone_number: number,
-// 	created_at?: number,
-// 	username?: string,
-// 	first_name?: string,
-// 	last_name?: string,
-// 	avatar_url?: string,
-// 	deleted_at?: number,
-
-// }
-
-// export interface User {
-// 	id: string,
-//   phoneNumber: number;
-//   username?: string;
-//   firstName?: string;
-//   lastName?: string;
-//   avatarUrl?: string;
-// }

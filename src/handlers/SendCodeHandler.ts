@@ -13,7 +13,7 @@ interface Req {
 
 export class SendCodeHandler extends OpenAPIRoute {
   static schema = {
-    tags: ["OTP"],
+    tags: ["auth"],
     summary: "Send code via Twilio",
     requestBody: {
       phoneNumber: new Str({ example: "+34627068478" }),

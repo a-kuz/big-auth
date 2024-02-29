@@ -45,17 +45,17 @@ export function fromCamelToSnake<T extends Record<string, any>>(
 }
 
 
-// Пример использования
-const row = {
-  id: "1",
-  phone_number: 123456789,
-  username: "john_doe",
-  first_name: "John",
-  last_name: "Doe",
-  avatar_url: "https://example.com/avatar.jpg",
-};
+// // Пример использования
+// const row = {
+//   id: "1",
+//   phone_number: 123456789,
+//   username: "john_doe",
+//   first_name: "John",
+//   last_name: "Doe",
+//   avatar_url: "https://example.com/avatar.jpg",
+// };
 
 
-console.log(fromCamelToSnake(fromSnakeToCamel(row)));
-console.log((fromSnakeToCamel(row)));
+// console.log(fromCamelToSnake(fromSnakeToCamel(row)));
+// console.log((fromSnakeToCamel(row)));
 

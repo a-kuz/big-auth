@@ -8,4 +8,6 @@ export interface Env {
   readonly billing: any;
 	readonly USER_FILES: R2Bucket;
   readonly ENV: string;
+	readonly REFRESH_TOKEN_DO: DurableObjectNamespace;
+
 }

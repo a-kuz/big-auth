@@ -1,8 +1,8 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
 import { instanceToPlain } from "class-transformer";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
-import { getUser } from "../services/get-user";
-import { generateAccessToken } from "../services/jwt";
+import { getOrCreateUserByPhone } from "../services/get-user";
+import { generateAccessToken, generateRefreshToken } from "../services/jwt";
 import { Env } from "../types";
 import { errorResponse } from "../utils/error-response";
 
@@ -18,7 +18,7 @@ export interface OTPResponse {
 
 export class VerifyCodeHandler extends OpenAPIRoute {
   static schema = {
-    tags: ["OTP"],
+    tags: ["auth"],
     summary: "Verify an code",
     requestBody: {
       phoneNumber: new Str({ example: "+34627068478" }),
@@ -28,9 +28,13 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       "200": {
         description: "OTP verification successful",
         schema: {
-          token: new Str({
+          accessToken: new Str({
             example:
               "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ",
+          }),
+          refreshToken: new Str({
+            example:
+              "TnLZcHQX2O560P9YM4QGQ",
           }),
         },
       },
@@ -42,7 +46,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
   };
 
   async handle(
-    _request: Request,
+    request: Request,
     env: Env,
     _context: any,
     data: Record<string, any>,
@@ -62,10 +66,25 @@ export class VerifyCodeHandler extends OpenAPIRoute {
           });
         }
       }
-      const user = await getUser(env.DB, phoneNumber);
+      const user = await getOrCreateUserByPhone(env.DB, phoneNumber, );
+      const accessToken = await generateAccessToken(user, env.JWT_SECRET);
+      const refreshToken = await generateRefreshToken(user.id);
+
+			const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
+      const obj = env.REFRESH_TOKEN_DO.get(id);
+
+      const url = new URL(request.url);
+			const row = {refreshToken, fingerprint: request.headers.get('fingerprint'), userId: user.id, phoneNumber: user.phoneNumber}
+
+      obj.fetch(
+        new Request(`${url.origin}`, {
+          method: "POST",body: JSON.stringify(row)
+        }),
+      );
       return new Response(
         JSON.stringify({
-          token: await generateAccessToken(user, env.JWT_SECRET),
+          accessToken,
+          refreshToken,
           profile: instanceToPlain(user),
         }),
         { status: 200 },

@@ -5,7 +5,7 @@ workers_dev = true
 route = "http://dev.big.a-kuznetsov.cc/*"
 
 main = "./src/index.ts"
-
+logpush = true
 
 [vars]
 TWILIO_SERVICE_SID = 'VAb176f1a570fd06d893498a6af5b55b49'
@@ -26,6 +26,7 @@ ENV = "development"
 workers_dev = false
 
 
+
 [env.production.vars]
 ENV = "production"
 
@@ -35,7 +36,7 @@ database_name = "big"
 database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
 preview_database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
 migrations_table = "migrations"
-migrations_dir = "migrations"
+migrations_dir = "src/migrations"
 
 [[r2_buckets]]
 binding = 'USER_FILES'
@@ -43,6 +44,11 @@ bucket_name = 'user-files'
 
 
 [durable_objects]
-bindings = [
-  { name = "REFRESH_TOKEN_STORAGE", class_name = "src/durable-objects/refresh-token.ts" }
-]
+bindings = [{ name = "REFRESH_TOKEN_DO", class_name = "RefreshTokenDO" }]
+
+[[migrations]]
+tag = "v1"                       # Should be unique for each entry
+new_classes = ["RefreshTokenDO"]
+
+
+

@@ -1,23 +1,27 @@
+import { User } from "../User";
 import { generateAccessToken, generateRefreshToken } from "../services/jwt";
 import { Env } from "../types";
+import { errorResponse } from "../utils/error-response";
 
 interface SetRequest {
   userId: string;
   refreshToken: string;
   ip?: string;
   fingerprint?: string;
+	phoneNumber?: string
 }
 
 interface Row {
   refreshToken: string;
   ip?: string;
   fingerprint?: string;
-  createdAt: Date;
+	phoneNumber?: string;
+  createdAt: number;
 }
 export class RefreshTokenDO implements DurableObject {
   constructor(
     private readonly state: DurableObjectState,
-    env: Env,
+    private readonly env: Env,
   ) {}
 
   async fetch(request: Request) {
@@ -32,17 +36,19 @@ export class RefreshTokenDO implements DurableObject {
           refreshToken: req.refreshToken,
           ip: req.ip,
           fingerprint: req.fingerprint,
-          createdAt: new Date(),
+          createdAt: Date.now(),
         };
-        await this.set(req.userId, req.refreshToken);
+        await this.set(req.refreshToken, req.phoneNumber!);
         return new Response();
       } else if (path === "/refresh") {
-        const refreshToken = url.searchParams.get("refre");
-        await this.refresh();
-        return new Response();
-      }
+        const refreshToken = url.searchParams.get("refreshToken")!;
+        const phoneNumber = url.searchParams.get("phoneNumber")!;
+
+        return await this.refresh(refreshToken, userId, phoneNumber);
+
+      } else return errorResponse('not found', 404)
     } else {
-      const refreshToken = await this.get(userId);
+      const refreshToken = await this.get();
       return new Response();
     }
   }
@@ -50,18 +56,18 @@ export class RefreshTokenDO implements DurableObject {
   async refresh(
     refreshToken: string,
     userId: string,
-    env: Env,
+		phoneNumber: string
   ): Promise<Response> {
-    const storedToken = await this.get<>(userId);
+    const storedToken = await this.get();
     if (storedToken && storedToken.refreshToken === refreshToken) {
-      if (Date.now() - storedToken.iss < 30 * 24 * 60 * 60 * 1000) {
+      if (Date.now() - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) {
         // Valid for 30 days
-        const user = new User(userId, storedToken.phoneNumber); // Construct user (ensure you have phoneNumber or remove it depending on your model)
+        const user = new User(userId, phoneNumber); // Construct user (ensure you have phoneNumber or remove it depending on your model)
 
-        const newRefreshToken = await generateRefreshToken();
-        await this.set(userId, newRefreshToken);
+        const newRefreshToken = await generateRefreshToken(userId);
+        await this.set(newRefreshToken, phoneNumber);
 
-        const newAccessToken = await generateAccessToken(user, env.JWT_SECRET);
+        const newAccessToken = await generateAccessToken(user, this.env.JWT_SECRET);
 
         return new Response(
           JSON.stringify({
@@ -70,7 +76,7 @@ export class RefreshTokenDO implements DurableObject {
           }),
         );
       } else {
-        return new Response("Refresh token expired", { status: 403 });
+        return new Response("Refresh token expired", { status: 401 });
       }
     } else {
       return new Response("Invalid refresh token", { status: 401 });
@@ -78,48 +84,50 @@ export class RefreshTokenDO implements DurableObject {
   }
 
   // Store the refresh token
-  async set(userId: string, refreshToken: String) {
-    await this.state.storage.put(`refreshToken`, {
+  async set(refreshToken: string, phoneNumber: string) {
+		console.log({refreshToken})
+    await this.state.storage.put<Row>(`refreshToken`, {
       refreshToken,
-      iss: Date.now(),
+      createdAt: Date.now(),
+			phoneNumber
     });
   }
 
   // Retrieve the refresh token
-  async get(userId: string) {
-    return await this.state.storage.get(`refreshToken_${userId}`);
+  async get(): Promise<Row | undefined> {
+    return this.state.storage.get<Row>(`refreshToken`);
   }
 
-  async refresh(
-    refreshToken: string,
-    userId: string,
-    env: Env,
-  ): Promise<Response> {
-    const storedToken = await this.get(userId);
-    if (storedToken && storedToken.refreshToken === refreshToken) {
-      if (Date.now() - storedToken.iss < 30 * 24 * 60 * 60 * 1000) {
-        // Valid for 30 days
-        const user = new User(userId, storedToken.phoneNumber); // Construct user (ensure you have phoneNumber or remove it depending on your model)
+  // async refresh(
+  //   refreshToken: string,
+  //   userId: string,
+  //   env: Env,
+  // ): Promise<Response> {
+  //   const storedToken = await this.state.storage.get<Row>('token');
+  //   if (storedToken && storedToken.refreshToken === refreshToken) {
+  //     if (Date.now() - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) {
+  //       // Valid for 30 days
+  //       const user = new User(userId, storedToken.phoneNumber); // Construct user (ensure you have phoneNumber or remove it depending on your model)
 
-        const newRefreshToken = await generateRefreshToken(
-          userId,
-          env.JWT_SECRET,
-        );
-        await this.set(userId, newRefreshToken);
+  //       const newRefreshToken = await generateRefreshToken(
+  //         userId,
+  //         env.JWT_SECRET,
+  //       );
+  //       await this.set(userId, newRefreshToken);
 
-        const newAccessToken = await generateAccessToken(user, env.JWT_SECRET);
+  //       const newAccessToken = await generateAccessToken(user, env.JWT_SECRET);
 
-        return new Response(
-          JSON.stringify({
-            accessToken: newAccessToken,
-            refreshToken: newRefreshToken,
-          }),
-        );
-      } else {
-        return new Response("Refresh token expired", { status: 403 });
-      }
-    } else {
-      return new Response("Invalid refresh token", { status: 401 });
-    }
-  }
+  //       return new Response(
+  //         JSON.stringify({
+  //           accessToken: newAccessToken,
+  //           refreshToken: newRefreshToken,
+  //         }),
+  //       );
+  //     } else {
+  //       return new Response("Refresh token expired", { status: 403 });
+  //     }
+  //   } else {
+  //     return new Response("Invalid refresh token", { status: 401 });
+  //   }
+  // }
 }

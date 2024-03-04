@@ -8,7 +8,7 @@ main = "./src/index.ts"
 logpush = true
 
 [vars]
-TWILIO_SERVICE_SID = 'VAb176f1a570fd06d893498a6af5b55b49'
+TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
 
 
 [placement]

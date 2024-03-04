@@ -7,6 +7,7 @@ import { getUserByToken } from "../services/get-user-by-token";
 import { updateUser } from "../services/update-user";
 import { Env } from "../types";
 import { errorResponse } from "../utils/error-response";
+import { instanceToPlain } from "class-transformer";
 
 export class UpdateProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -21,6 +22,17 @@ export class UpdateProfileHandler extends OpenAPIRoute {
     responses: {
       "200": {
         description: "Profile updated successfully",
+				schema: {
+          id: new Str({ example: "weEEwwecw_wdx2" }),
+          phoneNumber: new Str({ example: "+79333333333" }),
+          username: new Str({ required: false, example: "@ask_uznetsov" }),
+          firstName: new Str({ required: false, example: "Aleksandr" }),
+          lastName: new Str({ required: false, example: "Ivanov" }),
+          avatarUrl: new Str({
+            required: false,
+            example: "https://pics.png/png.png",
+          }),
+        },
       },
       "400": {
         description: "Bad Request",
@@ -59,21 +71,15 @@ export class UpdateProfileHandler extends OpenAPIRoute {
       if (
         (firstName === "" && !lastName && !user.firstName && !user.lastName) ||
         (lastName === "" && !firstName && !user.firstName && !user.lastName) ||
-        (!user.firstName && !user.lastName && !lastName && !firstName)
+        (!user.firstName && !user.lastName && !lastName && !firstName) ||
+        (lastName === "" && firstName === "")
       ) {
-        return errorResponse("Please, define firstName or lastName");
+        return errorResponse("Please, define firstName or lastName", 400);
       }
-      await updateUser(env.DB, user.id, {
-        username,
-        firstName,
-        lastName,
-        avatarUrl,
-      });
 
-      return new Response(
-        JSON.stringify({ message: "Profile updated successfully" }),
-        { status: 200 },
-      );
+      const updatedUser = await updateUser(env.DB, user.id, data.body);
+
+			return new Response(JSON.stringify(instanceToPlain(updatedUser)), { status: 200 });
     } catch (error) {
       console.error(error);
       return errorResponse("Failed to update profile");

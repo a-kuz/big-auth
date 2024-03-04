@@ -1,10 +1,10 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
-import { instanceToPlain } from "class-transformer";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
 import { getOrCreateUserByPhone } from "../services/get-user";
 import { generateAccessToken, generateRefreshToken } from "../services/jwt";
 import { Env } from "../types";
 import { errorResponse } from "../utils/error-response";
+
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string;
@@ -33,14 +33,13 @@ export class VerifyCodeHandler extends OpenAPIRoute {
               "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ",
           }),
           refreshToken: new Str({
-            example:
-              "TnLZcHQX2O560P9YM4QGQ",
+            example: "TnLZcHQX2O560P9YM4QGQ",
           }),
         },
       },
       "400": {
         description: "incorrect code",
-        schema: { message: "code is incorrect" },
+        schema: { error: "incorrect code" },
       },
     },
   };
@@ -66,26 +65,32 @@ export class VerifyCodeHandler extends OpenAPIRoute {
           });
         }
       }
-      const user = await getOrCreateUserByPhone(env.DB, phoneNumber, );
+      const user = await getOrCreateUserByPhone(env.DB, phoneNumber);
       const accessToken = await generateAccessToken(user, env.JWT_SECRET);
       const refreshToken = await generateRefreshToken(user.id);
 
-			const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
-      const obj = env.REFRESH_TOKEN_DO.get(id);
+      const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
+      const refreshTokenDO = env.REFRESH_TOKEN_DO.get(id);
 
-      const url = new URL(request.url);
-			const row = {refreshToken, fingerprint: request.headers.get('fingerprint'), userId: user.id, phoneNumber: user.phoneNumber}
+      const row = {
+        refreshToken,
+        fingerprint: request.headers.get("fingerprint"),
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+				ip: request.cf?.hostMetadata
 
-      obj.fetch(
+      };
+
+      await refreshTokenDO.fetch(
         new Request(`${request.url}`, {
-          method: "POST",body: JSON.stringify(row)
+          method: "POST",
+          body: JSON.stringify(row),
         }),
       );
       return new Response(
         JSON.stringify({
           accessToken,
           refreshToken,
-          profile: instanceToPlain(user),
         }),
         { status: 200 },
       );

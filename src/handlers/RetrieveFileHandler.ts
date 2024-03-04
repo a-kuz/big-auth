@@ -16,6 +16,7 @@ export class RetrieveFileHandler extends OpenAPIRoute {
     responses: {
       "200": {
         description: "File retrieved successfully",
+				schema: new Str({ format: 'binary' })
         // Here, adapt this part if you need to specify the content type or structure
       },
       "400": {

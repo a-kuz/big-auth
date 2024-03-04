@@ -40,7 +40,7 @@ export class GetProfileHandler extends OpenAPIRoute {
         status: 401,
       });
     }
-  
+
 
     try {
       const user = await getUserByToken(env.DB, token, env.JWT_SECRET);
@@ -52,14 +52,10 @@ export class GetProfileHandler extends OpenAPIRoute {
 
 			const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
 			const obj = env.REFRESH_TOKEN_DO.get(id);
-	
+
 			const url = new URL(request.url);
-	
-			// return obj.fetch(
-			// 	new Request(`${url.origin}`, {
-			// 		method: "GET",
-			// 	}),
-			// );
+
+
       return new Response(JSON.stringify(instanceToPlain( user), {}), { status: 200 });
     } catch (error) {
       console.error(error);

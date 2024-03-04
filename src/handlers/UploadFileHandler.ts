@@ -15,14 +15,15 @@ export class UploadFileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     summary: "Upload a file to R2",
     tags: ["files"],
-
+    requestBody: new Str({ format: "formData" }),
     responses: {
       "200": {
         description: "File uploaded successfully",
 
         schema: {
           url: new Str({
-            example: "http://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
+            example:
+              "http://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
           }),
         },
       },

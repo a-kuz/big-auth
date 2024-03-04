@@ -92,7 +92,8 @@ export class RefreshTokenDO implements DurableObject {
 
   // Store the refresh token
   async set(refreshToken: string, phoneNumber: string) {
-    console.log({ refreshToken });
+
+    console.log({ refreshToken, id: this.state.storage['id'] });
     await this.state.storage.put<Row>('refreshToken', {
       refreshToken,
       createdAt: Date.now(),

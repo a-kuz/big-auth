@@ -19,7 +19,6 @@ interface Row {
   createdAt: number;
 }
 export class RefreshTokenDO implements DurableObject {
-
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
@@ -28,8 +27,6 @@ export class RefreshTokenDO implements DurableObject {
     const url = new URL(request.url);
     const path = url.pathname;
     const userId = url.searchParams.get("userId")!;
-
-    const r = this.get();
 
     if (request.method === "POST") {
       if (path === "/" || path === "/verify-code") {
@@ -50,7 +47,7 @@ export class RefreshTokenDO implements DurableObject {
       } else return errorResponse("not found", 404);
     } else {
       const refreshToken = await this.get();
-      return new Response(JSON.stringify({refreshToken}));
+      return new Response(JSON.stringify({ refreshToken }));
     }
   }
 
@@ -92,9 +89,7 @@ export class RefreshTokenDO implements DurableObject {
 
   // Store the refresh token
   async set(refreshToken: string, phoneNumber: string) {
-
-    console.log({ refreshToken, id: this.state.storage['id'] });
-    await this.state.storage.put<Row>('refreshToken', {
+    await this.state.storage.put<Row>("refreshToken", {
       refreshToken,
       createdAt: Date.now(),
       phoneNumber,
@@ -103,7 +98,7 @@ export class RefreshTokenDO implements DurableObject {
 
   // Retrieve the refresh token
   async get(): Promise<Row | undefined> {
-    return this.state.storage.get<Row>('refreshToken');
+    return this.state.storage.get<Row>("refreshToken");
   }
 
   // async refresh(

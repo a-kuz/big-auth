@@ -1,7 +1,7 @@
 import {
-	OpenAPIRoute,
-	OpenAPIRouteSchema,
-	Str,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
 } from "@cloudflare/itty-router-openapi";
 import { Env } from "../types/Env";
 import { digest } from "../utils/digest";
@@ -42,21 +42,19 @@ export class UploadFileHandler extends OpenAPIRoute {
     ctx: ExecutionContext,
     formData: FormData,
   ): Promise<Response> {
-
     const file = formData.get("file") as unknown as File;
 
     if (file) {
       const fileName = file.name;
       const buffer = await file.arrayBuffer();
       const id = await digest(buffer);
-      console.log(file.type);
+
       try {
         ctx.waitUntil(
           env.FILES_KV.put(id, buffer, {
             metadata: { fileName, type: file.type },
           }),
         );
-
 
         return new Response(
           JSON.stringify({

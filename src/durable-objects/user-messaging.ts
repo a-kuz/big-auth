@@ -1,3 +1,4 @@
+import { ChatList, ChatListItem } from "../types/Chats";
 import { Env } from "../types/Env";
 import { EditMessageEvent, NewMessageEvent } from "../types/events";
 
@@ -7,53 +8,187 @@ export class UserMessagingDO implements DurableObject {
     private readonly env: Env,
   ) {}
 
-  // Метод для обработки запросов к Durable Object
   async fetch(request: Request) {
     const url = new URL(request.url);
+
+    this.#userId = url.searchParams.get("userId")!;
+
     switch (url.pathname) {
       case "/m/send":
-        return this.sendMessage(request);
+        return this.dialogMessage(request);
       case "/m/edit":
         return this.editMessage(request);
-      // Добавьте другие case для обработки разных событий
+      case "/m/fetch":
+        return this.fetchMessages(request);
+      case "/chats":
+        return this.fetchChats(request);
       default:
-        return new Response("Not found", { status: 404 });
+        return new Response(`${url.pathname}Not found`, { status: 404 });
     }
   }
 
-  // Метод для отправки сообщения
-  async sendMessage(request: Request) {
+  // Method to send a message
+  async dialogMessage(request: Request) {
     const eventData = await request.json<NewMessageEvent>();
-    // Генерация ID события (можно использовать timestamp или инкрементальный счетчик)
-		const currentEventId = (await this.state.storage.get<number>("eventIdCounter")) || 0;
-    const newEventId = currentEventId + 1;
+    const eventId =
+      ((await this.state.storage.get<number>("eventIdCounter")) || 0) + 1;
 
-    // Сохранение события с новым инкрементальным ID
-    await this.state.storage.put(`event-${newEventId}`, eventData);
+    await this.state.storage.put(`event-${eventId}`, eventData);
 
-    // Обновление счетчика в storage
-    await this.state.storage.put("eventIdCounter", newEventId);
+    await this.state.storage.put("eventIdCounter", eventId);
 
-    return new Response(JSON.stringify({ success: true, newEventId }), {
+    if (
+      eventData.receiverId === eventData.senderId ||
+      eventData.receiverId === "0"
+    )
+      return this.sendToFavorites(eventId, eventData);
+    else if (eventData.receiverId === this.#userId)
+      return this.receiveMessage(eventId, eventData);
+    else return this.sendMessage(eventId, eventData);
+  }
+
+  async sendToFavorites(eventId: number, eventData: NewMessageEvent) {
+    const chatId = this.#userId;
+
+    const [chats, chat]: [ChatList, ChatListItem] = this.toTop(
+      (await this.state.storage.get<ChatList>("chatList")) || [],
+      chatId,
+      {
+        id: chatId,
+        lastMessageStatus: "read",
+        lastMessageText: eventData.message,
+        lastMessageTime: new Date(eventData.timestamp),
+        name: "Favorites",
+        type: "favorites",
+        verified: false,
+        lastMessageAuthor: chatId,
+      },
+    );
+    chat.missedMessagesCount = 0;
+    chats.unshift(chat);
+    await this.state.storage.put("chatList", chats);
+
+    return new Response(JSON.stringify({ success: true, eventId }), {
       headers: { "Content-Type": "application/json" },
     });
   }
+  async receiveMessage(eventId: number, eventData: NewMessageEvent) {
+    const chatId = eventData.senderId;
 
-  // Метод для редактирования сообщения
+    const [chats, chat] = this.toTop(
+      (await this.state.storage.get<ChatList>("chatList")) || [],
+      chatId,
+      {
+        id: chatId,
+        lastMessageStatus: "unread",
+        lastMessageText: eventData.message,
+        lastMessageTime: new Date(eventData.timestamp),
+        name: eventData.receiverId,
+        type: "dialog",
+        verified: false,
+        lastMessageAuthor: chatId,
+      },
+    );
+    chat.missedMessagesCount = (chat.missedMessagesCount ?? 0) + 1;
+    chats.unshift(chat);
+    await this.state.storage.put("chatList", chats);
+    return new Response(JSON.stringify({ success: true, eventId }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  async sendMessage(eventId: number, eventData: NewMessageEvent) {
+    const chatId = eventData.receiverId;
+
+
+    const [chats, chat] = this.toTop(
+      (await this.state.storage.get<ChatList>("chatList")) || [],
+      chatId,
+      {
+        id: chatId,
+        lastMessageStatus: "unread",
+        lastMessageText: eventData.message,
+        lastMessageTime: new Date(eventData.timestamp),
+        missedMessagesCount: 0,
+        name: eventData.receiverId,
+        type: "dialog",
+        verified: false,
+        lastMessageAuthor: "",
+      },
+    );
+    chats.unshift(chat);
+    await this.state.storage.put("chatList", chats);
+    return new Response(
+      JSON.stringify({ success: true, eventId, chatId, chats }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  private toTop(
+    chats: ChatList,
+    chatId: string,
+    eventData: Partial<ChatListItem>,
+  ): [ChatList, ChatListItem] {
+    const currentChatIndex = chats.findIndex((chat) => chat.id === chatId);
+    const currentChat: ChatListItem =
+      currentChatIndex === -1
+        ? (eventData as ChatListItem)
+        : { ...chats[currentChatIndex], ...eventData };
+    if (currentChatIndex >= 0) chats.splice(currentChatIndex, 1);
+
+    return [chats, currentChat];
+  }
+
+  // Method to edit a message
   async editMessage(request: Request) {
-    const { eventId, newText } = await request.json();
-    // Получение события из state
-    const event = await this.state.storage.get<EditMessageEvent>(`event-${eventId}`);
+    const { newMessage, timestamp } = await request.json<EditMessageEvent>();
+    const event = await this.state.storage.get<EditMessageEvent>(
+      `event-${timestamp}`,
+    );
     if (!event) {
       return new Response("Event not found", { status: 404 });
     }
-    // Обновление события
-    event.newMessage = newText;
-    await this.state.storage.put(`event-${eventId}`, event);
+    event.newMessage = newMessage;
+    await this.state.storage.put(`event-${timestamp}`, event);
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  // Добавьте дополнительные методы для обработки других событий чата
+  // Method to fetch messages
+  async fetchMessages(request: Request) {
+    const url = new URL(request.url);
+    const chatId = url.searchParams.get("chatId");
+    if (!chatId) {
+      return new Response("Chat ID is required", { status: 400 });
+    }
+
+    // Assuming chat messages are stored with keys following the pattern `chat-${chatId}-message-${messageId}`
+    const messages = await this.state.storage.list({
+      prefix: `chat-${chatId}-message-`,
+    });
+    const messagesArray = Array.from(messages.values());
+
+    return new Response(JSON.stringify(messagesArray), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  #userId: string;
+
+  // Добавляем в UserMessagingDO
+
+  async fetchChats(request: Request) {
+    // Предполагается, что 'chatList' хранит массив объектов чатов
+    const chatList = (await this.state.storage.get<ChatList>("chatList")) || [];
+
+    return new Response(
+      JSON.stringify(
+        chatList.filter((e => chatList.lastIndexOf(e) === chatList.findIndex(e2=>e.id===e.id))),
+      ),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 }

@@ -10,20 +10,20 @@ export interface NewMessageEvent extends BaseEvent {
   senderId: string;
   receiverId: string;
   message: string;
-  messageId: string; // Уникальный идентификатор сообщения
+  messageId?: number;
 }
 
 // Определение события редактирования сообщения
 export interface EditMessageEvent extends BaseEvent {
   type: 'editMessage';
-  messageId: string; // Уникальный идентификатор редактируемого сообщения
+  messageId: number;
   newMessage: string; // Новый текст сообщения
 }
 
 // Определение события чтения сообщения
 export interface ReadMessageEvent extends BaseEvent {
   type: 'readMessage';
-  messageId: string; // Уникальный идентификатор прочитанного сообщения
+  messageId: number; // Уникальный идентификатор прочитанного сообщения
   readerId: string; // Идентификатор пользователя, прочитавшего сообщение
 }
 

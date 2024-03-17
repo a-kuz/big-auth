@@ -44,7 +44,6 @@ export function fromCamelToSnake<T extends Record<string, any>>(
   ) as ObjectCamelToSnakeCase<T>;
 }
 
-
 // // Пример использования
 // const row = {
 //   id: "1",
@@ -55,7 +54,5 @@ export function fromCamelToSnake<T extends Record<string, any>>(
 //   avatar_url: "https://example.com/avatar.jpg",
 // };
 
-
 // console.log(fromCamelToSnake(fromSnakeToCamel(row)));
 // console.log((fromSnakeToCamel(row)));
-

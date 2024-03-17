@@ -17,6 +17,7 @@ import { UploadFileHandler } from "./handlers/UploadFileHandler";
 import { SendMessageHandler } from "./handlers/SendMessageHandler";
 
 import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
+import { GetChatsHandler } from "./handlers/GetChatsHandler";
 
 export { RefreshTokenDO } from "./durable-objects/refresh-token";
 export { UserMessagingDO } from "./durable-objects/user-messaging";
@@ -49,6 +50,8 @@ router.post("/public/upload", UploadFileHandler);
 router.post("/contacts/whoIsThere", FindContactsHandler);
 
 router.post("/m/send", SendMessageHandler);
+
+router.get("/chats", GetChatsHandler);
 
 router.get("/network", NetworkInfoHandler);
 

@@ -38,7 +38,7 @@ export class RefreshTokenHandler extends OpenAPIRoute {
   async handle(
     request: Request,
     env: Env,
-    context: any,
+    _context: any,
     data: Record<string, any>,
   ) {
     try {

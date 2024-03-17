@@ -7,32 +7,23 @@ import { VerifyCodeHandler } from "./handlers/VerifyCodeHandler";
 
 import { RefreshTokenHandler } from "./handlers/RefreshTokenHandler";
 
+import { FindContactsHandler } from "./handlers/FindContactsHandler";
 import { GetProfileHandler } from "./handlers/GetProfileHandler";
 import { UpdateProfileHandler } from "./handlers/UpdateProfileHandler";
-import { FindContactsHandler } from "./handlers/FindContactsHandler";
 
-import { UploadFileHandler } from "./handlers/UploadFileHandler";
 import { RetrieveFileHandler } from "./handlers/RetrieveFileHandler";
+import { UploadFileHandler } from "./handlers/UploadFileHandler";
 
 import { SendMessageHandler } from "./handlers/SendMessageHandler";
 
 import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
-import { TEST_NUMBERS } from "./constants";
 
 export { RefreshTokenDO } from "./durable-objects/refresh-token";
 export { UserMessagingDO } from "./durable-objects/user-messaging";
 
 const router = OpenAPIRouter({
   schema: {
-    servers: [
-      {
-        url: "https://dev.big.a-kuznetsov.cc",
-        description: "develop",
-        variables: {
-          TEST_NUMBERS: { default: JSON.stringify(TEST_NUMBERS, null, 2) },
-        },
-      },
-    ],
+
     info: {
       title: "BIG Auth",
       version: "1.0",
@@ -67,7 +58,7 @@ router.original.get("/", (request: Request) =>
 );
 
 // 404 for everything else
-router.all("*", () => new Response("Not Found.", { status: 404 }));
+router.all("*", () => new Response("Not Fou§nd.", { status: 404 }));
 
 export default {
   fetch: router.handle,

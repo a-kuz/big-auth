@@ -5,7 +5,6 @@ import { generateAccessToken, generateRefreshToken } from "../services/jwt";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
-
 export interface VerifyOTPRequestBody {
   phoneNumber: string;
   code: string;
@@ -21,7 +20,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     tags: ["auth"],
     summary: "Verify OTP",
     requestBody: {
-      phoneNumber: new Str({ example: "+34627068478" }),
+      phoneNumber: new Str({ example: "+70001234567" }),
       code: new Str({ example: "000000" }),
     },
     responses: {
@@ -53,16 +52,20 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     const { phoneNumber, code } = data.body;
 
     try {
-      if (!(TEST_NUMBERS.includes(phoneNumber) && code === "000000")) {
+      if (
+        !(
+          (TEST_NUMBERS.includes(phoneNumber) ||
+            phoneNumber.startsWith("+7000")) &&
+          code === "000000"
+        )
+      ) {
         const verificationResult = await this.verifyCodeWithTwilio(
           phoneNumber,
           code,
           env,
         );
         if (verificationResult !== "approved") {
-          return new Response(JSON.stringify({ error: "Incorrect code" }), {
-            status: 400,
-          });
+          return errorResponse("Incorrect code", 400);
         }
       }
       const user = await getOrCreateUserByPhone(env.DB, phoneNumber);
@@ -77,8 +80,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
         fingerprint: request.headers.get("fingerprint"),
         userId: user.id,
         phoneNumber: user.phoneNumber,
-				ip: request.cf?.hostMetadata
-
+        ip: request.cf?.hostMetadata,
       };
 
       await refreshTokenDO.fetch(

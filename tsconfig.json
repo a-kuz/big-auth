@@ -1,7 +1,7 @@
 {
 	"compilerOptions": {
 		"noEmit": true,
-		// "module": "esnext",
+		"module": "esnext",
 		"allowSyntheticDefaultImports": true,
 		"target": "ESNext",
 		"lib": ["ESNext"],

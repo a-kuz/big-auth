@@ -1,4 +1,4 @@
-import { User, UserDB } from "../User";
+import { User, UserDB } from "../db/models/User";
 import { newId } from "../utils/new-id";
 
 export const getOrCreateUserByPhone = async (

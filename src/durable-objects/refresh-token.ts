@@ -1,6 +1,6 @@
-import { User } from "../User";
+import { User } from "../db/models/User";
 import { generateAccessToken, generateRefreshToken } from "../services/jwt";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 interface SetRequest {

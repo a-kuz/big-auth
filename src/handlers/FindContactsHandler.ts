@@ -6,7 +6,7 @@ import {
 } from "@cloudflare/itty-router-openapi";
 import { getUserByPhoneNumbers } from "../services/get-user";
 import { getUserByToken } from "../services/get-user-by-token";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 export class FindContactsHandler extends OpenAPIRoute {

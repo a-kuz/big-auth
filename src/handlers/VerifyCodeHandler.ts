@@ -2,7 +2,7 @@ import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
 import { getOrCreateUserByPhone } from "../services/get-user";
 import { generateAccessToken, generateRefreshToken } from "../services/jwt";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 
@@ -19,7 +19,7 @@ export interface OTPResponse {
 export class VerifyCodeHandler extends OpenAPIRoute {
   static schema = {
     tags: ["auth"],
-    summary: "Verify an code",
+    summary: "Verify OTP",
     requestBody: {
       phoneNumber: new Str({ example: "+34627068478" }),
       code: new Str({ example: "000000" }),

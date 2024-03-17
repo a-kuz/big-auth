@@ -4,7 +4,7 @@ import {
   Str,
 } from "@cloudflare/itty-router-openapi";
 import { getUserByToken } from "../services/get-user-by-token";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { instanceToPlain, serialize } from "class-transformer";
 
 export class GetProfileHandler extends OpenAPIRoute {

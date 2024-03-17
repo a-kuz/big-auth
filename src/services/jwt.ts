@@ -1,5 +1,5 @@
 import jwt from "@tsndr/cloudflare-worker-jwt";
-import { User } from "../User";
+import { User } from "../db/models/User";
 import { newId } from "../utils/new-id";
 
 // Function to generate an access token for a user

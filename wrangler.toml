@@ -2,17 +2,19 @@ name = "big-auth"
 
 compatibility_date = "2024-02-14"
 workers_dev = true
-route = "http://dev.big.a-kuznetsov.cc/*"
+route = "https://dev.big.a-kuznetsov.cc/*"
+account_id = "8ef32e6718ee4ae45070f737ab1eacf8"
 
 main = "./src/index.ts"
 logpush = true
 
+kv_namespaces = [{ binding = "FILES_KV", id = "024fc4b38aaa497d99037e5e1b23057b" }]
 [vars]
 TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
 
 
 [placement]
-mode = "smart"
+mode = "off"
 
 
 [env.development]
@@ -36,7 +38,7 @@ database_name = "big"
 database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
 preview_database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
 migrations_table = "migrations"
-migrations_dir = "src/migrations"
+migrations_dir = "src/db/migrations"
 
 [[r2_buckets]]
 binding = 'USER_FILES'
@@ -44,11 +46,14 @@ bucket_name = 'user-files'
 
 
 [durable_objects]
-bindings = [{ name = "REFRESH_TOKEN_DO", class_name = "RefreshTokenDO" }]
+bindings = [
+	{ name = "REFRESH_TOKEN_DO", class_name = "RefreshTokenDO" },
+	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" }
+	]
 
 [[migrations]]
-tag = "v1"                       # Should be unique for each entry
-new_classes = ["RefreshTokenDO"]
+tag = "v2" # Уникальный тэг миграции
+new_classes = ["UserMessagingDO"] # Добавление класса Durable Object
 
 
 

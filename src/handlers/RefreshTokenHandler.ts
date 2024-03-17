@@ -4,7 +4,7 @@ import {
   Str,
 } from "@cloudflare/itty-router-openapi";
 import { getUserById } from "../services/get-user";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 export class RefreshTokenHandler extends OpenAPIRoute {

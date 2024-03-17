@@ -4,7 +4,7 @@ import {
   Path,
   Str,
 } from "@cloudflare/itty-router-openapi";
-import { Env } from "../types";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 export class RetrieveFileHandler extends OpenAPIRoute {
@@ -46,30 +46,33 @@ export class RetrieveFileHandler extends OpenAPIRoute {
     _ctx: any,
     data: { params: { id: string } },
   ): Promise<Response> {
-    console.log(data);
+
     let { id } = data.params;
     try {
-      const fileResponse = await env.USER_FILES.get(id);
+      const fileResponse = await env.FILES_KV.getWithMetadata<{fileName: string, type: string}>(id, "arrayBuffer");
+
       if (!fileResponse) {
         return errorResponse("File not found", 404);
       }
+			console.log(fileResponse.metadata)
 
-      if (!fileResponse.httpMetadata) {
-        return errorResponse("File metadata not found", 500);
-      }
-      const fileName = fileResponse.customMetadata?.fileName ?? "response";
+
+      // const fileName = fileResponse.customMetadata?.fileName ?? "response";
+      const fileName = 'file.jpeg'
 
       // Assuming the file's content type and other metadata are correctly set in R2
       const headers = new Headers();
-      fileResponse.writeHttpMetadata(headers);
+			const { readable, writable } = new TransformStream();
+			// const reader = readable.getReader({ mode: 'byob' });
 
-      return new Response(fileResponse.body, {
-        headers: {
+
+      return new Response(fileResponse.value, {
+        encodeBody: "manual", headers: {
           id,
-          etag: fileResponse.etag,
-          "file-name": fileName,
-          ...headers,
-        },
+          "file-name": fileResponse.metadata!.fileName,
+					"Content-Type": fileResponse.metadata!.type,
+					"Etag": id,
+        }
       });
     } catch (error) {
       console.error("Error retrieving file:", error);

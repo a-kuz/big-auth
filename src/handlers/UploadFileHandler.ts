@@ -1,11 +1,11 @@
 import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
+	OpenAPIRoute,
+	OpenAPIRouteSchema,
+	Str,
 } from "@cloudflare/itty-router-openapi";
-import { Env } from "../types";
+import { Env } from "../types/Env";
+import { digest } from "../utils/digest";
 import { errorResponse } from "../utils/error-response";
-import { newId } from "../utils/new-id";
 
 export class UploadFileHandler extends OpenAPIRoute {
   //@ts-ignore
@@ -23,7 +23,7 @@ export class UploadFileHandler extends OpenAPIRoute {
         schema: {
           url: new Str({
             example:
-              "http://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
+              "https://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
           }),
         },
       },
@@ -39,28 +39,30 @@ export class UploadFileHandler extends OpenAPIRoute {
   async handle(
     request: Request,
     env: Env,
-    ctx: any,
+    ctx: ExecutionContext,
     formData: FormData,
   ): Promise<Response> {
-    // const formData = await request.formData();
+
     const file = formData.get("file") as unknown as File;
-    let uploadResult: R2Object;
+
     if (file) {
       const fileName = file.name;
-
-      const id = newId();
+      const buffer = await file.arrayBuffer();
+      const id = await digest(buffer);
+      console.log(file.type);
       try {
-        uploadResult = await env.USER_FILES.put(id, file.stream(), {
-          customMetadata: { fileName },
-        });
+        ctx.waitUntil(
+          env.FILES_KV.put(id, buffer, {
+            metadata: { fileName, type: file.type },
+          }),
+        );
+
 
         return new Response(
           JSON.stringify({
             message: "File uploaded successfully",
 
             url: `${new URL(request.url).origin}/public/${id}`,
-            etag: uploadResult.etag,
-            uploadResult,
           }),
           {
             status: 200,
@@ -71,9 +73,7 @@ export class UploadFileHandler extends OpenAPIRoute {
         return errorResponse("Failed to upload file");
       }
     } else {
-      return new Response(JSON.stringify({ error: "No file uploaded" }), {
-        status: 400,
-      });
+      return errorResponse("No file uploaded", 400);
     }
   }
 }

@@ -6,7 +6,7 @@ import {
   plainToClass,
 } from "class-transformer";
 import "reflect-metadata";
-import { ObjectCamelToSnakeCase, fromSnakeToCamel } from "./utils/name-сases";
+import { ObjectCamelToSnakeCase, fromSnakeToCamel } from "../../utils/name-сases";
 
 @Exclude()
 export class User {

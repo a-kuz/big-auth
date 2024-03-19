@@ -74,19 +74,16 @@ export class GetChatsHandler extends OpenAPIRoute {
         return errorResponse("Unauthorized", 401);
       }
 
-      const userMessagingDOId = env.USER_MESSAGING_DO.idFromName(user.id);
-      const userMessagingDO = env.USER_MESSAGING_DO.get(userMessagingDOId);
-
-      const params = new URLSearchParams({
-        userId: user.id,
-        username: user.username ?? `${user.lastName} ${user.firstName}`,
-      });
+      const userMessagingDO = env.USER_MESSAGING_DO.get(
+        env.USER_MESSAGING_DO.idFromName(user.id),
+      );
 
       const url = new URL(request.url);
 
       return userMessagingDO.fetch(
-        new Request(`${url.origin}/chats?${params.toString()}`, {
-          method: "GET",
+        new Request(`${url.origin}/${user.id}/chats`, {
+          method: "POST",
+					body: '{}'
         }),
       );
     } catch (error) {

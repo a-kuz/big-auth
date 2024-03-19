@@ -1,17 +1,21 @@
 import { ChatList, ChatListItem } from "../types/Chats";
 import { Env } from "../types/Env";
-import { EditMessageEvent, NewMessageEvent } from "../types/events";
+import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/events";
 
 export class UserMessagingDO implements DurableObject {
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
-  ) {}
+  ) {
+
+	}
 
   async fetch(request: Request) {
     const url = new URL(request.url);
+		const event = await request.json<BaseEvent>()
+		const event = await request.json<BaseEvent>()
 
-    this.#userId = url.searchParams.get("userId")!;
+    this.#userId = request.
 
     switch (url.pathname) {
       case "/m/send":

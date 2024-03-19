@@ -94,43 +94,11 @@ export class RefreshTokenDO implements DurableObject {
       createdAt: Date.now(),
       phoneNumber,
     });
+    ч;
   }
 
   // Retrieve the refresh token
   async get(): Promise<Row | undefined> {
     return this.state.storage.get<Row>("refreshToken");
   }
-
-  // async refresh(
-  //   refreshToken: string,
-  //   userId: string,
-  //   env: Env,
-  // ): Promise<Response> {
-  //   const storedToken = await this.state.storage.get<Row>('token');
-  //   if (storedToken && storedToken.refreshToken === refreshToken) {
-  //     if (Date.now() - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) {
-  //       // Valid for 30 days
-  //       const user = new User(userId, storedToken.phoneNumber); // Construct user (ensure you have phoneNumber or remove it depending on your model)
-
-  //       const newRefreshToken = await generateRefreshToken(
-  //         userId,
-  //         env.JWT_SECRET,
-  //       );
-  //       await this.set(userId, newRefreshToken);
-
-  //       const newAccessToken = await generateAccessToken(user, env.JWT_SECRET);
-
-  //       return new Response(
-  //         JSON.stringify({
-  //           accessToken: newAccessToken,
-  //           refreshToken: newRefreshToken,
-  //         }),
-  //       );
-  //     } else {
-  //       return new Response("Refresh token expired", { status: 403 });
-  //     }
-  //   } else {
-  //     return new Response("Invalid refresh token", { status: 401 });
-  //   }
-  // }
 }

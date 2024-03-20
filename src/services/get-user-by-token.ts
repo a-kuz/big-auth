@@ -1,6 +1,6 @@
 import jwt from "@tsndr/cloudflare-worker-jwt";
 import { User } from "../db/models/User";
-import { getUserById } from "./get-user";
+import { getUserById } from "../db/services/get-user";
 
 
 export const getUserByToken = async (

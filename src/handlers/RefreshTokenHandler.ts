@@ -3,7 +3,7 @@ import {
   OpenAPIRouteSchema,
   Str,
 } from "@cloudflare/itty-router-openapi";
-import { getUserById } from "../services/get-user";
+import { getUserById } from "../db/services/get-user";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 

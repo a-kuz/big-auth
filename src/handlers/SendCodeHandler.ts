@@ -30,7 +30,7 @@ export class SendCodeHandler extends OpenAPIRoute {
   async handle(_request: Request, env: Env, _ctx: any, { body }: Req) {
     const phoneNumber = normalizePhoneNumber(body.phoneNumber);
 
-    if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+7000')) {
+    if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+999')) {
       return new Response("{}", { status: 200 });
     }
     const url = `${TWILIO_BASE_URL}/${env.TWILIO_SERVICE_SID}/Verifications`;

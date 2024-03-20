@@ -4,7 +4,7 @@ import {
   Str,
 } from "@cloudflare/itty-router-openapi";
 import { getUserByToken } from "../services/get-user-by-token";
-import { updateUser } from "../services/update-user";
+import { updateUser } from "../db/services/update-user";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 import { instanceToPlain } from "class-transformer";

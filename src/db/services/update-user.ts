@@ -1,6 +1,6 @@
 
-import { User, UserDB } from "../db/models/User";
-import { fromCamelToSnake } from "../utils/name-сases";
+import { User, UserDB } from "../models/User";
+import { fromCamelToSnake } from "../../utils/name-сases";
 
 export const updateUser = async (
   d1: D1Database,

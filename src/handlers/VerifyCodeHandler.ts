@@ -1,6 +1,6 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
-import { getOrCreateUserByPhone } from "../services/get-user";
+import { getOrCreateUserByPhone } from "../db/services/get-user";
 import { generateAccessToken, generateRefreshToken } from "../services/jwt";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
@@ -20,7 +20,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     tags: ["auth"],
     summary: "Verify OTP",
     requestBody: {
-      phoneNumber: new Str({ example: "+70001234567" }),
+      phoneNumber: new Str({ example: "+99901234567" }),
       code: new Str({ example: "000000" }),
     },
     responses: {
@@ -55,7 +55,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       if (
         !(
           (TEST_NUMBERS.includes(phoneNumber) ||
-            phoneNumber.startsWith("+7000")) &&
+            phoneNumber.startsWith("+9990")) &&
           code === "000000"
         )
       ) {

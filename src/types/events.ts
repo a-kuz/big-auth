@@ -1,32 +1,27 @@
-// Определение базового типа для всех событий
 export interface BaseEvent {
   type: string;
   timestamp: number;
-	userId: string;
+  userId: string;
 }
 
-// Определение события нового сообщения
 export interface NewMessageEvent extends BaseEvent {
-  type: 'newMessage';
+  type: "newMessage";
   senderId: string;
   receiverId: string;
   message: string;
   messageId?: number;
 }
 
-// Определение события редактирования сообщения
 export interface EditMessageEvent extends BaseEvent {
-  type: 'editMessage';
+  type: "editMessage";
   messageId: number;
-  newMessage: string; // Новый текст сообщения
+  newMessage: string;
 }
 
-// Определение события чтения сообщения
 export interface ReadMessageEvent extends BaseEvent {
-  type: 'readMessage';
-  messageId: number; // Уникальный идентификатор прочитанного сообщения
-  readerId: string; // Идентификатор пользователя, прочитавшего сообщение
+  type: "readMessage";
+  messageId: number;
+  readerId: string;
 }
 
-// Общий тип Event, объединяющий все типы событий
 export type Event = NewMessageEvent | EditMessageEvent | ReadMessageEvent;

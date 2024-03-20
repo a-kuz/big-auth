@@ -52,8 +52,15 @@ More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IAT
       return new Response(response);
     } else {
       return new Response(
-        html(country as string, region as string, city as string, httpProtocol as string, colo as string, cloudlflareRequestInfo),
-				{headers: {'content-type': "html"}}
+        html(
+          country as string,
+          region as string,
+          city as string,
+          httpProtocol as string,
+          colo as string,
+          cloudlflareRequestInfo,
+        ),
+        { headers: { "content-type": "html" } },
       );
     }
   }
@@ -65,7 +72,7 @@ const html = (
   city: string,
   httpProtocol: string,
   colo: string,
-	cloudlflareRequestInfo: Record<string, string>
+  cloudlflareRequestInfo: Record<string, string>,
 ) => {
   return `<!DOCTYPE html>
 	<html lang="en">

@@ -1,11 +1,11 @@
 import {
-	OpenAPIRoute,
-	OpenAPIRouteSchema,
-	Str,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
 } from "@cloudflare/itty-router-openapi";
-import { Env } from "../types";
+import { Env } from "../types/Env";
+import { digest } from "../utils/digest";
 import { errorResponse } from "../utils/error-response";
-import { newId } from "../utils/new-id";
 
 export class UploadFileHandler extends OpenAPIRoute {
   //@ts-ignore
@@ -15,14 +15,15 @@ export class UploadFileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     summary: "Upload a file to R2",
     tags: ["files"],
-
+    requestBody: new Str({ format: "formData" }),
     responses: {
       "200": {
         description: "File uploaded successfully",
 
         schema: {
           url: new Str({
-            example: "https://files.big.io/public/xvy6dOXrHtDhHAsm7oBCx",
+            example:
+              "https://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
           }),
         },
       },
@@ -38,28 +39,29 @@ export class UploadFileHandler extends OpenAPIRoute {
   async handle(
     request: Request,
     env: Env,
-    ctx: any,
+    ctx: ExecutionContext,
     formData: FormData,
   ): Promise<Response> {
-    // const formData = await request.formData();
     const file = formData.get("file") as unknown as File;
-    let uploadResult: R2Object;
+
     if (file) {
       const fileName = file.name;
+      const buffer = await file.arrayBuffer();
+      const id = await digest(buffer);
 
-      const id = newId();
       try {
-        uploadResult = await env.USER_FILES.put(id, file.stream(), {
-          customMetadata: { fileName },
-        });
+        ctx.waitUntil(
+          env.FILES_KV.put(id, buffer, {
+            metadata: { fileName, type: file.type },
+
+					}),
+        );
 
         return new Response(
           JSON.stringify({
             message: "File uploaded successfully",
 
-            url: `${new URL(request.url).origin}/user-files/${id}`,
-            etag: uploadResult.etag,
-            uploadResult,
+            url: `${new URL(request.url).origin}/public/${id}`,
           }),
           {
             status: 200,
@@ -70,9 +72,7 @@ export class UploadFileHandler extends OpenAPIRoute {
         return errorResponse("Failed to upload file");
       }
     } else {
-      return new Response(JSON.stringify({ error: "No file uploaded" }), {
-        status: 400,
-      });
+      return errorResponse("No file uploaded", 400);
     }
   }
 }

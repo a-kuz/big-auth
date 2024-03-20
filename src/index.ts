@@ -1,9 +1,27 @@
+import "reflect-metadata";
+
 import { OpenAPIRouter } from "@cloudflare/itty-router-openapi";
+
 import { SendCodeHandler } from "./handlers/SendCodeHandler";
 import { VerifyCodeHandler } from "./handlers/VerifyCodeHandler";
-import { GetProfileHandler } from "./handlers/GetProfileHandler";
-import { UploadFileHandler } from "./handlers/UploadFileHandler";
+
+import { RefreshTokenHandler } from "./handlers/RefreshTokenHandler";
+
+import { FindContactsHandler } from "./handlers/FindContactsHandler";
+import { GetOwnProfileHandler } from "./handlers/GetOwnProfileHandler";
+import { UpdateProfileHandler } from "./handlers/UpdateProfileHandler";
+
 import { RetrieveFileHandler } from "./handlers/RetrieveFileHandler";
+import { UploadFileHandler } from "./handlers/UploadFileHandler";
+
+import { SendMessageHandler } from "./handlers/SendMessageHandler";
+
+import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
+import { GetChatsHandler } from "./handlers/GetChatsHandler";
+import { GetProfileHandler } from "./handlers/GetProfileHandler";
+
+export { RefreshTokenDO } from "./durable-objects/refresh-token";
+export { UserMessagingDO } from "./durable-objects/user-messaging";
 
 const router = OpenAPIRouter({
   schema: {
@@ -13,20 +31,32 @@ const router = OpenAPIRouter({
     },
   },
 });
-router.registry.registerComponent(
-  'securitySchemes',
-  'BearerAuth',
-  {
-    type: 'http',
-    scheme: 'bearer',
-  },
-)
+
+router.registry.registerComponent("securitySchemes", "BearerAuth", {
+  type: "http",
+  scheme: "bearer",
+});
 
 router.post("/send-code", SendCodeHandler);
 router.post("/verify-code", VerifyCodeHandler);
-router.get("/profile", GetProfileHandler);
-router.post('/upload', UploadFileHandler,);
-router.get('/user-files/:id/', RetrieveFileHandler,);
+router.post("/auth/refresh", RefreshTokenHandler);
+
+
+router.get("/profile", GetOwnProfileHandler);
+router.post("/profile", UpdateProfileHandler);
+
+router.get("/profile/:id", GetProfileHandler);
+
+router.get("/public/:id/", RetrieveFileHandler);
+router.post("/public/upload", UploadFileHandler);
+
+router.post("/contacts/whoIsThere", FindContactsHandler);
+
+router.post("/m/send", SendMessageHandler);
+
+router.get("/chats", GetChatsHandler);
+
+router.get("/network", NetworkInfoHandler);
 
 // Redirect root request to the /docs page
 router.original.get("/", (request: Request) =>

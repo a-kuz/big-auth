@@ -1,8 +1,8 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
 import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
-import { getUser } from "../services/get-user";
-import { Env } from "../types";
-import { token } from "../services/jwt";
+import { getOrCreateUserByPhone } from "../db/services/get-user";
+import { generateAccessToken, generateRefreshToken } from "../services/jwt";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
 export interface VerifyOTPRequestBody {
@@ -17,26 +17,34 @@ export interface OTPResponse {
 
 export class VerifyCodeHandler extends OpenAPIRoute {
   static schema = {
-    tags: ["OTP"],
-    summary: "Verify an OTP",
+    tags: ["auth"],
+    summary: "Verify OTP",
     requestBody: {
-      phoneNumber: new Str({ example: "+34627068478" }),
+      phoneNumber: new Str({ example: "+99901234567" }),
       code: new Str({ example: "000000" }),
     },
     responses: {
       "200": {
         description: "OTP verification successful",
-        schema: { token: new Str() },
+        schema: {
+          accessToken: new Str({
+            example:
+              "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ",
+          }),
+          refreshToken: new Str({
+            example: "TnLZcHQX2O560P9YM4QGQ",
+          }),
+        },
       },
       "400": {
         description: "incorrect code",
-        schema: { message: "code is incorrect" },
+        schema: { error: "incorrect code" },
       },
     },
   };
 
   async handle(
-    _request: Request,
+    request: Request,
     env: Env,
     _context: any,
     data: Record<string, any>,
@@ -44,23 +52,47 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     const { phoneNumber, code } = data.body;
 
     try {
-      if (!(TEST_NUMBERS.includes(phoneNumber) && code === "000000")) {
+      if (
+        !(
+          (TEST_NUMBERS.includes(phoneNumber) ||
+            phoneNumber.startsWith("+9990")) &&
+          code === "000000"
+        )
+      ) {
         const verificationResult = await this.verifyCodeWithTwilio(
           phoneNumber,
           code,
           env,
         );
         if (verificationResult !== "approved") {
-          return new Response(JSON.stringify({ error: "Incorrect code" }), {
-            status: 400,
-          });
+          return errorResponse("Incorrect code", 400);
         }
       }
-      const user = await getUser(env.DB, phoneNumber);
+      const user = await getOrCreateUserByPhone(env.DB, phoneNumber);
+      const accessToken = await generateAccessToken(user, env.JWT_SECRET);
+      const refreshToken = await generateRefreshToken(user.id);
+
+      const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
+      const refreshTokenDO = env.REFRESH_TOKEN_DO.get(id);
+
+      const row = {
+        refreshToken,
+        fingerprint: request.headers.get("fingerprint"),
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        ip: request.cf?.hostMetadata,
+      };
+
+      await refreshTokenDO.fetch(
+        new Request(`${request.url}`, {
+          method: "POST",
+          body: JSON.stringify(row),
+        }),
+      );
       return new Response(
         JSON.stringify({
-          token: await token(user, env.JWT_SECRET),
-          profile: user.profile,
+          accessToken,
+          refreshToken,
         }),
         { status: 200 },
       );

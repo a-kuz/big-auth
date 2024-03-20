@@ -1,7 +1,8 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
-import { TWILIO_BASE_URL } from "../constants";
-import { Env } from "../types";
+import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
+import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
+import { normalizePhoneNumber } from "../utils/normalize-phone-number";
 
 interface Message {
   phoneNumber: string;
@@ -13,10 +14,10 @@ interface Req {
 
 export class SendCodeHandler extends OpenAPIRoute {
   static schema = {
-    tags: ["OTP"],
-    summary: "Send code via Twilio",
+    tags: ["auth"],
+    summary: "Send OTP",
     requestBody: {
-      phoneNumber: new Str({ example: "+34627068478" }),
+      phoneNumber: new Str({ example: "+99999999999" }),
     },
     responses: {
       "200": {
@@ -27,7 +28,11 @@ export class SendCodeHandler extends OpenAPIRoute {
   };
 
   async handle(_request: Request, env: Env, _ctx: any, { body }: Req) {
-    const { phoneNumber } = body; // Assuming data is already validated and parsed based on the schema
+    const phoneNumber = normalizePhoneNumber(body.phoneNumber);
+
+    if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+999')) {
+      return new Response("{}", { status: 200 });
+    }
     const url = `${TWILIO_BASE_URL}/${env.TWILIO_SERVICE_SID}/Verifications`;
     const authHeader =
       "Basic " + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
@@ -41,7 +46,7 @@ export class SendCodeHandler extends OpenAPIRoute {
         },
         body: new URLSearchParams({
           To: phoneNumber,
-          Channel: "sms",
+          Channel: "auto",
         }),
       });
 
@@ -49,7 +54,7 @@ export class SendCodeHandler extends OpenAPIRoute {
         status: response.status,
       });
     } catch (error) {
-      return errorResponse('Faied to send OTP');
+      return errorResponse("Failed to send OTP");
     }
   }
 }

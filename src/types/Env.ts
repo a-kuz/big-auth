@@ -6,6 +6,9 @@ export interface Env {
 
   readonly DB: D1Database;
   readonly billing: any;
-	readonly USER_FILES: R2Bucket;
+  readonly USER_FILES: R2Bucket;
   readonly ENV: string;
+  readonly REFRESH_TOKEN_DO: DurableObjectNamespace;
+  readonly FILES_KV: KVNamespace;
+  readonly USER_MESSAGING_DO: DurableObjectNamespace;
 }

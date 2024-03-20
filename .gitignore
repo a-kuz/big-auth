@@ -170,4 +170,8 @@ dist
 
 .dev.vars
 .wrangler/
-pnpm-lock.yaml
+
+.smol-dev-js
+docs
+docs/index.ts.md
+docs/User.ts.md

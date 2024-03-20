@@ -8,7 +8,7 @@ import { VerifyCodeHandler } from "./handlers/VerifyCodeHandler";
 import { RefreshTokenHandler } from "./handlers/RefreshTokenHandler";
 
 import { FindContactsHandler } from "./handlers/FindContactsHandler";
-import { GetProfileHandler } from "./handlers/GetProfileHandler";
+import { GetOwnProfileHandler } from "./handlers/GetOwnProfileHandler";
 import { UpdateProfileHandler } from "./handlers/UpdateProfileHandler";
 
 import { RetrieveFileHandler } from "./handlers/RetrieveFileHandler";
@@ -18,13 +18,13 @@ import { SendMessageHandler } from "./handlers/SendMessageHandler";
 
 import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
 import { GetChatsHandler } from "./handlers/GetChatsHandler";
+import { GetProfileHandler } from "./handlers/GetProfileHandler";
 
 export { RefreshTokenDO } from "./durable-objects/refresh-token";
 export { UserMessagingDO } from "./durable-objects/user-messaging";
 
 const router = OpenAPIRouter({
   schema: {
-
     info: {
       title: "BIG Auth",
       version: "1.0",
@@ -41,8 +41,11 @@ router.post("/send-code", SendCodeHandler);
 router.post("/verify-code", VerifyCodeHandler);
 router.post("/auth/refresh", RefreshTokenHandler);
 
-router.get("/profile", GetProfileHandler);
+
+router.get("/profile", GetOwnProfileHandler);
 router.post("/profile", UpdateProfileHandler);
+
+router.get("/profile/:id", GetProfileHandler);
 
 router.get("/public/:id/", RetrieveFileHandler);
 router.post("/public/upload", UploadFileHandler);
@@ -61,7 +64,7 @@ router.original.get("/", (request: Request) =>
 );
 
 // 404 for everything else
-router.all("*", () => new Response("Not Fou§nd.", { status: 404 }));
+router.all("*", () => new Response("Not Found.", { status: 404 }));
 
 export default {
   fetch: router.handle,

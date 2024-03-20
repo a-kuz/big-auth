@@ -83,7 +83,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       return userMessagingDO.fetch(
         new Request(`${url.origin}/${user.id}/chats`, {
           method: "POST",
-					body: '{}'
+          body: "{}",
         }),
       );
     } catch (error) {

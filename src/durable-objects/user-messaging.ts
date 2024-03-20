@@ -1,8 +1,10 @@
+
 import { ChatList, ChatListItem } from "../types/Chats";
 import { Env } from "../types/Env";
 import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/events";
 
 export class UserMessagingDO implements DurableObject {
+
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
@@ -12,22 +14,23 @@ export class UserMessagingDO implements DurableObject {
 
   async fetch(request: Request) {
     const url = new URL(request.url);
-		const event = await request.json<BaseEvent>()
-		const event = await request.json<BaseEvent>()
+    const paths = url.pathname.split("/").filter((p) => p);
+    // Expecting the first part of the path to be the userId
+    const userId = paths[0];
+    const action = paths[1];
 
-    this.#userId = request.
+    switch (action) {
 
-    switch (url.pathname) {
-      case "/m/send":
+      case "send":
         return this.dialogMessage(request);
-      case "/m/edit":
+      case "edit":
         return this.editMessage(request);
-      case "/m/fetch":
+      case "chat":
         return this.fetchMessages(request);
-      case "/chats":
+      case "chats":
         return this.fetchChats(request);
       default:
-        return new Response(`${url.pathname}Not found`, { status: 404 });
+        return new Response(`${url.pathname} Not found`, { status: 404 });
     }
   }
 
@@ -102,8 +105,6 @@ export class UserMessagingDO implements DurableObject {
   }
   async sendMessage(eventId: number, eventData: NewMessageEvent) {
     const chatId = eventData.receiverId;
-
-
     const [chats, chat] = this.toTop(
       (await this.state.storage.get<ChatList>("chatList")) || [],
       chatId,
@@ -178,12 +179,12 @@ export class UserMessagingDO implements DurableObject {
       headers: { "Content-Type": "application/json" },
     });
   }
-  #userId: string;
+
 
   // Добавляем в UserMessagingDO
 
   async fetchChats(request: Request) {
-    // Предполагается, что 'chatList' хранит массив объектов чатов
+
     const chatList = (await this.state.storage.get<ChatList>("chatList")) || [];
 
     return new Response(
@@ -195,4 +196,5 @@ export class UserMessagingDO implements DurableObject {
       },
     );
   }
+#userId: string;
 }

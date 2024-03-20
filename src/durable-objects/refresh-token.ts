@@ -94,7 +94,6 @@ export class RefreshTokenDO implements DurableObject {
       createdAt: Date.now(),
       phoneNumber,
     });
-    ч;
   }
 
   // Retrieve the refresh token

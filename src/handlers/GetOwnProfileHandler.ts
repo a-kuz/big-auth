@@ -1,16 +1,18 @@
 import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
+	OpenAPIRoute,
+	OpenAPIRouteSchema,
+	Path,
+	Str,
 } from "@cloudflare/itty-router-openapi";
-import { getUserByToken } from "../services/get-user-by-token";
+import { instanceToPlain } from "class-transformer";
+import { getUserById } from "../db/services/get-user";
 import { Env } from "../types/Env";
-import { instanceToPlain, serialize } from "class-transformer";
 
-export class GetProfileHandler extends OpenAPIRoute {
+export class GetOwnProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     summary: "Get user profile",
-    tags: ["contacts"],
+    tags: ["profile"],
+    parameters: { id: Path(Str) },
     responses: {
       "200": {
         description: "Profile fetched successfully",
@@ -31,7 +33,7 @@ export class GetProfileHandler extends OpenAPIRoute {
     security: [{ BearerAuth: [] }],
   };
 
-  async handle(request: Request, env: Env, context: any) {
+  async handle(request: Request, env: Env, context: any, data: { id: string }) {
     const authorization = request.headers.get("Authorization");
     const token = authorization?.split(" ")[1];
 
@@ -41,22 +43,12 @@ export class GetProfileHandler extends OpenAPIRoute {
       });
     }
 
-
     try {
-      const user = await getUserByToken(env.DB, token, env.JWT_SECRET);
-      if (!user) {
-        return new Response(JSON.stringify({ error: "User not found" }), {
-          status: 404,
-        });
-      }
+      const profile = await getUserById(env.DB, data.id);
 
-			const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
-			const obj = env.REFRESH_TOKEN_DO.get(id);
-
-			const url = new URL(request.url);
-
-
-      return new Response(JSON.stringify(instanceToPlain( user), {}), { status: 200 });
+      return new Response(JSON.stringify(instanceToPlain(profile, {})), {
+        status: 200,
+      });
     } catch (error) {
       console.error(error);
       return new Response(

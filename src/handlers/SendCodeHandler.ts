@@ -15,9 +15,9 @@ interface Req {
 export class SendCodeHandler extends OpenAPIRoute {
   static schema = {
     tags: ["auth"],
-    summary: "Send code via Twilio",
+    summary: "Send OTP",
     requestBody: {
-      phoneNumber: new Str({ example: "+34627068478" }),
+      phoneNumber: new Str({ example: "+99999999999" }),
     },
     responses: {
       "200": {

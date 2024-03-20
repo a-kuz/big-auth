@@ -2,6 +2,7 @@
 export interface BaseEvent {
   type: string;
   timestamp: number;
+	userId: string;
 }
 
 // Определение события нового сообщения

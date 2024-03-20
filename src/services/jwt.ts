@@ -3,7 +3,10 @@ import { User } from "../db/models/User";
 import { newId } from "../utils/new-id";
 
 // Function to generate an access token for a user
-export const generateAccessToken = async (user: Pick<User, 'phoneNumber' | 'id'>, secret: string) => {
+export const generateAccessToken = async (
+  user: Pick<User, "phoneNumber" | "id">,
+  secret: string,
+) => {
   // Creating a token
   const token = await jwt.sign(
     {

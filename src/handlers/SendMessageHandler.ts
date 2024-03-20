@@ -2,7 +2,12 @@ import jwt from "@tsndr/cloudflare-worker-jwt";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 import { NewMessageEvent } from "../types/events";
-import { Num, OpenAPIRoute, OpenAPIRouteSchema, Str } from "@cloudflare/itty-router-openapi";
+import {
+  Num,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+} from "@cloudflare/itty-router-openapi";
 
 interface SendMessageRequest {
   receiverId: string;
@@ -11,33 +16,30 @@ interface SendMessageRequest {
 
 export class SendMessageHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
-			tags: ["messages"],
-			summary: "Send a message between users",
-			requestBody: {
-				recieverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
-				message: new Str({ example: "Hello, how are you?" }),
-
-			},
-			responses: {
-				"200": {
-					description: "Message sent successfully",
-					schema: {
-						messageId: new Num(),
-						timestamp: new Num()
-					},
-				},
-				"400": {
-					description: "Bad Request",
-
-				},
-				"500": {
-					description: "Internal Server Error",
-					schema:{message: new Str()}
-				},
-			},
-			security: [{ BearerAuth: [] }],
-		};
-
+    tags: ["messages"],
+    summary: "Send a message between users",
+    requestBody: {
+      recieverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
+      message: new Str({ example: "Hello, how are you?" }),
+    },
+    responses: {
+      "200": {
+        description: "Message sent successfully",
+        schema: {
+          messageId: new Num(),
+          timestamp: new Num(),
+        },
+      },
+      "400": {
+        description: "Bad Request",
+      },
+      "500": {
+        description: "Internal Server Error",
+        schema: { message: new Str() },
+      },
+    },
+    security: [{ BearerAuth: [] }],
+  };
 
   async handle(
     request: Request,
@@ -78,22 +80,29 @@ export class SendMessageHandler extends OpenAPIRoute {
         timestamp: Date.now(),
       };
 
-			const reqBody = JSON.stringify(event);
+      const reqBody = JSON.stringify(event);
       const headers = new Headers({ "Content-Type": "application/json" });
 
-			const storings: Promise<any>[] = [senderDO.fetch(
-				new Request(request.url, { method: "POST", body: reqBody, headers }),
-			)]
-			if (receiverId != '0' && receiverId !== senderId) {
-storings.push(receiverDO.fetch(
-	new Request(request.url, { method: "POST", body: reqBody, headers }),
-))
-			}
+      const storings: Promise<any>[] = [
+        senderDO.fetch(
+          new Request(request.url, { method: "POST", body: reqBody, headers }),
+        ),
+      ];
+      if (receiverId != "0" && receiverId !== senderId) {
+        storings.push(
+          receiverDO.fetch(
+            new Request(request.url, {
+              method: "POST",
+              body: reqBody,
+              headers,
+            }),
+          ),
+        );
+      }
 
-			const [responseSender, responseReceiver] = await Promise.all(storings);
+      const [responseSender, responseReceiver] = await Promise.all(storings);
       // Return a success response
-      return responseSender
-
+      return responseSender;
     } catch (error) {
       console.error("SendMessageHandler Error:", error);
       return errorResponse("Failed to send message", 500);

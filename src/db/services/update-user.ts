@@ -1,13 +1,12 @@
-
 import { User, UserDB } from "../models/User";
 import { fromCamelToSnake } from "../../utils/name-сases";
 
 export const updateUser = async (
   d1: D1Database,
   userId: string,
-  updates: Partial<User>
+  updates: Partial<User>,
 ): Promise<User> => {
-	const snakedUpdates = fromCamelToSnake(updates);
+  const snakedUpdates = fromCamelToSnake(updates);
   // Construct the SQL update statement dynamically based on the provided updates
   const setClause = Object.keys(snakedUpdates)
     .map((key) => `${key} = ?`)
@@ -19,7 +18,10 @@ export const updateUser = async (
 
   try {
     // Execute the update statement
-    await d1.prepare(sql).bind(...values).run();
+    await d1
+      .prepare(sql)
+      .bind(...values)
+      .run();
 
     // Retrieve the updated user from the database to return
     const updatedUser = await d1

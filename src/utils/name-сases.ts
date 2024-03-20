@@ -43,4 +43,3 @@ export function fromCamelToSnake<T extends Record<string, any>>(
     ]),
   ) as ObjectCamelToSnakeCase<T>;
 }
-

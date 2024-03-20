@@ -41,7 +41,6 @@ export class GetProfileHandler extends OpenAPIRoute {
       });
     }
 
-
     try {
       const user = await getUserByToken(env.DB, token, env.JWT_SECRET);
       if (!user) {
@@ -50,13 +49,14 @@ export class GetProfileHandler extends OpenAPIRoute {
         });
       }
 
-			const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
-			const obj = env.REFRESH_TOKEN_DO.get(id);
+      const id = env.REFRESH_TOKEN_DO.idFromName(user.id);
+      const obj = env.REFRESH_TOKEN_DO.get(id);
 
-			const url = new URL(request.url);
+      const url = new URL(request.url);
 
-
-      return new Response(JSON.stringify(instanceToPlain( user), {}), { status: 200 });
+      return new Response(JSON.stringify(instanceToPlain(user), {}), {
+        status: 200,
+      });
     } catch (error) {
       console.error(error);
       return new Response(

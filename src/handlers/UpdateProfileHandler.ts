@@ -22,7 +22,7 @@ export class UpdateProfileHandler extends OpenAPIRoute {
     responses: {
       "200": {
         description: "Profile updated successfully",
-				schema: {
+        schema: {
           id: new Str({ example: "weEEwwecw_wdx2" }),
           phoneNumber: new Str({ example: "+79333333333" }),
           username: new Str({ required: false, example: "@ask_uznetsov" }),
@@ -79,7 +79,9 @@ export class UpdateProfileHandler extends OpenAPIRoute {
 
       const updatedUser = await updateUser(env.DB, user.id, data.body);
 
-			return new Response(JSON.stringify(instanceToPlain(updatedUser)), { status: 200 });
+      return new Response(JSON.stringify(instanceToPlain(updatedUser)), {
+        status: 200,
+      });
     } catch (error) {
       console.error(error);
       return errorResponse("Failed to update profile");

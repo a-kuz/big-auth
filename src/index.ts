@@ -41,7 +41,6 @@ router.post("/send-code", SendCodeHandler);
 router.post("/verify-code", VerifyCodeHandler);
 router.post("/auth/refresh", RefreshTokenHandler);
 
-
 router.get("/profile", GetOwnProfileHandler);
 router.post("/profile", UpdateProfileHandler);
 

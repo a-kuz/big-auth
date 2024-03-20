@@ -1,16 +1,12 @@
-
 import { ChatList, ChatListItem } from "../types/Chats";
 import { Env } from "../types/Env";
 import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/events";
 
 export class UserMessagingDO implements DurableObject {
-
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
-  ) {
-
-	}
+  ) {}
 
   async fetch(request: Request) {
     const url = new URL(request.url);
@@ -20,7 +16,6 @@ export class UserMessagingDO implements DurableObject {
     const action = paths[1];
 
     switch (action) {
-
       case "send":
         return this.dialogMessage(request);
       case "edit":
@@ -180,21 +175,23 @@ export class UserMessagingDO implements DurableObject {
     });
   }
 
-
   // Добавляем в UserMessagingDO
 
   async fetchChats(request: Request) {
-
     const chatList = (await this.state.storage.get<ChatList>("chatList")) || [];
 
     return new Response(
       JSON.stringify(
-        chatList.filter((e => chatList.lastIndexOf(e) === chatList.findIndex(e2=>e.id===e.id))),
+        chatList.filter(
+          (e) =>
+            chatList.lastIndexOf(e) ===
+            chatList.findIndex((e2) => e.id === e.id),
+        ),
       ),
       {
         headers: { "Content-Type": "application/json" },
       },
     );
   }
-#userId: string;
+  #userId: string;
 }

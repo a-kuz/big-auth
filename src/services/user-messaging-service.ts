@@ -1,7 +1,6 @@
 import { UserMessagingDO } from "../durable-objects/user-messaging";
 import { Env } from "../types/Env";
 
-
 // UserMessagingService encapsulates the logic for interacting with the UserMessagingDO Durable Object
 export class UserMessagingService {
   private env: Env;
@@ -9,7 +8,6 @@ export class UserMessagingService {
   constructor(env: Env) {
     this.env = env;
   }
-
 
   // Method to retrieve an instance of UserMessagingDO
   private getUserMessagingDO(userId: string): DurableObjectStub {

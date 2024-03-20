@@ -53,8 +53,7 @@ export class UploadFileHandler extends OpenAPIRoute {
         ctx.waitUntil(
           env.FILES_KV.put(id, buffer, {
             metadata: { fileName, type: file.type },
-
-					}),
+          }),
         );
 
         return new Response(

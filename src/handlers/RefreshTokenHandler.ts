@@ -12,7 +12,7 @@ export class RefreshTokenHandler extends OpenAPIRoute {
     summary: "Refresh tokens",
     tags: ["auth"],
     requestBody: {
-      refreshToken: new Str()
+      refreshToken: new Str(),
     },
     responses: {
       "200": {
@@ -42,8 +42,8 @@ export class RefreshTokenHandler extends OpenAPIRoute {
     data: Record<string, any>,
   ) {
     try {
-      const { refreshToken} = data.body;
-			const userId = refreshToken.split('.')[1]
+      const { refreshToken } = data.body;
+      const userId = refreshToken.split(".")[1];
       const user = await getUserById(env.DB, userId);
 
       const params = new URLSearchParams({

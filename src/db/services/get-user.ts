@@ -53,11 +53,14 @@ export const getUserByPhoneNumbers = async (
   d1: D1Database,
   phoneNumbers: string[],
 ): Promise<User[]> => {
-  const placeholders = phoneNumbers.map(() => '?').join(',');
+  const placeholders = phoneNumbers.map(() => "?").join(",");
   const query = `SELECT * FROM users WHERE phone_number IN (${placeholders}) and deleted_at is null`;
 
   try {
-    const users = await d1.prepare(query).bind(...phoneNumbers).all<UserDB>();
+    const users = await d1
+      .prepare(query)
+      .bind(...phoneNumbers)
+      .all<UserDB>();
     return users.results.map(User.fromDb);
   } catch (error) {
     console.error("Failed to retrieve users by phone numbers:", error);

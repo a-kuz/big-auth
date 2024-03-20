@@ -17,7 +17,6 @@ export class RetrieveFileHandler extends OpenAPIRoute {
       "200": {
         description: "File retrieved successfully",
         schema: new Str({ format: "binary" }),
-        // Here, adapt this part if you need to specify the content type or structure
       },
       "400": {
         description: "Bad Request",
@@ -56,14 +55,6 @@ export class RetrieveFileHandler extends OpenAPIRoute {
       if (!fileResponse) {
         return errorResponse("File not found", 404);
       }
-
-      // const fileName = fileResponse.customMetadata?.fileName ?? "response";
-      const fileName = "file.jpeg";
-
-      // Assuming the file's content type and other metadata are correctly set in R2
-      const headers = new Headers();
-      const { readable, writable } = new TransformStream();
-      // const reader = readable.getReader({ mode: 'byob' });
 
       return new Response(fileResponse.value, {
         encodeBody: "manual",

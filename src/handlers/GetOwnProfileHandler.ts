@@ -1,8 +1,8 @@
 import {
-	OpenAPIRoute,
-	OpenAPIRouteSchema,
-	Path,
-	Str,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Path,
+  Str,
 } from "@cloudflare/itty-router-openapi";
 import { instanceToPlain } from "class-transformer";
 import { getUserById } from "../db/services/get-user";

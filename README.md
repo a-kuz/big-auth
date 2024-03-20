@@ -1,33 +1,57 @@
-## Template: worker-openapi
+# Big Project
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/worker-openapi)
+This project provides a comprehensive authentication, user profile management, messaging, and file handling solution for applications. Built on Cloudflare Workers, it includes features such as sending OTP for verification, refreshing tokens, finding contacts, managing user profiles, sending messages, uploading and retrieving files, and providing network info.
 
-This template demonstrates using the [`itty-router-openapi`](https://github.com/cloudflare/itty-router-openapi) package to add openapi 3 schema generation and validation.
+## Features
 
-You can try this template in your browser [here](https://worker-openapi-example.radar.cloudflare.com/docs)!
+- **Authentication:** Send OTP and verify it. Refresh access tokens.
+- **User Profile Management:** Find contacts by phone numbers, get and update user profiles.
+- **Messaging:** Send, receive, and manage messages. Retrieve chat lists.
+- **File Handling:** Upload and retrieve files.
+- **Network Information:** Provide information about the network request.
 
-## Setup
+## How It Works
 
-To create a `my-project` directory using this template, run:
+- **Authentication:** Utilizes Twilio for OTP verification and JWT for token management.
+- **User Profiles:** Stores user data in a Cloudflare D1 database. Allows updating user profiles.
+- **Messaging:** Implements a Durable Object for each user to handle messaging logic.
+- **File Handling:** Files are uploaded to and retrieved from Cloudflare R2 storage.
+- **Network Information:** Offers insights into the request's network information like country, region, and more.
 
-```sh
-$ npx wrangler generate my-project worker-openapi
-# or
-$ yarn wrangler generate my-project worker-openapi
-# or
-$ pnpm wrangler generate my-project worker-openapi
-```
+## Technologies Used
 
-## Local development
+- Cloudflare Workers for serverless function execution.
+- Cloudflare D1 for database storage.
+- Cloudflare R2 for file storage.
+- JWT for token generation and verification.
+- Twilio for sending OTPs.
 
-Run `wrangler dev` and head to `/docs` our `/redocs` with your browser.
+## Getting Started
 
-You'll be greeted with an OpenAPI page that you can use to test and call your endpoints.
+1. **Setup Cloudflare Worker:**
+   - Clone the repository.
+   - Set up Wrangler CLI and authenticate with Cloudflare.
+   - Configure `wrangler.toml` with your Cloudflare account details.
 
-## Deploy
+2. **Configure Environment Variables:**
+   - Twilio account SID, auth token, and service SID.
+   - JWT secret for token encryption.
 
-Once you are ready, you can publish your code by running the following command:
+3. **Deploy:**
+   - Run `wrangler publish` to deploy the worker.
 
-```sh
-$ wrangler deploy
-```
+## Structure
+
+- **`./src/index.ts`:** Main entry point.
+- **`./handlers/`:** Request handlers for different features.
+- **`./durable-objects/`:** Durable Objects for stateful logic.
+- **`./db/`:** Database models and services.
+- **`./utils/`:** Utility functions.
+
+## Documentation
+
+Access the API documentation by navigating to `/docs` endpoint after deployment.
+
+## License
+
+This project is licensed under the MIT License.

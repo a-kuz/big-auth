@@ -54,7 +54,7 @@ export class GetProfileHandler extends OpenAPIRoute {
 
       const url = new URL(request.url);
 
-      return new Response(JSON.stringify(instanceToPlain(user), {}), {
+      return new Response(JSON.stringify(instanceToPlain(user, {})), {
         status: 200,
       });
     } catch (error) {

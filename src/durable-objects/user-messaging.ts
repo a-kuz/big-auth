@@ -1,21 +1,26 @@
-import { ChatList, ChatListItem } from "../types/Chats";
+
+import { ChatList, ChatListItem } from "../types/ChatList";
 import { Env } from "../types/Env";
-import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/events";
+import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/Event";
 
 export class UserMessagingDO implements DurableObject {
+
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
-  ) {}
+  ) {
+
+	}
 
   async fetch(request: Request) {
     const url = new URL(request.url);
     const paths = url.pathname.split("/").filter((p) => p);
     // Expecting the first part of the path to be the userId
-    const userId = paths[0];
+    this.#userId = paths[0];
     const action = paths[1];
 
     switch (action) {
+
       case "send":
         return this.dialogMessage(request);
       case "edit":
@@ -175,23 +180,17 @@ export class UserMessagingDO implements DurableObject {
     });
   }
 
-  // Добавляем в UserMessagingDO
 
   async fetchChats(request: Request) {
     const chatList = (await this.state.storage.get<ChatList>("chatList")) || [];
-
     return new Response(
       JSON.stringify(
-        chatList.filter(
-          (e) =>
-            chatList.lastIndexOf(e) ===
-            chatList.findIndex((e2) => e.id === e.id),
-        ),
+        chatList.filter((e => chatList.lastIndexOf(e) === chatList.findIndex(e2=>e.id===e.id))),
       ),
       {
         headers: { "Content-Type": "application/json" },
       },
     );
   }
-  #userId: string;
+	#userId = '';
 }

@@ -173,5 +173,5 @@ dist
 
 .smol-dev-js
 docs
-docs/index.ts.md
-docs/User.ts.md
+spec
+src/.DS_Store

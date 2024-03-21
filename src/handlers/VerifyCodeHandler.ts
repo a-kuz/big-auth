@@ -55,7 +55,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       if (
         !(
           (TEST_NUMBERS.includes(phoneNumber) ||
-            phoneNumber.startsWith("+9990")) &&
+            phoneNumber.startsWith("+999")) &&
           code === "000000"
         )
       ) {

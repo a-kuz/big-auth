@@ -2,7 +2,12 @@ import jwt from "@tsndr/cloudflare-worker-jwt";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 import { NewMessageEvent } from "../types/Event";
-import { Num, OpenAPIRoute, OpenAPIRouteSchema, Str } from "@cloudflare/itty-router-openapi";
+import {
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+  Num,
+} from "@cloudflare/itty-router-openapi";
 
 interface SendMessageRequest {
   receiverId: string;
@@ -11,33 +16,30 @@ interface SendMessageRequest {
 
 export class SendMessageHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
-			tags: ["messages"],
-			summary: "Send a message between users",
-			requestBody: {
-				recieverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
-				message: new Str({ example: "Hello, how are you?" }),
-
-			},
-			responses: {
-				"200": {
-					description: "Message sent successfully",
-					schema: {
-						messageId: new Num(),
-						timestamp: new Num()
-					},
-				},
-				"400": {
-					description: "Bad Request",
-
-				},
-				"500": {
-					description: "Internal Server Error",
-					schema:{message: new Str()}
-				},
-			},
-			security: [{ BearerAuth: [] }],
-		};
-
+    tags: ["messages"],
+    summary: "Send a message between users",
+    requestBody: {
+      receiverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
+      message: new Str({ example: "Hello, how are you?" }),
+    },
+    responses: {
+      "200": {
+        description: "Message sent successfully",
+        schema: {
+          messageId: new Num(),
+          timestamp: new Num(),
+        },
+      },
+      "400": {
+        description: "Bad Request",
+      },
+      "500": {
+        description: "Internal Server Error",
+        schema: { message: new Str() },
+      },
+    },
+    security: [{ BearerAuth: [] }],
+  };
 
   async handle(
     request: Request,
@@ -53,7 +55,10 @@ export class SendMessageHandler extends OpenAPIRoute {
     const token = authorization.substring(7);
     try {
       // Verify the JWT token
-      await jwt.verify(token, env.JWT_SECRET);
+      const isValid = await jwt.verify(token, env.JWT_SECRET);
+      if (!isValid) {
+        return errorResponse("Unauthorized", 401);
+      }
     } catch {
       return errorResponse("Unauthorized", 401);
     }
@@ -70,9 +75,9 @@ export class SendMessageHandler extends OpenAPIRoute {
       const senderDO = env.USER_MESSAGING_DO.get(senderDOId);
       const receiverDO = env.USER_MESSAGING_DO.get(receiverDOId);
 
-			// Create an event object with message details and timestamp
+      // Create an event object with message details and timestamp
       const event: NewMessageEvent = {
-				userId,
+        userId,
         type: "newMessage",
         senderId: userId,
         receiverId,
@@ -80,23 +85,33 @@ export class SendMessageHandler extends OpenAPIRoute {
         timestamp: Date.now(),
       };
 
-			const reqBody = JSON.stringify(event);
+      const reqBody = JSON.stringify(event);
       const headers = new Headers({ "Content-Type": "application/json" });
-			const url = new URL(request.url);
-			const storings: Promise<any>[] = [senderDO.fetch(
+      const url = new URL(request.url);
+      const storings: Promise<any>[] = [
+        senderDO.fetch(
+          new Request(`${url.origin}/${userId}/send`, {
+            method: "POST",
+            body: reqBody,
+            headers,
+          }),
+        ),
+      ];
+      if (receiverId != "0" && receiverId !== userId) {
+        storings.push(
+          receiverDO.fetch(
+            new Request(request.url, {
+              method: "POST",
+              body: reqBody,
+              headers,
+            }),
+          ),
+        );
+      }
 
-				new Request(`${url.origin}/${userId}/send`, { method: "POST", body: reqBody, headers }),
-			)]
-			if (receiverId != '0' && receiverId !== userId) {
-storings.push(receiverDO.fetch(
-	new Request(request.url, { method: "POST", body: reqBody, headers }),
-))
-			}
-
-			const [responseSender, responseReceiver] = await Promise.all(storings);
+      const [responseSender, responseReceiver] = await Promise.all(storings);
       // Return a success response
-      return responseSender
-
+      return responseSender;
     } catch (error) {
       console.error("SendMessageHandler Error:", error);
       return errorResponse("Failed to send message", 500);

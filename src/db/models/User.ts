@@ -11,6 +11,7 @@ import {
   fromSnakeToCamel,
 } from "../../utils/name-сases";
 
+// The User class represents a user entity with various properties and behaviors.
 @Exclude()
 export class User {
   @Expose({})
@@ -29,10 +30,14 @@ export class User {
   @Expose()
   @Transform(({ value }) => value || undefined)
   avatarUrl?: string;
-  @Type()
+  @Type(() => Number)
+  @Transform(({ value }) => value || undefined)
   createdAt?: number;
+  @Type(() => Number)
+  @Transform(({ value }) => value || undefined)
   deletedAt?: number;
 
+  // Converts a database row object into an instance of the User class.
   static fromDb(userRow: UserDB) {
     return plainToClass(User, fromSnakeToCamel(userRow));
   }

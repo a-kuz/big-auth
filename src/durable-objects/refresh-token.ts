@@ -60,7 +60,7 @@ export class RefreshTokenDO implements DurableObject {
       if (Date.now() - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) { // Valid for 30 days
         const user = new User(userId, phoneNumber); // Construct user
 
-        const newRefreshToken = await generateRefreshToken(userId);
+			const newRefreshToken = await generateRefreshToken(userId);
         await this.set(newRefreshToken, phoneNumber);
 
         const newAccessToken = await generateAccessToken(user, this.env.JWT_SECRET);

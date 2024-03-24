@@ -7,6 +7,7 @@ import {
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 
+// RetrieveFileHandler class is designed to handle file retrieval requests.
 export class RetrieveFileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     summary: "retrieve a file by id",
@@ -39,6 +40,7 @@ export class RetrieveFileHandler extends OpenAPIRoute {
     },
   };
 
+  // The handle method processes the file retrieval request.
   async handle(
     _request: Request,
     env: Env,
@@ -47,17 +49,20 @@ export class RetrieveFileHandler extends OpenAPIRoute {
   ): Promise<Response> {
     let { id } = data.params;
     try {
+      // Attempt to retrieve the file and its metadata from Cloudflare KV storage.
       const fileResponse = await env.FILES_KV.getWithMetadata<{
         fileName: string;
         type: string;
       }>(id, "arrayBuffer");
 
+      // If the file is not found, return a 404 error response.
       if (!fileResponse) {
         return errorResponse("File not found", 404);
       }
 
+      // If the file is found, return the file content and relevant headers.
       return new Response(fileResponse.value, {
-        encodeBody: "manual",
+
         headers: {
           id,
           "file-name": fileResponse.metadata!.fileName,
@@ -66,7 +71,9 @@ export class RetrieveFileHandler extends OpenAPIRoute {
         },
       });
     } catch (error) {
+      // Log any errors encountered during the file retrieval process.
       console.error("Error retrieving file:", error);
+      // Return a 500 error response if an exception occurs.
       return errorResponse("Failed to retrieve file");
     }
   }

@@ -7,6 +7,8 @@ import {
 import { instanceToPlain } from "class-transformer";
 import { getUserById } from "../db/services/get-user";
 import { Env } from "../types/Env";
+import { errorResponse } from "../utils/error-response";
+import { decode, verify } from "@tsndr/cloudflare-worker-jwt";
 
 export class GetOwnProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -38,25 +40,26 @@ export class GetOwnProfileHandler extends OpenAPIRoute {
     const token = authorization?.split(" ")[1];
 
     if (!token) {
-      return new Response(JSON.stringify({ error: "Authorization required" }), {
-        status: 401,
-      });
+      return errorResponse("Authorization required", 401);
     }
-
     try {
-      const profile = await getUserById(env.DB, data.id);
-
-      return new Response(JSON.stringify(instanceToPlain(profile, {})), {
-        status: 200,
-      });
-    } catch (error) {
-      console.error(error);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch profile" }),
-        {
-          status: 500,
-        },
-      );
+      // Verify the JWT token
+      const isValid = await verify(token, env.JWT_SECRET);
+      if (!isValid) {
+        return errorResponse("Unauthorized", 401);
+      }
+    } catch {
+      return errorResponse("Unauthorized", 401);
     }
+    const decoded = decode(token);
+    const userId = decoded?.payload?.sub;
+    if (!userId) {
+      return errorResponse("Invalid sender", 401);
+    }
+    const profile = await getUserById(env.DB, userId);
+
+    return new Response(JSON.stringify(instanceToPlain(profile)), {
+      status: 200,
+    });
   }
 }

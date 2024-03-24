@@ -1,12 +1,12 @@
 import jwt from "@tsndr/cloudflare-worker-jwt";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
-import { NewMessageEvent } from "../types/events";
+import { NewMessageEvent } from "../types/Event";
 import {
-  Num,
   OpenAPIRoute,
   OpenAPIRouteSchema,
   Str,
+  Num,
 } from "@cloudflare/itty-router-openapi";
 
 interface SendMessageRequest {
@@ -19,7 +19,7 @@ export class SendMessageHandler extends OpenAPIRoute {
     tags: ["messages"],
     summary: "Send a message between users",
     requestBody: {
-      recieverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
+      receiverId: new Str({ example: "JC0TvKi3f2bIQtBcW1jIn" }),
       message: new Str({ example: "Hello, how are you?" }),
     },
     responses: {
@@ -55,26 +55,31 @@ export class SendMessageHandler extends OpenAPIRoute {
     const token = authorization.substring(7);
     try {
       // Verify the JWT token
-      await jwt.verify(token, env.JWT_SECRET);
+      const isValid = await jwt.verify(token, env.JWT_SECRET);
+      if (!isValid) {
+        return errorResponse("Unauthorized", 401);
+      }
     } catch {
       return errorResponse("Unauthorized", 401);
     }
     const decoded = jwt.decode(token);
-    const senderId = decoded?.payload?.sub;
-    if (!senderId) {
+    const userId = decoded?.payload?.sub;
+    if (!userId) {
       return errorResponse("Invalid sender", 400);
     }
     try {
       const { receiverId, message } = body;
       // Retrieve sender and receiver's durable object IDs
-      const senderDOId = env.USER_MESSAGING_DO.idFromName(senderId);
+      const senderDOId = env.USER_MESSAGING_DO.idFromName(userId);
       const receiverDOId = env.USER_MESSAGING_DO.idFromName(receiverId);
       const senderDO = env.USER_MESSAGING_DO.get(senderDOId);
       const receiverDO = env.USER_MESSAGING_DO.get(receiverDOId);
+
       // Create an event object with message details and timestamp
       const event: NewMessageEvent = {
+        userId,
         type: "newMessage",
-        senderId,
+        senderId: userId,
         receiverId,
         message,
         timestamp: Date.now(),
@@ -82,13 +87,17 @@ export class SendMessageHandler extends OpenAPIRoute {
 
       const reqBody = JSON.stringify(event);
       const headers = new Headers({ "Content-Type": "application/json" });
-
+      const url = new URL(request.url);
       const storings: Promise<any>[] = [
         senderDO.fetch(
-          new Request(request.url, { method: "POST", body: reqBody, headers }),
+          new Request(`${url.origin}/${userId}/send`, {
+            method: "POST",
+            body: reqBody,
+            headers,
+          }),
         ),
       ];
-      if (receiverId != "0" && receiverId !== senderId) {
+      if (receiverId != "0" && receiverId !== userId) {
         storings.push(
           receiverDO.fetch(
             new Request(request.url, {

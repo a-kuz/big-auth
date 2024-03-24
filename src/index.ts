@@ -20,8 +20,8 @@ import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
 import { GetChatsHandler } from "./handlers/GetChatsHandler";
 import { GetProfileHandler } from "./handlers/GetProfileHandler";
 
-export { RefreshTokenDO } from "./durable-objects/refresh-token";
-export { UserMessagingDO } from "./durable-objects/user-messaging";
+export { RefreshTokenDO } from "./durable-objects/RefreshTokenDO";
+export { UserMessagingDO } from "./durable-objects/messaging";
 
 const router = OpenAPIRouter({
   schema: {

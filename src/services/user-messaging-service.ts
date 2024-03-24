@@ -1,4 +1,4 @@
-import { UserMessagingDO } from "../durable-objects/user-messaging";
+import { UserMessagingDO } from "../durable-objects/messaging/UserMessagingDO";
 import { Env } from "../types/Env";
 
 // UserMessagingService encapsulates the logic for interacting with the UserMessagingDO Durable Object

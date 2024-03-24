@@ -1,25 +1,29 @@
-import { ChatList, ChatListItem } from "../types/ChatList";
-import { Env } from "../types/Env";
-import { BaseEvent, EditMessageEvent, NewMessageEvent } from "../types/Event";
+import { ChatList, ChatListItem } from "../../types/ChatList";
+import { Env } from "../../types/Env";
+import { EditMessageEvent, NewMessageEvent } from "../../types/Event";
+import { errorResponse } from "../../utils/error-response";
+import { internalSocket } from "./internal-socket";
+import { userSocket } from "./user-socket";
 
 export class UserMessagingDO implements DurableObject {
   public server?: WebSocket;
   constructor(
     private readonly state: DurableObjectState,
-    private online: boolean,
-
     private readonly env: Env,
   ) {}
 
   async fetch(request: Request) {
     const url = new URL(request.url);
     const paths = url.pathname.split("/").filter((p) => p);
-    this.#userId = paths[0];
+    this.userId = paths[0];
     const action = paths[1];
+    this.#origin = url.origin;
 
     switch (action) {
       case "websocket":
-        return this.websocket(request);
+        return this.userSocket(request);
+      case "internal-websocket":
+        return this.internalSocket(request);
       case "send":
         return this.dialogMessage(request);
       case "edit":
@@ -46,13 +50,13 @@ export class UserMessagingDO implements DurableObject {
       eventData.receiverId === "0"
     )
       return this.sendToFavorites(eventId, eventData);
-    else if (eventData.receiverId === this.#userId)
+    else if (eventData.receiverId === this.userId)
       return this.receiveMessage(eventId, eventData);
     else return this.sendMessage(eventId, eventData);
   }
 
   async sendToFavorites(eventId: number, eventData: NewMessageEvent) {
-    const chatId = this.#userId;
+    const chatId = this.userId;
     const [chats, chat] = this.toTop(
       (await this.state.storage.get<ChatList>("chatList")) || [],
       chatId,
@@ -181,51 +185,24 @@ export class UserMessagingDO implements DurableObject {
     });
   }
 
-  async websocket(request: Request) {
-    // Expect to receive a WebSocket Upgrade request.
-    // If there is one, accept the request and return a WebSocket Response.
+  async userSocket(request: Request): Promise<Response> {
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== "websocket") {
-      return new Response("Durable Object expected Upgrade: websocket", {
-        status: 426,
-      });
+      return errorResponse("Durable Object expected Upgrade: websocket", 426);
     }
+    const client = userSocket(this);
 
-    // Creates two ends of a WebSocket connection.
-    const webSocketPair = new WebSocketPair();
-    const [client, server] = Object.values(webSocketPair);
-
-    // Calling `accept()` tells the runtime that this WebSocket is to begin terminating
-    // request within the Durable Object. It has the effect of "accepting" the connection,
-    // and allowing the WebSocket to send and receive messages.
-    server.accept();
-    this.server = server;
-
-    // Upon receiving a message from the client, the server replies with the same message,
-    // but will prefix the message with "[Durable Object]: ".
-    this.server.addEventListener("message", (event: MessageEvent) => {
-      server.send(`${event.data}`);
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
     });
-    server.addEventListener("open", (event: Event) => {
-      this.online = true;
-			server.send(`${this.#userId} online`);
-    });
-
-    setInterval(() => {
-      try {
-        server.send(`ping`);
-      } catch (e) {
-        console.error(e);
-        this.online = false;
-      }
-    }, 3000);
-
-    // If the client closes the connection, the runtime will close the connection too.
-    server.addEventListener("close", (cls: CloseEvent) => {
-      this.online = false;
-
-      server.close(cls.code, "bue");
-    });
+  }
+  async internalSocket(request: Request): Promise<Response> {
+    const upgradeHeader = request.headers.get("Upgrade");
+    if (!upgradeHeader || upgradeHeader !== "websocket") {
+      return errorResponse("Durable Object expected Upgrade: websocket", 426);
+    }
+    const client = internalSocket(this);
 
     return new Response(null, {
       status: 101,
@@ -233,5 +210,40 @@ export class UserMessagingDO implements DurableObject {
     });
   }
 
-  #userId = "";
+  async online() {
+    const chatList = await this.state.storage.get<ChatList>("chatList");
+    if (!chatList) {
+      return;
+    }
+    for (const chat of chatList) {
+      if (chat.type !== "dialog") {
+        continue;
+      }
+      let socket = this.sockets.get(chat.id);
+      if (
+        !(
+          socket?.readyState === WebSocket.READY_STATE_OPEN ||
+          socket?.readyState === WebSocket.OPEN
+        )
+      ) {
+        const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id);
+        const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId);
+
+        socket = (
+          await receiverDO.fetch(
+            new Request(`${origin}/${this.userId}/internal-websocket`),
+          )
+        ).webSocket!;
+
+        socket.send(`${this.userId} online`);
+        this.sockets.set(chat.id, socket);
+      }
+    }
+  }
+
+  async offline() {}
+
+  userId = "";
+  #origin = "";
+  sockets: Map<string, WebSocket> = new Map();
 }

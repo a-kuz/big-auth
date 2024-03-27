@@ -19,6 +19,8 @@ import { SendMessageHandler } from "./handlers/SendMessageHandler";
 import { NetworkInfoHandler } from "./handlers/NetworkInfoHandler";
 import { GetChatsHandler } from "./handlers/GetChatsHandler";
 import { GetProfileHandler } from "./handlers/GetProfileHandler";
+import { WebsocketHandler } from "./handlers/WebsocketHandler";
+import { CORS } from "./utils/cors";
 
 export { RefreshTokenDO } from "./durable-objects/RefreshTokenDO";
 export { UserMessagingDO } from "./durable-objects/messaging";
@@ -41,10 +43,11 @@ router.post("/send-code", SendCodeHandler);
 router.post("/verify-code", VerifyCodeHandler);
 router.post("/auth/refresh", RefreshTokenHandler);
 
+router.get("/profile/:id", GetProfileHandler);
+
 router.get("/profile", GetOwnProfileHandler);
 router.post("/profile", UpdateProfileHandler);
 
-router.get("/profile/:id", GetProfileHandler);
 
 router.get("/public/:id/", RetrieveFileHandler);
 router.post("/public/upload", UploadFileHandler);
@@ -56,6 +59,10 @@ router.post("/m/send", SendMessageHandler);
 router.get("/chats", GetChatsHandler);
 
 router.get("/network", NetworkInfoHandler);
+
+router.get("/websocket*", WebsocketHandler);
+router.options('*', CORS) // TODO: add security CORS
+
 
 // Redirect root request to the /docs page
 router.original.get("/", (request: Request) =>

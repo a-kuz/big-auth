@@ -1,13 +1,15 @@
 import { getUserByToken } from "../services/get-user-by-token";
 import { errorResponse } from "../utils/error-response";
 import { Env } from "../types/Env";
-import { OpenAPIRoute, OpenAPIRouteSchema, Str } from "@cloudflare/itty-router-openapi";
+import { OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from "@cloudflare/itty-router-openapi";
 import { instanceToPlain } from "class-transformer";
 
 export class GetProfileHandler extends OpenAPIRoute {
 	static schema: OpenAPIRouteSchema = {
 		summary: "Get user profile",
+		operationId: "user profule",
 		tags: ["contacts"],
+		parameters: { id: Path(Str) },
 		responses: {
 			"200": {
 				description: "Profile fetched successfully",
@@ -27,7 +29,7 @@ export class GetProfileHandler extends OpenAPIRoute {
 		security: [{ BearerAuth: [] }],
 	};
 
-	async handle(request: Request, env: Env, context: any) {
+	async handle(request: Request, env: Env, context: any, data: { id: string }) {
 		const authorization = request.headers.get("Authorization");
 		const token = authorization?.split(" ")[1];
 

@@ -1,51 +1,50 @@
-import {
-  Exclude,
-  Expose,
-  Transform,
-  Type,
-  plainToClass,
-} from "class-transformer";
-import "reflect-metadata";
-import {
-  ObjectCamelToSnakeCase,
-  fromSnakeToCamel,
-} from "../../utils/name-сases";
+import { Exclude, Expose, Transform, Type, instanceToPlain, plainToClass } from 'class-transformer'
+import 'reflect-metadata'
+import { ObjectCamelToSnakeCase, fromSnakeToCamel } from '../../utils/name-сases'
 
-// The User class represents a user entity with various properties and behaviors.
-@Exclude()
+const NullToUndefined = Transform(({ value }) => value || undefined)
+
+@Expose()
 export class User {
-  @Expose({})
-  id: string;
-  @Expose({})
-  phoneNumber: string;
-  @Expose()
-  @Transform(({ value }) => value || undefined)
-  username?: string;
-  @Expose()
-  @Transform(({ value }) => value || undefined)
-  firstName?: string;
-  @Expose()
-  @Transform(({ value }) => value || undefined)
-  lastName?: string;
-  @Expose()
-  @Transform(({ value }) => value || undefined)
-  avatarUrl?: string;
+  id: string
+
+  phoneNumber: string
+
+  @NullToUndefined
+  username?: string
+
+  @NullToUndefined
+  firstName?: string
+
+  @NullToUndefined
+  lastName?: string
+
+  @NullToUndefined
+  avatarUrl?: string
+
+  @Exclude()
   @Type(() => Number)
-  @Transform(({ value }) => value || undefined)
-  createdAt?: number;
+  @NullToUndefined
+  createdAt?: number
+
+  @Exclude()
   @Type(() => Number)
-  @Transform(({ value }) => value || undefined)
-  deletedAt?: number;
+  @NullToUndefined
+  deletedAt?: number
 
   // Converts a database row object into an instance of the User class.
   static fromDb(userRow: UserDB) {
-    return plainToClass(User, fromSnakeToCamel(userRow));
+    return plainToClass(User, fromSnakeToCamel(userRow))
   }
 
   constructor(id: string, phoneNumber: string) {
-    this.id = id;
-    this.phoneNumber = phoneNumber;
+    this.id = id
+    this.phoneNumber = phoneNumber
+  }
+
+  profile() {
+    return instanceToPlain(this, {})
   }
 }
 
-export type UserDB = ObjectCamelToSnakeCase<User>;
+export type UserDB = ObjectCamelToSnakeCase<User>

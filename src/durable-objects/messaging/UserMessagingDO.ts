@@ -43,19 +43,17 @@ export class UserMessagingDO implements DurableObject {
 			userId: this.userId,
 			server: this.server,
 			wss: this.state.getWebSockets(),
+			r: request.fetcher
 		})
 
 		switch (action) {
 			case 'websocket':
 				return this.userSocket(request)
-			case 'internal-websocket':
-				return this.internalSocket(request)
 			case 'online':
 				return this.friendOnline(request)
 			case 'offline':
 				return this.friendOffline(request)
 			case 'send':
-				return this.dialogMessage(request)
 			case 'receive':
 				return this.dialogMessage(request)
 			case 'edit':
@@ -252,11 +250,6 @@ export class UserMessagingDO implements DurableObject {
 			const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
 			const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
-			// const chatSocket = await receiverDO.fetch(
-			//   new Request(`${this.#origin}/websocket/${chat.id}/internal-websocket`, {
-			//     method: 'GET',
-			//   }),
-			// )
 			const chatStatus = await (
 				await receiverDO.fetch(
 					new Request(`${this.#origin}/${chat.id}/online`, {
@@ -266,10 +259,12 @@ export class UserMessagingDO implements DurableObject {
 				)
 			).text()
 
-			// chatSocket.webSocket?.accept()
-			// this.server?.addEventListener('close', event => {
-			//   chatSocket.webSocket?.send(JSON.stringify({ type: 'offline', userId: this.userId }))
-			// })
+			new Request(`/online`, {
+				method: 'POST',
+				body: JSON.stringify({ type: 'online', userId: this.userId }),
+			}),
+			if (chatStatus==='online') {}
+				await this.friendOnline()
 
 			await this.fetch(
 				new Request(`${this.#origin}/${this.userId}/${chatStatus}`, {
@@ -330,22 +325,6 @@ export class UserMessagingDO implements DurableObject {
 		this.state.acceptWebSocket(server, ['user'])
 		this.server = server
 		this.state.waitUntil(this.online())
-
-		return new Response(null, {
-			status: 101,
-			webSocket: client,
-		})
-	}
-
-	async internalSocket(request: Request): Promise<Response> {
-		const upgradeHeader = request.headers.get('Upgrade')
-		if (!upgradeHeader || upgradeHeader !== 'websocket') {
-			return errorResponse('Durable Object expected Upgrade: websocket', 426)
-		}
-		const webSocketPair = new WebSocketPair()
-		const [client, server] = Object.values(webSocketPair)
-
-		this.state.acceptWebSocket(server, ['internal'])
 
 		return new Response(null, {
 			status: 101,

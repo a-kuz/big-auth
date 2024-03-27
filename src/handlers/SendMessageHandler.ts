@@ -100,11 +100,11 @@ export class SendMessageHandler extends OpenAPIRoute {
       if (receiverId != "0" && receiverId !== userId) {
         storings.push(
           receiverDO.fetch(
-            new Request(request.url, {
-              method: "POST",
-              body: reqBody,
-              headers,
-            }),
+            new Request(`${url.origin}/${receiverId}/receive`, {
+							method: "POST",
+							body: JSON.stringify({... event,  userId: receiverId}),
+							headers,
+						}),
           ),
         );
       }

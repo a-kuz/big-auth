@@ -7,6 +7,7 @@ module.exports = [
 		plugins: { "simple-import-sort": simpleImportSort },
 		ignores: ["**/*.js"],
 		rules: {
+			"@stylistic/ts/member-delimiter-style": ["never", {}],
 
 			"simple-import-sort/imports": [
 				"error",

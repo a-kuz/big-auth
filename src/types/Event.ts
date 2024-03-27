@@ -1,5 +1,5 @@
-export interface BaseEvent {
-  type: string;
+export interface BaseEvent<S = EventType> {
+  type: S;
   timestamp: number;
   userId: string;
 }
@@ -24,4 +24,26 @@ export interface ReadMessageEvent extends BaseEvent {
   readerId: string;
 }
 
-export type Event = NewMessageEvent | EditMessageEvent | ReadMessageEvent;
+export interface OnlineEvent extends BaseEvent<Online> {
+  type: "online";
+}
+export interface OfflineEvent extends BaseEvent<Offline> {
+  type: "offline";
+}
+
+export type Event =
+  | NewMessageEvent
+  | EditMessageEvent
+  | ReadMessageEvent
+  | OnlineEvent
+  | OfflineEvent;
+
+export type NewMessageUpdate = "newMessage";
+export type Online = "online";
+export type Offline = "offline";
+export type EventType =
+  | "newMessage"
+  | "editMessage"
+  | "readMessage"
+  | "online"
+  | "offline";

@@ -9,6 +9,9 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 
 export class WebsocketHandler extends OpenAPIRoute {
+  static schema: OpenAPIRouteSchema = {
+    security: [{ BearerAuth: [] }],
+  }
   validateRequest(request: Request<unknown, CfProperties<unknown>>): Promise<RouteValidated> {
     // @ts-ignore
     return { data: {} }
@@ -25,7 +28,7 @@ export class WebsocketHandler extends OpenAPIRoute {
           if (protocol) {
             if (protocol.startsWith('protocol, e')) {
               token = protocol.slice(10)
-							console.log(token)
+              console.log(token)
             }
           }
         } catch (e) {}

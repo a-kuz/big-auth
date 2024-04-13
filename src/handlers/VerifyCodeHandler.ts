@@ -120,6 +120,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     const responseData = (await response.json()) as {
       status: 'pending' | 'approved' | string
     }
+		console.log(responseData)
 
     return responseData.status
   }

@@ -1,5 +1,6 @@
 {
 	"compilerOptions": {
+		"baseUrl": ".",
 		"noEmit": true,
 		"module": "esnext",
 		"allowSyntheticDefaultImports": true,
@@ -8,7 +9,9 @@
 		"experimentalDecorators": true,
     "emitDecoratorMetadata": true,
 		"strict": true,
-
+		"paths": {
+      "~/*": ["src/*"]
+    },
 		"moduleResolution": "node",
 		"types": ["@cloudflare/workers-types", "@types/service-worker-mock"]
 	},

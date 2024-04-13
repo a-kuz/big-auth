@@ -35,7 +35,7 @@ export class GetChatsHandler extends OpenAPIRoute {
               }),
               name: new Str({ example: "Серёжа" }),
               lastMessageText: new Str({ example: "Hi" }),
-              lastMessageTime: new DateTime(),
+              lastMessageTime: new Num({example: 1710436789784}),
               lastMessageAuthor: new Str({
                 required: false,
                 example: "Серёжа",

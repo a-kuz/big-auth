@@ -1,6 +1,6 @@
 export type ChatType = "dialog" | "group" | "channel" | "favorites";
 
-export type MessageStatus = "read" | "unread";
+export type MessageStatus = "read" | "unread" | "undelivered";
 
 export interface ChatListItem {
   type: ChatType;
@@ -8,7 +8,7 @@ export interface ChatListItem {
   photoUrl?: string; // необязательное поле
   name: string;
   lastMessageText: string;
-  lastMessageTime: Date; // Используйте тип Date для DateTime
+  lastMessageTime: number; // Используйте тип Date для DateTime
   lastMessageAuthor?: string; // необязательное поле
   lastMessageStatus: MessageStatus;
   missedMessagesCount: number;

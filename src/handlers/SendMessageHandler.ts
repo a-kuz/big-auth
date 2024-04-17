@@ -77,7 +77,7 @@ export class SendMessageHandler extends OpenAPIRoute {
 
       // Create an event object with message details and timestamp
       const event: NewMessageEvent = {
-        type: "newMessage",
+        type: "new",
         userId,
         senderId: userId,
         receiverId,

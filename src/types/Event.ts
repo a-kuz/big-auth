@@ -14,7 +14,7 @@ export interface NewMessageEvent extends BaseEvent<NewMessage> {
 
 export interface EditMessageEvent extends BaseEvent<EditMessage> {
   messageId: number
-  newMessage: string
+  new: string
 }
 
 export interface ReadMessageEvent extends BaseEvent<ReadMessage> {
@@ -26,13 +26,13 @@ export interface OnlineEvent extends BaseEvent<Online> {
 export interface OfflineEvent extends BaseEvent<Offline> {
 }
 
-export type NewMessage = 'newMessage'
+export type NewMessage = 'new'
 export type EditMessage = 'edit'
 export type ReadMessage = 'read'
 export type Online = 'online'
 export type Offline = 'offline'
 
-export type EventType = 'newMessage' | 'editMessage' | 'readMessage' | 'online' | 'offline'
+export type EventType = 'new' | 'editMessage' | 'readMessage' | 'online' | 'offline'
 
 export type Event =
   | NewMessageEvent

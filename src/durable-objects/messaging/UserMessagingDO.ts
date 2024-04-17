@@ -238,12 +238,12 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async editMessage(request: Request) {
-    const { newMessage, timestamp } = await request.json<EditMessageEvent>()
+    const { new, timestamp } = await request.json<EditMessageEvent>()
     const event = await this.state.storage.get<EditMessageEvent>(`event-${timestamp}`)
     if (!event) {
       return new Response('Event not found', { status: 404 })
     }
-    event.newMessage = newMessage
+    event.new = new
     await this.state.storage.put(`event-${timestamp}`, event)
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
@@ -418,7 +418,7 @@ export class UserMessagingDO implements DurableObject {
     await this.state.storage.put(`event-${eventId}`, event)
     await this.state.storage.put('eventIdCounter', eventId)
     switch (event.type) {
-      case 'newMessage':
+      case 'new':
         ws.send(JSON.stringify(await this.sendMessage(eventId, event)))
 
         break

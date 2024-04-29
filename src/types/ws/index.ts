@@ -1,22 +1,28 @@
 import {
-	EditMessage,
-	MarkDelivered,
-	MarkRead,
-	NewMessage,
-	Offline,
-	Online,
-	Typing
+	dlt,
+	edit,
+	dlvrd,
+	read,
+	nw,
+	offline,
+	online,
+	typing,
+	getChat,
+	getChats,
+	getMessages
 } from './event-literals'
 
-export type ClientEventType = NewMessage | EditMessage | MarkRead | MarkDelivered | Typing | Offline
+export type ClientRequestType = nw | edit | read | dlvrd | dlt | getChat | getChats | getMessages
+export type ClientEventType = typing | offline
 export type ServerEventType =
-  | NewMessage
-  | EditMessage
-  | MarkRead
-  | MarkDelivered
-  | Typing
-  | Online
-  | Offline
+  | nw
+  | edit
+  | read
+  | dlvrd
+  | typing
+  | online
+  | offline
+
 
 export interface NewMessageResponse {
   messageId: number

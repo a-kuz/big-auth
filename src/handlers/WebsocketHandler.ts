@@ -38,11 +38,17 @@ export class WebsocketHandler extends OpenAPIRoute {
         return errorResponse('Unauthorized', 401)
       }
 
+      let user
       try {
-        const user = await getUserByToken(env.DB, token, env.JWT_SECRET)
+        try {
+          user = await getUserByToken(env.DB, token, env.JWT_SECRET)
+        } catch (e) {
+          return errorResponse('invalid token', 401)
+        }
         if (!user) {
           return errorResponse('user not exist', 401)
         }
+
         const receiverDOId = env.USER_MESSAGING_DO.idFromName(user.id)
         const mDO = env.USER_MESSAGING_DO.get(receiverDOId)
 
@@ -53,7 +59,8 @@ export class WebsocketHandler extends OpenAPIRoute {
         return errorResponse('Something went wrong')
       }
     } catch (error) {
-      console.error(error)
+      console.error('!!!!')
+      console.error({ error })
       return errorResponse('Something went worng')
     }
   }

@@ -1,14 +1,13 @@
-import { ServerEventType } from '.';
+import { ServerEventType } from '.'
 import { AttachmentType, Attachment } from './attachments'
-import { ServerEventPayload } from './payload-types';
+import { ServerEventPayload } from './payload-types'
 
-
-export interface WebsocketServerEvent<Event extends ServerEventType> {
-	type: 'event';
-	timestamp: number;
-	id: number;
-	eventType: Event;
-	payload: ServerEventPayload;
+export interface WebsocketServerEvent<Event extends ServerEventType = ServerEventType> {
+  type: 'event'
+  timestamp: number
+  id: number
+  eventType: Event
+  payload: ServerEventPayload
 }
 
 export interface EditMessageEvent {
@@ -39,8 +38,21 @@ export interface TypingEvent {
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
   userId?: string
-  messageId: number
   message: string
-  timestamp: string
+  timestamp?: number
   attachments?: Attachment<A>[]
 }
+
+export interface MarkDeliveredEvent {
+  chatId: string
+	userId?: string
+  messageId: number,
+	timestamp: number
+}
+export interface MarkReadEvent {
+  chatId: string
+	userId?: string
+  messageId: number,
+	timestamp: number
+}
+

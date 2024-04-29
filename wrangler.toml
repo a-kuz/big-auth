@@ -1,18 +1,18 @@
 name = "big-auth"
 
 compatibility_date = "2024-03-04"
-workers_dev = true
-route = "https://dev.big.a-kuznetsov.cc/*"
-account_id = "8ef32e6718ee4ae45070f737ab1eacf8"
+route = "https://dev.iambig.ai/*"
+
 
 main = "./src/index.ts"
 logpush = true
 
 kv_namespaces = [
-	{ binding = "FILES_KV", id = "024fc4b38aaa497d99037e5e1b23057b" },
+	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76" },
 ]
 [vars]
 TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
+ORIGIN = "https://dev.iambig.ai"
 
 [placement]
 mode = "off"
@@ -22,19 +22,21 @@ workers_dev = true
 
 [env.development.vars]
 ENV = "development"
+ORIGIN = "https://dev.iambig.ai"
 
 [env.production]
 workers_dev = false
 
 
+
 [env.production.vars]
 ENV = "production"
+ORIGIN = "https://iambig.ai"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "big"
-database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
-preview_database_id = "25ae5f05-9c48-4851-bf88-d28ba703b7eb"
+database_name = "imbig"
+database_id = "50a83409-8f4f-49ad-af14-573f33b0b91d"
 migrations_table = "migrations"
 migrations_dir = "src/db/migrations"
 
@@ -49,14 +51,7 @@ bindings = [
 	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" },
 ]
 
-[[migrations]]
-tag = "v2"
-new_classes = ["UserMessagingDO"]
-
-[[migrations]]
-tag = "v3"
-deleted_classes = ["UserMessagingDO"]
 
 [[migrations]]
 tag = "v4"
-new_classes = ["UserMessagingDO"]
+new_classes = ["UserMessagingDO", "RefreshTokenDO"]

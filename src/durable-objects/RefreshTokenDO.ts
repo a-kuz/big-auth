@@ -45,7 +45,7 @@ export class RefreshTokenDO implements DurableObject {
 
         return await this.refresh(refreshToken, userId, phoneNumber)
       } else {
-        return errorResponse('Not found', 404)
+        return errorResponse('Not found', 401)
       }
     } else {
       const refreshToken = await this.get()
@@ -82,7 +82,7 @@ export class RefreshTokenDO implements DurableObject {
   async set(refreshToken: string, phoneNumber: string) {
     await this.state.storage.put<Row>('refreshToken', {
       refreshToken,
-      createdAt: Date.now(),
+      createdAt: Math.floor(Date.now() / 1000),
       phoneNumber,
     })
   }

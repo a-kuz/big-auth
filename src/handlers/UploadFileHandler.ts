@@ -23,7 +23,7 @@ export class UploadFileHandler extends OpenAPIRoute {
         schema: {
           url: new Str({
             example:
-              "https://dev.big.a-kuznetsov.cc/public/zAE2h2mPSKjWwnxw8qxp4",
+              "https://dev.iambig.ai/public/zAE2h2mPSKjWwnxw8qxp4",
           }),
         },
       },

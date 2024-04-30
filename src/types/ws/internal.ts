@@ -5,7 +5,7 @@ export interface MarkDeliveredInternalEvent {
   messageTimestamp: number
 	timestamp: number
 }
-export interface MarkDeliveredInternalEvent {
+export interface MarkReadInternalEvent {
   chatId: string
 	userId?: string
   messageTimestamp: number

@@ -70,17 +70,19 @@ export class WebSocketGod {
           ws.send(JSON.stringify(response))
       }
     } catch (e) {
-      ws.send(JSON.stringify({ error: { incomingMessage: message, exception: e } }))
+      ws.send(
+        JSON.stringify({ error: { incomingMessage: message, exception: (e as Error).message } }),
+      )
       console.error(e)
     }
   }
 
   ping(message: string | ArrayBuffer): boolean {
     this.lastPing = Date.now()
-    // @ts-ignore
     return (
-      message === PING ||
+			message === PING ||
       message instanceof ArrayBuffer ||
+			// @ts-ignore
       message.maxByteLength === 1 ||
       (message.length ?? 6) <= 5
     )
@@ -90,11 +92,11 @@ export class WebSocketGod {
     console.log({ f: 'webSocketClose', code, reason, wasClean })
 
     try {
-			await this.onlineService.offline()
-		} catch (e) {
-			console.error(e)
-		}
-		this.server = null
+      await this.onlineService.offline()
+    } catch (e) {
+      console.error(e)
+    }
+    this.server = null
     ws.close()
   }
 
@@ -113,7 +115,6 @@ export class WebSocketGod {
       console.error(e)
       return
     }
-
   }
 
   private refreshPing() {
@@ -145,7 +146,6 @@ export class WebSocketGod {
 
   async alarm(): Promise<void> {
     if (this.server) {
-
       if (this.lastPing)
         if (Date.now() - this.lastPing > 20000) {
           //@ts-ignore

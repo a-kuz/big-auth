@@ -13,6 +13,9 @@ export interface ChatListItem {
   lastMessageStatus: MessageStatus;
   missed: number;
   verified?: boolean;
+  isMine: boolean;
+  lastMessageId: number;
+
 }
 
 export type ChatList = ChatListItem[];

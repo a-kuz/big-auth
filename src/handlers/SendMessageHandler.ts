@@ -43,10 +43,7 @@ export class SendMessageHandler extends OpenAPIRoute {
     const token = authorization.substring(7)
     try {
       // Verify the JWT token
-      const isValid = await jwt.verify(token, env.JWT_SECRET)
-      if (!isValid) {
-        return errorResponse('Unauthorized', 401)
-      }
+      const isValid = await jwt.verify(token, env.JWT_SECRET, { throwError: true })
     } catch {
       return errorResponse('Unauthorized', 401)
     }
@@ -59,9 +56,7 @@ export class SendMessageHandler extends OpenAPIRoute {
       const { chatId, message, attachments = undefined } = body
       // Retrieve sender and receiver's durable object IDs
       const senderDOId = env.USER_MESSAGING_DO.idFromName(userId)
-      const receiverDOId = env.USER_MESSAGING_DO.idFromName(chatId)
       const senderDO = env.USER_MESSAGING_DO.get(senderDOId)
-      const receiverDO = env.USER_MESSAGING_DO.get(receiverDOId)
 
       // Create an event object with message details and timestamp
       const req: NewMessageRequest = {
@@ -69,40 +64,18 @@ export class SendMessageHandler extends OpenAPIRoute {
         message,
         attachments,
       }
-      const event: NewMessageEvent= {
-        chatId: userId,
-        message,
-        attachments,
-				userId
-      }
 
       const reqBody = JSON.stringify(req)
       const headers = new Headers({ 'Content-Type': 'application/json' })
       const url = new URL(request.url)
-      const storings: Promise<any>[] = [
-        senderDO.fetch(
-          new Request(`${url.origin}/${userId}/send`, {
-            method: 'POST',
-            body: reqBody,
-            headers,
-          }),
-        ),
-      ]
-      if (chatId != '0' && chatId !== userId) {
-        storings.push(
-          receiverDO.fetch(
-            new Request(`${url.origin}/${chatId}/receive`, {
-              method: 'POST',
-              body: JSON.stringify(event),
-              headers,
-            }),
-          ),
-        )
-      }
 
-      const [responseSender, responseReceiver] = await Promise.all(storings)
-      // Return a success response
-      return responseSender
+      return senderDO.fetch(
+        new Request(`${url.origin}/${userId}/send`, {
+          method: 'POST',
+          body: reqBody,
+          headers,
+        }),
+      )
     } catch (error) {
       console.error('SendMessageHandler Error:', error)
       return errorResponse('Failed to send message', 500)

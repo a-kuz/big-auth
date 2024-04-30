@@ -1,6 +1,7 @@
 import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
   MarkDeliveredRequest,
+  MarkReadRequest,
   NewMessageRequest,
   getChatsRequest,
   getMessagesRequest,
@@ -9,6 +10,7 @@ import { ChatMessage, DialogMessage } from '~/types/ws/messages'
 import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
 import {
   MarkDeliveredEvent,
+  MarkReadEvent,
   NewMessageEvent,
   OfflineEvent,
   OnlineEvent,
@@ -16,14 +18,13 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
+import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
+import { errorResponse } from '~/utils/error-response'
 import { newId } from '../../utils/new-id'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { dialogNameAndAvatar } from './utils/dialog-name-and-avatar'
 import { toTop } from './utils/move-chat-to-top'
-import { online } from '~/types/ws/event-literals'
-import { MarkDeliveredInternalEvent } from '~/types/ws/internal'
-import { errorResponse } from '~/utils/error-response'
 
 export class UserMessagingDO implements DurableObject {
   id = newId(3)
@@ -71,6 +72,8 @@ export class UserMessagingDO implements DurableObject {
         return this.fetchChats(request)
       case 'dlvrd':
         return this.dlvrdEventHandler(request)
+      case 'read':
+        return this.readEventHandler(request)
       default:
         return new Response(`${url.pathname} Not found`, { status: 404 })
     }
@@ -137,16 +140,66 @@ export class UserMessagingDO implements DurableObject {
     }
     await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
 
-    if (messages.length - 1 === messageId) {
+    if (messages[messages.length - 1].messageId === messageId) {
       const chats = (await this.state.storage.get<ChatList>('chatList')) || []
       const i = chats.findIndex(chat => chat.id === chatId)
       if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
         chats[i].lastMessageStatus = 'unread'
       }
+      await this.state.storage.put('chatList', chats)
     }
 
     if (this.onlineService.isOnline()) {
       await this.ws.sendEvent('dlvrd', eventId, event)
+    }
+    return new Response()
+  }
+
+  async readEventHandler(request: Request) {
+    const eventData = await request.json<MarkReadInternalEvent>()
+    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+
+    await this.state.storage.put('eventIdCounter', eventId)
+
+    const chatId = eventData.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    const endId = messages.findLastIndex(m => m.createdAt === eventData.messageTimestamp)
+    if (endId === -1) {
+      console.error('absolute fail')
+      return errorResponse('fail')
+    }
+    const messageId = messages[endId].messageId
+    const event: MarkReadEvent = { chatId, messageId, timestamp: eventData.timestamp }
+    await this.state.storage.put(`event-${eventId}`, event)
+    for (let i = endId; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (message.sender && message.sender !== this.userId) {
+        continue
+      }
+      if (message.read) {
+        break
+      }
+      if (!message.read) {
+        message.read = eventData.timestamp
+      }
+      if (!message.dlvrd) {
+        message.dlvrd = eventData.timestamp
+      }
+    }
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    if (messages[messages.length - 1].messageId === messageId) {
+      const chats = (await this.state.storage.get<ChatList>('chatList')) || []
+      const i = chats.findIndex(chat => chat.id === chatId)
+      if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
+        chats[i].lastMessageStatus = 'read'
+      }
+      await this.state.storage.put('chatList', chats)
+    }
+
+    if (this.onlineService.isOnline()) {
+      await this.ws.sendEvent('read', eventId, event)
     }
     return new Response()
   }
@@ -165,6 +218,7 @@ export class UserMessagingDO implements DurableObject {
         type: 'favorites',
         verified: false,
         lastMessageAuthor: chatId,
+        isMine: true,
       },
     )
     chat.missed = 0
@@ -183,7 +237,7 @@ export class UserMessagingDO implements DurableObject {
     const messageId = messages.length + 1
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: 'unread',
+      lastMessageStatus: 'undelivered',
       lastMessageText: eventData.message,
       lastMessageTime: eventData.timestamp,
       name: dialog[0],
@@ -191,6 +245,8 @@ export class UserMessagingDO implements DurableObject {
       verified: false,
       lastMessageAuthor: dialog[0],
       photoUrl: dialog[1],
+      isMine: false,
+      lastMessageId: messageId,
     }
     const [chats, chat] = toTop(
       (await this.state.storage.get<ChatList>('chatList')) || [],
@@ -210,6 +266,7 @@ export class UserMessagingDO implements DurableObject {
     }
 
     messages.push(message)
+    messages.sort((a, b) => a.createdAt - b.createdAt)
     await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
 
     let dlvrd = false
@@ -322,6 +379,7 @@ export class UserMessagingDO implements DurableObject {
   ): Promise<void | Object> {
     const timestamp = Math.round(Date.now() / 1000)
     let response: ServerResponsePayload = {}
+    console.log(type)
     switch (type) {
       case 'new':
         response = await this.newRequest(request as NewMessageRequest, timestamp)
@@ -334,6 +392,10 @@ export class UserMessagingDO implements DurableObject {
         return response
       case 'dlvrd':
         response = await this.dlvrdRequest(request as MarkDeliveredRequest, timestamp)
+        return response
+      case 'read':
+        response = await this.readRequest(request as MarkReadRequest, timestamp)
+        console.log(response)
         return response
     }
   }
@@ -365,6 +427,8 @@ export class UserMessagingDO implements DurableObject {
       verified: false,
       lastMessageAuthor: '',
       photoUrl: dialog[1],
+      isMine: true,
+      lastMessageId: messageId,
     }
 
     const [chats, chat] = toTop(
@@ -383,6 +447,7 @@ export class UserMessagingDO implements DurableObject {
     }
 
     messages.push(message)
+    messages.sort((a, b) => a.createdAt - b.createdAt)
     await this.sendNewEventFromRequest(chatId, message, timestamp)
 
     await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
@@ -392,16 +457,21 @@ export class UserMessagingDO implements DurableObject {
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
     const chatId = payload.chatId
     const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
     if (!messages.length) {
-      return {}
+      throw new Error('Chat is empty')
     }
-    if (payload.messageId ?? 0 > messages.length) {
-      return {}
+    let endIndex = messages.length - 1
+
+    if (payload.messageId) {
+      endIndex = messages.findLastIndex(m => m.messageId === payload.messageId)
+
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
     }
 
-    const endId = (payload.messageId ?? messages.length) - 1
-    let messageTimestamp = messages[endId].createdAt
-    for (let i = endId; i >= 0; i--) {
+    for (let i = endIndex; i >= 0; i--) {
       const message = messages[i] as DialogMessage
       if (!message.sender || message.sender === this.userId) {
         continue
@@ -412,11 +482,53 @@ export class UserMessagingDO implements DurableObject {
       message.dlvrd = timestamp
     }
 
-    await this.sendDlvrdEventFromRequest(chatId, messageTimestamp, timestamp)
+    await this.sendDlvrdEventFromRequest(chatId, messages[endIndex].createdAt, timestamp)
 
     await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
 
-    return {}
+    return { messageId: messages[endIndex].messageId, timestamp }
+  }
+
+  async readRequest(payload: MarkReadRequest, timestamp: number) {
+    const chatId = payload.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    if (!messages.length) {
+      throw new Error('Chat is empty')
+    }
+    let endIndex = messages.length - 1
+
+    if (payload.messageId) {
+      endIndex = messages.findLastIndex(m => m.messageId === payload.messageId)
+
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
+    }
+
+    for (let i = endIndex; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (!message.sender || message.sender === this.userId) {
+        continue
+      }
+      if (message.read) {
+        break
+      }
+
+      if (!message.dlvrd) {
+        message.dlvrd = timestamp
+      }
+
+      if (!message.read) {
+        message.read = timestamp
+      }
+    }
+
+    await this.sendReadEventFromRequest(chatId, messages[endIndex].createdAt, timestamp)
+
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    return { messageId: messages[endIndex].messageId, timestamp }
   }
 
   async sendDlvrdEventFromRequest(receiverId: string, messageTimestamp: number, timestamp: number) {
@@ -444,7 +556,37 @@ export class UserMessagingDO implements DurableObject {
     )
 
     if (resp.status !== 200) {
-      console.log(await resp.text())
+      console.error(await resp.text())
+      throw new Error("Couldn't send event")
+    }
+  }
+
+  async sendReadEventFromRequest(receiverId: string, messageTimestamp: number, timestamp: number) {
+    // Retrieve sender and receiver's durable object IDs
+
+    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
+    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+
+    // Create an event object with message details and timestamp
+    const event: MarkReadInternalEvent = {
+      chatId: this.userId,
+      messageTimestamp,
+      timestamp,
+    }
+
+    const reqBody = JSON.stringify(event)
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/read`, {
+        method: 'POST',
+        body: reqBody,
+        headers,
+      }),
+    )
+
+    if (resp.status !== 200) {
+      console.error(await resp.text())
       throw new Error("Couldn't send event")
     }
   }
@@ -473,8 +615,8 @@ export class UserMessagingDO implements DurableObject {
         headers,
       }),
     )
-		if (resp.status !== 200) {
-      console.log(await resp.text())
+    if (resp.status !== 200) {
+      console.error(await resp.text())
       throw new Error("Couldn't send event")
     }
   }

@@ -55,3 +55,11 @@ bindings = [
 [[migrations]]
 tag = "v4"
 new_classes = ["UserMessagingDO", "RefreshTokenDO"]
+
+[[migrations]]
+tag = "v5"
+deleted_classes = ["UserMessagingDO"]
+
+[[migrations]]
+tag = "v6"
+new_classes = ["UserMessagingDO"]

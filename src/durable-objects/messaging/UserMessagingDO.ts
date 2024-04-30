@@ -1,56 +1,46 @@
-import { getUserById } from '~/db/services/get-user'
-import { ChatList, ChatListItem } from '../../types/ChatList'
-import { Env } from '../../types/Env'
+import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
-  EditMessageEvent,
-  Event,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
+  getChatsRequest,
+  getMessagesRequest,
+} from '~/types/ws/client-requests'
+import { ChatMessage, DialogMessage } from '~/types/ws/messages'
+import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
+import {
+  MarkDeliveredEvent,
+  MarkReadEvent,
   NewMessageEvent,
   OfflineEvent,
   OnlineEvent,
-} from '../../types/Event'
-import { errorResponse } from '../../utils/error-response'
-import { newId } from '../../utils/new-id'
-import { displayName } from '~/services/display-name'
+} from '~/types/ws/server-events'
+import { ChatList, ChatListItem } from '../../types/ChatList'
+import { Env } from '../../types/Env'
 
-const PING = String.fromCharCode(0x9)
-const PONG = String.fromCharCode(0xa)
-const PING_BYTE = Uint8Array.from([0x9]).buffer
-const PONG_BYTE = Uint8Array.from([0x10]).buffer
-const SEVEN_DAYS = 604800000
+import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
+import { errorResponse } from '~/utils/error-response'
+import { newId } from '../../utils/new-id'
+import { OnlineStatusService } from './OnlineStatusService'
+import { WebSocketGod } from './WebSocketService'
+import { dialogNameAndAvatar } from './utils/dialog-name-and-avatar'
+import { toTop } from './utils/move-chat-to-top'
+
 export class UserMessagingDO implements DurableObject {
-  public server?: WebSocket
-  lastPing = 0
   id = newId(3)
+  private readonly ws: WebSocketGod
+  private readonly onlineService: OnlineStatusService
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
   ) {
-    console.log({ uuid: this.id, id: state.id })
-
-    this.state.setHibernatableWebSocketEventTimeout(SEVEN_DAYS / 7) // :))
+    this.ws = new WebSocketGod(state, env)
+    this.onlineService = new OnlineStatusService(this.state, this.env, this.ws)
+    this.ws.onlineService = this.onlineService
   }
 
   async alarm(): Promise<void> {
-    if (this.server) {
-      console.log({ readyState: this.server.readyState })
-
-      if (this.lastPing)
-        if (new Date() - this.lastPing > 20000) {
-          //@ts-ignore
-          try {
-            this.server.close()
-            //@ts-ignore
-            this.server = null
-            this.lastPing = 0
-          } catch (e) {
-            console.error(e)
-          }
-          // await this.offline()
-          return
-        }
-
-      await this.state.storage.setAlarm(Date.now() + 1000, { allowConcurrency: false })
-    }
+    this.ws.alarm()
   }
 
   async fetch(request: Request) {
@@ -60,96 +50,178 @@ export class UserMessagingDO implements DurableObject {
       .filter(p => p)
       .slice(-2)
     this.userId = paths[0]
+    this.onlineService.setUserId(this.userId)
     const action = paths[1]
-    this.#origin = url.origin
-    // console.log({
-    //   f: 'fetch',
-    //   id: this.id,
-    //   url: request.url,
-    //   userId: this.userId,
-    //   server: this.server,
-    //   wss: this.state.getWebSockets(),
-    //   r: request.fetcher,
-    // })
 
     switch (action) {
       case 'websocket':
-        return this.userSocket(request)
+        return this.handleWebsocket(request)
       case 'online':
         return this.friendOnline(request)
       case 'offline':
         return this.friendOffline(request)
       case 'send':
+        return await this.newRequestHandler(request)
       case 'receive':
-        return await this.dialogMessage(request)
+        return await this.newEventHandler(request)
       case 'edit':
         return this.editMessage(request)
       case 'chat':
         return this.fetchMessages(request)
       case 'chats':
         return this.fetchChats(request)
+      case 'dlvrd':
+        return this.dlvrdEventHandler(request)
+      case 'read':
+        return this.readEventHandler(request)
       default:
         return new Response(`${url.pathname} Not found`, { status: 404 })
     }
   }
 
-  async dialogMessage(request: Request) {
-    const eventData = await request.json<NewMessageEvent>()
+  async newRequestHandler(request: Request) {
+    const eventData = await request.json<NewMessageRequest>()
     const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+    const timestamp = Math.floor(Date.now() / 1000)
 
     await this.state.storage.put(`event-${eventId}`, eventData)
     await this.state.storage.put('eventIdCounter', eventId)
 
-    if (eventData.receiverId === eventData.senderId) {
-      return this.sendToFavorites(eventId, eventData)
-    } else if (eventData.receiverId === this.userId) {
-      return new Response(JSON.stringify(await this.receiveMessage(eventId, eventData)))
+    if (eventData.chatId === this.userId) {
+      return this.sendToFavorites(eventId, eventData, timestamp)
     } else {
-      return new Response(JSON.stringify(await this.sendMessage(eventId, eventData)))
+      const response = new Response(JSON.stringify(await this.newRequest(eventData, timestamp)))
+
+      return response
     }
   }
 
-  async friendOnline(request: Request) {
-    const eventData = await request.json<OnlineEvent>()
+  async newEventHandler(request: Request) {
+    const eventData = await request.json<NewMessageEvent>()
+    console.log({ eventData })
+    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+    const timestamp = Math.floor(Date.now() / 1000)
 
-    let on = false
-    for (const ws of this.state.getWebSockets('user')) {
-      ws?.send(JSON.stringify({ type: 'online', userId: eventData.userId }))
-      on = true
+    await this.state.storage.put(`event-${eventId}`, eventData)
+    await this.state.storage.put('eventIdCounter', eventId)
+
+    if (eventData.chatId === this.userId) {
+      return this.sendToFavorites(eventId, eventData, timestamp)
+    } else {
+      return new Response(JSON.stringify(await this.receiveMessage(eventId, eventData)))
     }
-    return new Response(on ? 'online' : '')
   }
+  async dlvrdEventHandler(request: Request) {
+    const eventData = await request.json<MarkDeliveredInternalEvent>()
+    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
 
-  async friendOffline(request: Request) {
-    const eventData = await request.json<OfflineEvent>()
+    await this.state.storage.put('eventIdCounter', eventId)
 
-    for (const ws of this.state.getWebSockets('user')) {
-      try {
-        ws?.send(JSON.stringify({ type: 'offline', userId: eventData.userId }))
-      } catch (e) {
-        console.error(e)
+    const chatId = eventData.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    const endId = messages.findLastIndex(m => m.createdAt === eventData.messageTimestamp)
+    if (endId === -1) {
+      console.error('absolute fail')
+      return errorResponse('fail')
+    }
+    const messageId = messages[endId].messageId
+    const event: MarkDeliveredEvent = { chatId, messageId, timestamp: eventData.timestamp }
+    await this.state.storage.put(`event-${eventId}`, event)
+    for (let i = endId; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (message.sender && message.sender !== this.userId) {
+        continue
       }
+      if (message.dlvrd) {
+        break
+      }
+      message.dlvrd = eventData.timestamp
+    }
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    if (messages[messages.length - 1].messageId === messageId) {
+      const chats = (await this.state.storage.get<ChatList>('chatList')) || []
+      const i = chats.findIndex(chat => chat.id === chatId)
+      if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
+        chats[i].lastMessageStatus = 'unread'
+      }
+      await this.state.storage.put('chatList', chats)
+    }
+
+    if (this.onlineService.isOnline()) {
+      await this.ws.sendEvent('dlvrd', eventId, event)
     }
     return new Response()
   }
 
-  async sendToFavorites(eventId: number, eventData: NewMessageEvent) {
+  async readEventHandler(request: Request) {
+    const eventData = await request.json<MarkReadInternalEvent>()
+    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+
+    await this.state.storage.put('eventIdCounter', eventId)
+
+    const chatId = eventData.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    const endId = messages.findLastIndex(m => m.createdAt === eventData.messageTimestamp)
+    if (endId === -1) {
+      console.error('absolute fail')
+      return errorResponse('fail')
+    }
+    const messageId = messages[endId].messageId
+    const event: MarkReadEvent = { chatId, messageId, timestamp: eventData.timestamp }
+    await this.state.storage.put(`event-${eventId}`, event)
+    for (let i = endId; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (message.sender && message.sender !== this.userId) {
+        continue
+      }
+      if (message.read) {
+        break
+      }
+      if (!message.read) {
+        message.read = eventData.timestamp
+      }
+      if (!message.dlvrd) {
+        message.dlvrd = eventData.timestamp
+      }
+    }
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    if (messages[messages.length - 1].messageId === messageId) {
+      const chats = (await this.state.storage.get<ChatList>('chatList')) || []
+      const i = chats.findIndex(chat => chat.id === chatId)
+      if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
+        chats[i].lastMessageStatus = 'read'
+      }
+      await this.state.storage.put('chatList', chats)
+    }
+
+    if (this.onlineService.isOnline()) {
+      await this.ws.sendEvent('read', eventId, event)
+    }
+    return new Response()
+  }
+
+  async sendToFavorites(eventId: number, eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.userId
-    const [chats, chat] = this.toTop(
+    const [chats, chat] = toTop(
       (await this.state.storage.get<ChatList>('chatList')) || [],
       chatId,
       {
         id: chatId,
         lastMessageStatus: 'read',
         lastMessageText: eventData.message,
-        lastMessageTime: eventData.timestamp,
+        lastMessageTime: timestamp,
         name: 'Favorites',
         type: 'favorites',
         verified: false,
         lastMessageAuthor: chatId,
+        isMine: true,
       },
     )
-    chat.missedMessagesCount = 0
+    chat.missed = 0
     chats.unshift(chat)
     await this.state.storage.put('chatList', chats)
 
@@ -159,11 +231,13 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async receiveMessage(eventId: number, eventData: NewMessageEvent) {
-    const chatId = eventData.senderId
-    const dialog = await this.dialogNameAndAvatar(chatId)
+    const chatId = eventData.chatId
+    const dialog = await dialogNameAndAvatar(chatId, this.env.DB)
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+    const messageId = messages.length + 1
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: 'unread',
+      lastMessageStatus: 'undelivered',
       lastMessageText: eventData.message,
       lastMessageTime: eventData.timestamp,
       name: dialog[0],
@@ -171,80 +245,38 @@ export class UserMessagingDO implements DurableObject {
       verified: false,
       lastMessageAuthor: dialog[0],
       photoUrl: dialog[1],
+      isMine: false,
+      lastMessageId: messageId,
     }
-    const [chats, chat] = this.toTop(
+    const [chats, chat] = toTop(
       (await this.state.storage.get<ChatList>('chatList')) || [],
       chatId,
       chatChanges,
     )
-    chat.missedMessagesCount = (chat.missedMessagesCount ?? 0) + 1
+    chat.missed = (chat.missed ?? 0) + 1
     chats.unshift(chat)
     await this.state.storage.put('chatList', chats)
-    return { success: true, eventId }
-  }
 
-  async dialogNameAndAvatar(id: string): Promise<[string, string?]> {
-    const cache = this.#dialogNameCaches.get(id)
-    if (cache) return cache
-
-    try {
-      const user = await getUserById(this.env.DB, id)
-      const result = [displayName(user), user.avatarUrl]
-      // this.#dialogNameCaches.set(id, result)
-      return result as [string, string?]
-    } catch (e) {
-      return ['@' + id, undefined]
+    const message: DialogMessage = {
+      createdAt: eventData.timestamp!,
+      messageId,
+      sender: eventData.chatId,
+      message: eventData.message,
+      attachments: eventData.attachments,
     }
-  }
 
-  async sendMessage(eventId: number, eventData: NewMessageEvent) {
-    const chatId = eventData.receiverId
-    const dialog = await this.dialogNameAndAvatar(chatId)
-    const chatChanges: Partial<ChatListItem> = {
-      id: chatId,
-      lastMessageStatus: 'unread',
-      lastMessageText: eventData.message,
-      lastMessageTime: eventData.timestamp,
-      missedMessagesCount: 0,
-      name: dialog[0],
-      type: 'dialog',
-      verified: false,
-      lastMessageAuthor: '',
-      photoUrl: dialog[1],
+    messages.push(message)
+    messages.sort((a, b) => a.createdAt - b.createdAt)
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    let dlvrd = false
+    if (this.onlineService.isOnline()) {
+      await this.ws.sendEvent('new', eventId, eventData)
     }
-    const [chats, chat] = this.toTop(
-      (await this.state.storage.get<ChatList>('chatList')) || [],
-      chatId,
-      chatChanges,
-    )
-    chats.unshift(chat)
-    await this.state.storage.put('chatList', chats)
-    return { success: true, eventId, chatId, chats }
-  }
-
-  private toTop(
-    chats: ChatList,
-    chatId: string,
-    eventData: Partial<ChatListItem>,
-  ): [ChatList, ChatListItem] {
-    const currentChatIndex = chats.findIndex(chat => chat.id === chatId)
-    const currentChat: ChatListItem =
-      currentChatIndex === -1
-        ? (eventData as ChatListItem)
-        : { ...chats[currentChatIndex], ...eventData }
-    if (currentChatIndex >= 0) chats.splice(currentChatIndex, 1)
-
-    return [chats, currentChat]
+    return { success: true, eventId, dlvrd }
   }
 
   async editMessage(request: Request) {
-    const { newMessage, timestamp } = await request.json<EditMessageEvent>()
-    const event = await this.state.storage.get<EditMessageEvent>(`event-${timestamp}`)
-    if (!event) {
-      return new Response('Event not found', { status: 404 })
-    }
-    event.newMessage = newMessage
-    await this.state.storage.put(`event-${timestamp}`, event)
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -274,107 +306,43 @@ export class UserMessagingDO implements DurableObject {
     })
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////
+  async friendOnline(request: Request) {
+    const eventData = await request.json<OnlineEvent>()
 
-  async online(ws: WebSocket) {
-    const chatList = await this.state.storage.get<ChatList>('chatList')
-    console.log({ chatList: chatList?.length })
-    if (!chatList) {
-      return
+    let on = false
+    for (const ws of this.state.getWebSockets('user')) {
+      ws?.send(JSON.stringify({ type: 'online', userId: eventData.userId }))
+      on = true
     }
-
-    for (const chat of chatList) {
-      if (chat.type !== 'dialog') {
-        continue
-      }
-
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
-
-      const chatStatus = await (
-        await receiverDO.fetch(
-          new Request(`${this.#origin}/${chat.id}/online`, {
-            method: 'POST',
-            body: JSON.stringify({ type: 'online', userId: this.userId }),
-          }),
-        )
-      ).text()
-
-      if (chatStatus === 'online') {
-        ws.send(JSON.stringify({ type: 'online', userId: chat.id }))
-      }
-    }
-    this.lastPing = Date.now()
+    return new Response(on ? 'online' : '')
   }
 
-  async offline() {
-    // this.state.setWebSocketAutoResponse()
-    const chatList = await this.state.storage.get<ChatList>('chatList')
-    for (const chat of chatList!) {
-      if (chat.type !== 'dialog') {
-        continue
-      }
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+  async friendOffline(request: Request) {
+    const eventData = await request.json<OfflineEvent>()
 
-      await receiverDO.fetch(
-        new Request(`${this.#origin}/${chat.id}/offline`, {
-          method: 'POST',
-          body: JSON.stringify({ type: 'offline', userId: this.userId }),
-        }),
-      )
+    for (const ws of this.state.getWebSockets('user')) {
+      try {
+        ws?.send(JSON.stringify({ type: 'offline', userId: eventData.userId }))
+      } catch (e) {
+        console.error(e)
+      }
     }
+    return new Response()
   }
 
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
-  async userSocket(request: Request): Promise<Response> {
-    const upgradeHeader = request.headers.get('Upgrade')
-    if (!upgradeHeader || upgradeHeader !== 'websocket') {
-      return errorResponse('Durable Object expected Upgrade: websocket', 426)
-    }
-    const webSocketPair = new WebSocketPair()
-    const [client, server] = Object.values(webSocketPair)
-
-    this.state.acceptWebSocket(server, ['user'])
-    this.server = server
-    this.state.waitUntil(this.online(server))
-
-    this.state.storage.setAlarm(Date.now() + 3000)
-    // this.state.setWebSocketAutoResponse(
-    //   // @ts-ignore
-    //   new WebSocketRequestResponsePair(PING, PONG),
-    // )
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    })
+  private async handleWebsocket(request: Request): Promise<Response> {
+    const response = await this.ws.acceptWebSocket(request)
+    this.state.waitUntil(this.onlineService.online())
+    return response
   }
-
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    console.log({ f: 'websocketMessage', message })
-    const [tag] = this.state.getTags(ws) as Tag[]
-    console.log({ tag })
-    switch (message) {
-      case PING:
-        this.lastPing = Date.now()
-        // ws.send(PONG)
-        break
-      default:
-        try {
-          const event = JSON.parse(message as string) as Event
-          await this.handleEvent(ws, event)
-        } catch (e) {
-          ws.send(JSON.stringify(e))
-          console.error(e)
-        }
-        break
-    }
+    this.ws.handlePacket(ws, message, this)
   }
 
   async webSocketClose(
@@ -383,50 +351,275 @@ export class UserMessagingDO implements DurableObject {
     reason: string,
     wasClean: boolean,
   ): Promise<void> {
-    const [tag] = this.state.getTags(ws) as Tag[]
-    console.log({ f: 'webSocketClose', code, reason, wasClean, tag })
-
-    await this.offline()
-
-    ws.close()
+    await this.ws.handleClose(ws, code, reason, wasClean)
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error(error)
-
-    try {
-      await this.offline()
-    } catch (e) {
-      console.error(e)
-      return
-    }
-    try {
-      ws.close()
-    } catch (e) {
-      console.error(e)
-      return
-    }
+    await this.ws.handleError(ws, error)
   }
 
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
-  async handleEvent(ws: WebSocket, event: Event): Promise<void> {
+  async handleEvent(type: ClientEventType, event?: any): Promise<void | Object> {
     const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
-		event.timestamp = Date.now()
+    event.timestamp = Math.round(Date.now() / 1000)
 
     await this.state.storage.put(`event-${eventId}`, event)
     await this.state.storage.put('eventIdCounter', eventId)
     switch (event.type) {
-      case 'newMessage':
-        ws.send(JSON.stringify(await this.sendMessage(eventId, event)))
+      case 'typing':
+        return
+    }
+  }
 
+  async handleRequest(
+    type: ClientRequestType,
+    request: ClientRequestPayload,
+  ): Promise<void | Object> {
+    const timestamp = Math.round(Date.now() / 1000)
+    let response: ServerResponsePayload = {}
+    console.log(type)
+    switch (type) {
+      case 'new':
+        response = await this.newRequest(request as NewMessageRequest, timestamp)
+        return response
+      case 'getChats':
+        response = await this.getChatsRequest(request as getChatsRequest)
+        return response
+      case 'getMessages':
+        response = await this.getMessagesRequest(request as getMessagesRequest)
+        return response
+      case 'dlvrd':
+        response = await this.dlvrdRequest(request as MarkDeliveredRequest, timestamp)
+        return response
+      case 'read':
+        response = await this.readRequest(request as MarkReadRequest, timestamp)
+        console.log(response)
+        return response
+    }
+  }
+
+  async getChatsRequest(payload: getChatsRequest): Promise<ChatList> {
+    const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
+    return chatList
+  }
+
+  async getMessagesRequest(payload: getMessagesRequest): Promise<ChatMessage[]> {
+    const messages =
+      (await this.state.storage.get<ChatMessage[]>(`messages-${payload.chatId}`)) || []
+    return messages
+  }
+
+  async newRequest(payload: NewMessageRequest, timestamp: number) {
+    const chatId = payload.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+    const messageId = messages.length + 1
+    const dialog = await dialogNameAndAvatar(chatId, this.env.DB)
+    const chatChanges: Partial<ChatListItem> = {
+      id: chatId,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: payload.message,
+      lastMessageTime: timestamp,
+      missed: 0,
+      name: dialog[0],
+      type: 'dialog',
+      verified: false,
+      lastMessageAuthor: '',
+      photoUrl: dialog[1],
+      isMine: true,
+      lastMessageId: messageId,
+    }
+
+    const [chats, chat] = toTop(
+      (await this.state.storage.get<ChatList>('chatList')) || [],
+      chatId,
+      chatChanges,
+    )
+    chats.unshift(chat)
+    await this.state.storage.put('chatList', chats)
+    const message: DialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: this.userId,
+      message: payload.message,
+      attachments: payload.attachments,
+    }
+
+    messages.push(message)
+    messages.sort((a, b) => a.createdAt - b.createdAt)
+    await this.sendNewEventFromRequest(chatId, message, timestamp)
+
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+    return { messageId }
+  }
+
+  async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
+    const chatId = payload.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    if (!messages.length) {
+      throw new Error('Chat is empty')
+    }
+    let endIndex = messages.length - 1
+
+    if (payload.messageId) {
+      endIndex = messages.findLastIndex(m => m.messageId === payload.messageId)
+
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
+    }
+
+    for (let i = endIndex; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (!message.sender || message.sender === this.userId) {
+        continue
+      }
+      if (message.dlvrd) {
         break
+      }
+      message.dlvrd = timestamp
+    }
+
+    await this.sendDlvrdEventFromRequest(chatId, messages[endIndex].createdAt, timestamp)
+
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    return { messageId: messages[endIndex].messageId, timestamp }
+  }
+
+  async readRequest(payload: MarkReadRequest, timestamp: number) {
+    const chatId = payload.chatId
+    const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+
+    if (!messages.length) {
+      throw new Error('Chat is empty')
+    }
+    let endIndex = messages.length - 1
+
+    if (payload.messageId) {
+      endIndex = messages.findLastIndex(m => m.messageId === payload.messageId)
+
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
+    }
+
+    for (let i = endIndex; i >= 0; i--) {
+      const message = messages[i] as DialogMessage
+      if (!message.sender || message.sender === this.userId) {
+        continue
+      }
+      if (message.read) {
+        break
+      }
+
+      if (!message.dlvrd) {
+        message.dlvrd = timestamp
+      }
+
+      if (!message.read) {
+        message.read = timestamp
+      }
+    }
+
+    await this.sendReadEventFromRequest(chatId, messages[endIndex].createdAt, timestamp)
+
+    await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+
+    return { messageId: messages[endIndex].messageId, timestamp }
+  }
+
+  async sendDlvrdEventFromRequest(receiverId: string, messageTimestamp: number, timestamp: number) {
+    // Retrieve sender and receiver's durable object IDs
+
+    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
+    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+
+    // Create an event object with message details and timestamp
+    const event: MarkDeliveredInternalEvent = {
+      chatId: this.userId,
+      messageTimestamp,
+      timestamp,
+    }
+
+    const reqBody = JSON.stringify(event)
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/dlvrd`, {
+        method: 'POST',
+        body: reqBody,
+        headers,
+      }),
+    )
+
+    if (resp.status !== 200) {
+      console.error(await resp.text())
+      throw new Error("Couldn't send event")
+    }
+  }
+
+  async sendReadEventFromRequest(receiverId: string, messageTimestamp: number, timestamp: number) {
+    // Retrieve sender and receiver's durable object IDs
+
+    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
+    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+
+    // Create an event object with message details and timestamp
+    const event: MarkReadInternalEvent = {
+      chatId: this.userId,
+      messageTimestamp,
+      timestamp,
+    }
+
+    const reqBody = JSON.stringify(event)
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/read`, {
+        method: 'POST',
+        body: reqBody,
+        headers,
+      }),
+    )
+
+    if (resp.status !== 200) {
+      console.error(await resp.text())
+      throw new Error("Couldn't send event")
+    }
+  }
+
+  async sendNewEventFromRequest(receiverId: string, message: DialogMessage, timestamp: number) {
+    // Retrieve sender and receiver's durable object IDs
+
+    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
+    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+
+    // Create an event object with message details and timestamp
+    const event: NewMessageEvent = {
+      chatId: this.userId,
+      message: message.message!,
+      attachments: message.attachments,
+      timestamp,
+    }
+
+    const reqBody = JSON.stringify(event)
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/receive`, {
+        method: 'POST',
+        body: reqBody,
+        headers,
+      }),
+    )
+    if (resp.status !== 200) {
+      console.error(await resp.text())
+      throw new Error("Couldn't send event")
     }
   }
 
   userId = ''
-  #origin = ''
-  #dialogNameCaches = new Map<string, [string, string?]>()
 }
-type Tag = 'internal' | 'user'

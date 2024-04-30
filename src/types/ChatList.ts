@@ -11,8 +11,11 @@ export interface ChatListItem {
   lastMessageTime: number; // Используйте тип Date для DateTime
   lastMessageAuthor?: string; // необязательное поле
   lastMessageStatus: MessageStatus;
-  missedMessagesCount: number;
-  verified: boolean;
+  missed: number;
+  verified?: boolean;
+  isMine: boolean;
+  lastMessageId: number;
+
 }
 
 export type ChatList = ChatListItem[];

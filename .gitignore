@@ -172,6 +172,7 @@ dist
 .wrangler/
 
 .smol-dev-js
-docs
+
 spec
 src/.DS_Store
+site

@@ -5,6 +5,7 @@ import { getUserById } from '../db/services/get-user'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { getUserByToken } from '../services/get-user-by-token'
+import { CustomError, UnauthorizedError } from '~/errors/UnauthorizedError'
 
 export class GetOwnProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -50,7 +51,7 @@ export class GetOwnProfileHandler extends OpenAPIRoute {
       })
     } catch (e) {
       console.error(e)
-      return errorResponse('Something went wrong', 500)
+      errorResponse((e as Error).message ?? 'Something went wrong', (e as CustomError).httpCode || 500)
     }
   }
 }

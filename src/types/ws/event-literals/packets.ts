@@ -1,0 +1,11 @@
+export type nw = 'new'
+export type edit = 'edit'
+export type read = 'read'
+export type dlvrd = 'dlvrd' // delivered
+export type dlt = 'delete'
+export type online = 'online'
+export type offline = 'offline'
+export type typing = 'typing'
+export type getChat = 'getChat'
+export type getChats = 'getChats'
+export type getMessages = 'getMessages'

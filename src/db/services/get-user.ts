@@ -2,6 +2,7 @@ import { User, UserDB } from '../models/User'
 import { newId } from '../../utils/new-id'
 import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
+import { CustomError } from '~/errors/UnauthorizedError'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -14,7 +15,7 @@ export const getOrCreateUserByPhone = async (
     if (!existingUser) {
       const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
       const id = newId()
-      const createdAt = Date.now()
+      const createdAt = Math.floor(Date.now()/1000)
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
       return new User(id, phoneNumber)
     } else {
@@ -26,20 +27,20 @@ export const getOrCreateUserByPhone = async (
     throw new Error('Failed to retrieve or insert user by phone number')
   }
 }
-export const getUserById = async (d1: D1Database, id: string): Promise<User> => {
+export const getUserById = async (d1: D1Database, id: string, errorClass: typeof CustomError = CustomError): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()
 
     if (!existingUser) {
-      throw new Error(`User not found ${{ id }}`)
+      throw new errorClass(`User not found ${{ id }}`)
     } else {
       return User.fromDb(existingUser)
     }
   } catch (error) {
     // Handle error
     console.error(error)
-    throw new Error('Failed to retrieve user by id')
+    throw new errorClass('Failed to retrieve user by id')
   }
 }
 

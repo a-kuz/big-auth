@@ -3,22 +3,32 @@ import {
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
+  TypingClientEvent,
   getChatsRequest,
   getMessagesRequest,
 } from '~/types/ws/client-requests'
 import { ChatMessage, DialogMessage } from '~/types/ws/messages'
-import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
+import {
+  ClientEventPayload,
+  ClientRequestPayload,
+  ServerResponsePayload,
+} from '~/types/ws/payload-types'
 import {
   MarkDeliveredEvent,
   MarkReadEvent,
   NewMessageEvent,
   OfflineEvent,
   OnlineEvent,
+  TypingServerEvent,
 } from '~/types/ws/server-events'
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
+import {
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  TypingInternalEvent,
+} from '~/types/ws/internal'
 import { errorResponse } from '~/utils/error-response'
 import { newId } from '../../utils/new-id'
 import { OnlineStatusService } from './OnlineStatusService'
@@ -56,20 +66,18 @@ export class UserMessagingDO implements DurableObject {
     switch (action) {
       case 'websocket':
         return this.handleWebsocket(request)
-      case 'online':
+      case 'are-you-online':
         return this.friendOnline(request)
-      case 'offline':
+      case 'i-am-offline':
         return this.friendOffline(request)
+      case 'typing':
+        return this.friendTyping(request)
       case 'send':
-        return await this.newRequestHandler(request)
+        return this.newHttpRequestHandler(request)
       case 'receive':
-        return await this.newEventHandler(request)
-      case 'edit':
-        return this.editMessage(request)
-      case 'chat':
-        return this.fetchMessages(request)
+        return this.newEventHandler(request)
       case 'chats':
-        return this.fetchChats(request)
+        return this.chatsHandler(request)
       case 'dlvrd':
         return this.dlvrdEventHandler(request)
       case 'read':
@@ -79,16 +87,13 @@ export class UserMessagingDO implements DurableObject {
     }
   }
 
-  async newRequestHandler(request: Request) {
+  async newHttpRequestHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
-    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+
     const timestamp = Math.floor(Date.now() / 1000)
 
-    await this.state.storage.put(`event-${eventId}`, eventData)
-    await this.state.storage.put('eventIdCounter', eventId)
-
     if (eventData.chatId === this.userId) {
-      return this.sendToFavorites(eventId, eventData, timestamp)
+      return this.sendToFavorites(eventData, timestamp)
     } else {
       const response = new Response(JSON.stringify(await this.newRequest(eventData, timestamp)))
 
@@ -98,24 +103,17 @@ export class UserMessagingDO implements DurableObject {
 
   async newEventHandler(request: Request) {
     const eventData = await request.json<NewMessageEvent>()
-    console.log({ eventData })
-    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
+
     const timestamp = Math.floor(Date.now() / 1000)
 
-    await this.state.storage.put(`event-${eventId}`, eventData)
-    await this.state.storage.put('eventIdCounter', eventId)
-
     if (eventData.chatId === this.userId) {
-      return this.sendToFavorites(eventId, eventData, timestamp)
+      return this.sendToFavorites(eventData, timestamp)
     } else {
-      return new Response(JSON.stringify(await this.receiveMessage(eventId, eventData)))
+      return new Response(JSON.stringify(await this.receiveMessage(eventData)))
     }
   }
   async dlvrdEventHandler(request: Request) {
     const eventData = await request.json<MarkDeliveredInternalEvent>()
-    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
-
-    await this.state.storage.put('eventIdCounter', eventId)
 
     const chatId = eventData.chatId
     const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
@@ -127,7 +125,7 @@ export class UserMessagingDO implements DurableObject {
     }
     const messageId = messages[endId].messageId
     const event: MarkDeliveredEvent = { chatId, messageId, timestamp: eventData.timestamp }
-    await this.state.storage.put(`event-${eventId}`, event)
+
     for (let i = endId; i >= 0; i--) {
       const message = messages[i] as DialogMessage
       if (message.sender && message.sender !== this.userId) {
@@ -150,16 +148,13 @@ export class UserMessagingDO implements DurableObject {
     }
 
     if (this.onlineService.isOnline()) {
-      await this.ws.sendEvent('dlvrd', eventId, event)
+      await this.ws.sendEvent('dlvrd', event)
     }
     return new Response()
   }
 
   async readEventHandler(request: Request) {
     const eventData = await request.json<MarkReadInternalEvent>()
-    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
-
-    await this.state.storage.put('eventIdCounter', eventId)
 
     const chatId = eventData.chatId
     const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
@@ -171,7 +166,7 @@ export class UserMessagingDO implements DurableObject {
     }
     const messageId = messages[endId].messageId
     const event: MarkReadEvent = { chatId, messageId, timestamp: eventData.timestamp }
-    await this.state.storage.put(`event-${eventId}`, event)
+
     for (let i = endId; i >= 0; i--) {
       const message = messages[i] as DialogMessage
       if (message.sender && message.sender !== this.userId) {
@@ -199,12 +194,12 @@ export class UserMessagingDO implements DurableObject {
     }
 
     if (this.onlineService.isOnline()) {
-      await this.ws.sendEvent('read', eventId, event)
+      await this.ws.sendEvent('read', event)
     }
     return new Response()
   }
 
-  async sendToFavorites(eventId: number, eventData: NewMessageRequest, timestamp: number) {
+  async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.userId
     const [chats, chat] = toTop(
       (await this.state.storage.get<ChatList>('chatList')) || [],
@@ -225,12 +220,12 @@ export class UserMessagingDO implements DurableObject {
     chats.unshift(chat)
     await this.state.storage.put('chatList', chats)
 
-    return new Response(JSON.stringify({ success: true, eventId }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  async receiveMessage(eventId: number, eventData: NewMessageEvent) {
+  async receiveMessage(eventData: NewMessageEvent) {
     const chatId = eventData.chatId
     const dialog = await dialogNameAndAvatar(chatId, this.env.DB)
     const messages = (await this.state.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
@@ -271,35 +266,12 @@ export class UserMessagingDO implements DurableObject {
 
     let dlvrd = false
     if (this.onlineService.isOnline()) {
-      await this.ws.sendEvent('new', eventId, eventData)
+      await this.ws.sendEvent('new', eventData)
     }
-    return { success: true, eventId, dlvrd }
+    return { success: true, dlvrd }
   }
 
-  async editMessage(request: Request) {
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  async fetchMessages(request: Request) {
-    const url = new URL(request.url)
-    const chatId = url.searchParams.get('chatId')
-    if (!chatId) {
-      return new Response('Chat ID is required', { status: 400 })
-    }
-
-    const messages = await this.state.storage.list({
-      prefix: `chat-${chatId}-message-`,
-    })
-    const messagesArray = Array.from(messages.values())
-
-    return new Response(JSON.stringify(messagesArray), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  async fetchChats(request: Request) {
+  async chatsHandler(request: Request) {
     const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
     return new Response(JSON.stringify(chatList), {
       headers: { 'Content-Type': 'application/json' },
@@ -309,24 +281,21 @@ export class UserMessagingDO implements DurableObject {
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
 
-    let on = false
-    for (const ws of this.state.getWebSockets('user')) {
-      ws?.send(JSON.stringify({ type: 'online', userId: eventData.userId }))
-      on = true
-    }
-    return new Response(on ? 'online' : '')
+    return new Response(
+      (await this.ws.sendEvent('online', { userId: eventData.userId })) ? 'online' : '',
+    )
   }
 
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
+    this.ws.sendEvent('offline', { userId: eventData.userId })
+    return new Response()
+  }
 
-    for (const ws of this.state.getWebSockets('user')) {
-      try {
-        ws?.send(JSON.stringify({ type: 'offline', userId: eventData.userId }))
-      } catch (e) {
-        console.error(e)
-      }
-    }
+  async friendTyping(request: Request) {
+    const eventData = await request.json<TypingInternalEvent>()
+    const event: TypingServerEvent = { chatId: eventData.userId }
+    this.ws.sendEvent('typing', event)
     return new Response()
   }
 
@@ -361,22 +330,18 @@ export class UserMessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
-  async handleEvent(type: ClientEventType, event?: any): Promise<void | Object> {
-    const eventId = ((await this.state.storage.get<number>('eventIdCounter')) || 0) + 1
-    event.timestamp = Math.round(Date.now() / 1000)
+  async wsEvent(type: ClientEventType, event?: ClientEventPayload): Promise<void | Object> {
+    const timestamp = Math.round(Date.now() / 1000)
 
-    await this.state.storage.put(`event-${eventId}`, event)
-    await this.state.storage.put('eventIdCounter', eventId)
-    switch (event.type) {
+    switch (type) {
       case 'typing':
-        return
+        return this.typingEvent(event! as TypingClientEvent)
+      case 'offline':
+        return this.onlineService.offline()
     }
   }
 
-  async handleRequest(
-    type: ClientRequestType,
-    request: ClientRequestPayload,
-  ): Promise<void | Object> {
+  async wsRequest(type: ClientRequestType, request: ClientRequestPayload): Promise<void | Object> {
     const timestamp = Math.round(Date.now() / 1000)
     let response: ServerResponsePayload = {}
     console.log(type)
@@ -395,7 +360,6 @@ export class UserMessagingDO implements DurableObject {
         return response
       case 'read':
         response = await this.readRequest(request as MarkReadRequest, timestamp)
-        console.log(response)
         return response
     }
   }
@@ -519,9 +483,7 @@ export class UserMessagingDO implements DurableObject {
         message.dlvrd = timestamp
       }
 
-      if (!message.read) {
-        message.read = timestamp
-      }
+      message.read = timestamp
     }
 
     await this.sendReadEventFromRequest(chatId, messages[endIndex].createdAt, timestamp)
@@ -619,6 +581,18 @@ export class UserMessagingDO implements DurableObject {
       console.error(await resp.text())
       throw new Error("Couldn't send event")
     }
+  }
+
+  async typingEvent(event: TypingClientEvent) {
+    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(event.chatId)
+    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+
+    await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${event.chatId}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: this.userId }),
+      }),
+    )
   }
 
   userId = ''

@@ -1,79 +1,75 @@
-import { Env } from '~/types/Env'
-import { ClientRequestType } from '~/types/ws'
-import { WebsocketClientEvent, WebsocketClientRequest } from '~/types/ws/client-requests'
-import { ClientRequestPayload } from '~/types/ws/payload-types'
-import { WebsocketServerResponse } from '~/types/ws/websocket-server-accept'
-import { UserMessagingDO } from './UserMessagingDO'
 import { ChatList } from '~/types/ChatList'
+import { Env } from '~/types/Env'
 import { WebSocketGod } from './WebSocketService'
+import { OnlineEvent } from '~/types/ws/server-events'
 
 export class OnlineStatusService {
-	constructor(
-		private state: DurableObjectState,
+  constructor(
+    private state: DurableObjectState,
     private env: Env,
-		private ws: WebSocketGod
-
+    private ws: WebSocketGod,
   ) {}
 
-	isOnline() {
-		return this.#isOnline
-	}
+  isOnline() {
+    return this.#isOnline
+  }
 
   async online() {
-		const chatList = await this.state.storage.get<ChatList>('chatList')
+    const chatList = await this.state.storage.get<ChatList>('chatList')
 
     if (!chatList) {
-			return
+      return
     }
 
     for (const chat of chatList) {
-			if (chat.type !== 'dialog') {
-				continue
+      if (chat.type !== 'dialog') {
+        continue
       }
 
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
+      const userId = chat.id
+
+      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(userId)
       const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
       const chatStatus = await (
-				await receiverDO.fetch(
-					new Request(`${this.env.ORIGIN}/${chat.id}/online`, {
-						method: 'POST',
-            body: JSON.stringify({ type: 'online', userId: this.#userId }),
+        await receiverDO.fetch(
+          new Request(`${this.env.ORIGIN}/${chat.id}/are-you-online`, {
+            method: 'POST',
+            body: JSON.stringify({ userId: this.#userId }),
           }),
         )
       ).text()
 
       if (chatStatus === 'online') {
-				for (const ws of this.state.getWebSockets())
-					ws.send(JSON.stringify({ type: 'online', userId: chat.id }))
-
+        const event: OnlineEvent = { userId: chat.id }
+        this.ws.sendEvent('online', event)
       }
     }
-		this.#isOnline = true;
+    this.#isOnline = true
   }
 
   async offline() {
-		this.#isOnline = false;
-		const chatList = await this.state.storage.get<ChatList>('chatList')
+    this.#isOnline = false
+    const chatList = await this.state.storage.get<ChatList>('chatList')
     for (const chat of chatList!) {
-			if (chat.type !== 'dialog') {
-				continue
+      if (chat.type !== 'dialog') {
+        continue
       }
       const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
       const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
       await receiverDO.fetch(
-				new Request(`${this.env.ORIGIN}/${chat.id}/offline`, {
-					method: 'POST',
+        new Request(`${this.env.ORIGIN}/${chat.id}/i-am-offline`, {
+          method: 'POST',
           body: JSON.stringify({ type: 'offline', userId: this.#userId }),
         }),
       )
     }
   }
 
-	setUserId(id: string) {
-		this.#userId = id;
-	}
-	#userId = ''
-	#isOnline = false
+  setUserId(id: string) {
+    this.#userId = id
+  }
+  #userId = ''
+  #isOnline = false
 }

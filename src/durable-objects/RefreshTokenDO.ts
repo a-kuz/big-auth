@@ -43,7 +43,7 @@ export class RefreshTokenDO implements DurableObject {
         const refreshToken = url.searchParams.get('refreshToken')!
         const phoneNumber = url.searchParams.get('phoneNumber')!
 
-        return await this.refresh(refreshToken, userId, phoneNumber)
+        return this.refresh(refreshToken, userId, phoneNumber)
       } else {
         return errorResponse('Not found', 401)
       }

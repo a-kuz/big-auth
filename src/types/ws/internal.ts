@@ -11,3 +11,6 @@ export interface MarkReadInternalEvent {
   messageTimestamp: number
 	timestamp: number
 }
+export interface TypingInternalEvent {
+  userId: string
+}

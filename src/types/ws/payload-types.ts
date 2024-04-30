@@ -5,6 +5,7 @@ import {
   DeleteMessageRequest,
   MarkDeliveredRequest,
   MarkReadRequest,
+	TypingClientEvent,
 } from './client-requests'
 import {
   NewMessageEvent,
@@ -12,7 +13,7 @@ import {
   DeleteMessageEvent,
   OnlineEvent,
   OfflineEvent,
-  TypingEvent,
+  TypingServerEvent,
   MarkDeliveredEvent,
   MarkReadEvent,
 } from './server-events'
@@ -30,6 +31,7 @@ export type ServerEventPayload =
   | DeleteMessageEvent
   | OnlineEvent
   | OfflineEvent
-  | TypingEvent
+  | TypingServerEvent
   | MarkDeliveredEvent
   | MarkReadEvent
+export type ClientEventPayload = TypingClientEvent | OfflineEvent

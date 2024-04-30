@@ -26,7 +26,7 @@ export interface WebsocketClientEvent<Type extends ClientEventType = ClientEvent
   timestamp: number
   id: string
   payloadType: Type
-  payload: Type extends typing ? TypingEvent : never
+  payload: Type extends typing ? TypingClientEvent : never
 }
 
 export interface NewMessageRequest {
@@ -45,7 +45,7 @@ export interface getMessagesRequest {
   count?: number
 }
 
-export interface TypingEvent {
+export interface TypingClientEvent {
   chatId: string
 }
 
@@ -70,3 +70,4 @@ export interface MarkDeliveredRequest {
   chatId: string
   messageId: number
 }
+``

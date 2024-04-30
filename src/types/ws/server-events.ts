@@ -5,7 +5,7 @@ import { ServerEventPayload } from './payload-types'
 export interface WebsocketServerEvent<Event extends ServerEventType = ServerEventType> {
   type: 'event'
   timestamp: number
-  id: number
+  id?: number
   eventType: Event
   payload: ServerEventPayload
 }
@@ -30,8 +30,8 @@ export interface OfflineEvent {
   userId: string
 }
 
-export interface TypingEvent {
-  userId: string
+export interface TypingServerEvent {
+  userId?: string
   chatId: string
 }
 

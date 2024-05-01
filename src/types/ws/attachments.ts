@@ -50,3 +50,4 @@ export interface Attachment<T extends AttachmentType = never> {
   size: number
   payload: AttachmentPayloads[`${Capitalize<T>}AttachmentPayload`]
 }
+

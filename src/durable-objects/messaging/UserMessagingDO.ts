@@ -4,8 +4,8 @@ import {
   MarkReadRequest,
   NewMessageRequest,
   TypingClientEvent,
-  getChatsRequest,
-  getMessagesRequest,
+  GetChatsRequest,
+  GetMessagesRequest,
 } from '~/types/ws/client-requests'
 import { ChatMessage, DialogMessage } from '~/types/ws/messages'
 import {
@@ -34,10 +34,11 @@ import { newId } from '../../utils/new-id'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { dialogNameAndAvatar } from './utils/dialog-name-and-avatar'
-import { toTop } from './utils/move-chat-to-top'
 
 export class UserMessagingDO implements DurableObject {
   id = newId(3)
+  chats: ChatList = []
+  #timestamp = Math.floor(Date.now() / 1000)
   private readonly ws: WebSocketGod
   private readonly onlineService: OnlineStatusService
   constructor(
@@ -47,6 +48,19 @@ export class UserMessagingDO implements DurableObject {
     this.ws = new WebSocketGod(state, env)
     this.onlineService = new OnlineStatusService(this.state, this.env, this.ws)
     this.ws.onlineService = this.onlineService
+    this.state.blockConcurrencyWhile(async () => {
+      this.chats = (await this.state.storage.get<ChatList>('chatList')) || []
+    })
+  }
+
+  timestamp() {
+    const current = Math.floor(performance.now() / 1000)
+    if (current > this.#timestamp) {
+      this.#timestamp = current
+      return current
+    }
+    this.#timestamp++
+    return this.#timestamp
   }
 
   async alarm(): Promise<void> {
@@ -78,6 +92,8 @@ export class UserMessagingDO implements DurableObject {
         return this.newEventHandler(request)
       case 'chats':
         return this.chatsHandler(request)
+      case 'getMessages':
+        return this.getMessagesHandler(request)
       case 'dlvrd':
         return this.dlvrdEventHandler(request)
       case 'read':
@@ -90,7 +106,7 @@ export class UserMessagingDO implements DurableObject {
   async newHttpRequestHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
 
-    const timestamp = Math.floor(Date.now() / 1000)
+    const timestamp = this.timestamp()
 
     if (eventData.chatId === this.userId) {
       return this.sendToFavorites(eventData, timestamp)
@@ -104,7 +120,7 @@ export class UserMessagingDO implements DurableObject {
   async newEventHandler(request: Request) {
     const eventData = await request.json<NewMessageEvent>()
 
-    const timestamp = Math.floor(Date.now() / 1000)
+    const timestamp = this.timestamp()
 
     if (eventData.chatId === this.userId) {
       return this.sendToFavorites(eventData, timestamp)
@@ -201,24 +217,20 @@ export class UserMessagingDO implements DurableObject {
 
   async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.userId
-    const [chats, chat] = toTop(
-      (await this.state.storage.get<ChatList>('chatList')) || [],
-      chatId,
-      {
-        id: chatId,
-        lastMessageStatus: 'read',
-        lastMessageText: eventData.message,
-        lastMessageTime: timestamp,
-        name: 'Favorites',
-        type: 'favorites',
-        verified: false,
-        lastMessageAuthor: chatId,
-        isMine: true,
-      },
-    )
+    const chat = this.toTop(chatId, {
+      id: chatId,
+      lastMessageStatus: 'read',
+      lastMessageText: eventData.message,
+      lastMessageTime: timestamp,
+      name: 'Favorites',
+      type: 'favorites',
+      verified: false,
+      lastMessageAuthor: chatId,
+      isMine: true,
+    })
     chat.missed = 0
-    chats.unshift(chat)
-    await this.state.storage.put('chatList', chats)
+    this.chats.unshift(chat)
+    await this.state.storage.put('chatList', this.chats)
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
@@ -243,14 +255,10 @@ export class UserMessagingDO implements DurableObject {
       isMine: false,
       lastMessageId: messageId,
     }
-    const [chats, chat] = toTop(
-      (await this.state.storage.get<ChatList>('chatList')) || [],
-      chatId,
-      chatChanges,
-    )
+    const chat = this.toTop(chatId, chatChanges)
     chat.missed = (chat.missed ?? 0) + 1
-    chats.unshift(chat)
-    await this.state.storage.put('chatList', chats)
+    this.chats.unshift(chat)
+    await this.state.storage.put('chatList', this.chats)
 
     const message: DialogMessage = {
       createdAt: eventData.timestamp!,
@@ -272,8 +280,16 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async chatsHandler(request: Request) {
-    const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
+    const chatList = this.chats
     return new Response(JSON.stringify(chatList), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  async getMessagesHandler(request: Request) {
+		const data = await request.json<GetMessagesRequest>()
+		const messages = await this.state.storage.get<DialogMessage[]>(`messages-${data.chatId}`) || []
+
+    return new Response(JSON.stringify(messages), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -331,8 +347,6 @@ export class UserMessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   async wsEvent(type: ClientEventType, event?: ClientEventPayload): Promise<void | Object> {
-    const timestamp = Math.round(Date.now() / 1000)
-
     switch (type) {
       case 'typing':
         return this.typingEvent(event! as TypingClientEvent)
@@ -342,34 +356,33 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async wsRequest(type: ClientRequestType, request: ClientRequestPayload): Promise<void | Object> {
-    const timestamp = Math.round(Date.now() / 1000)
     let response: ServerResponsePayload = {}
-    console.log(type)
-    switch (type) {
-      case 'new':
-        response = await this.newRequest(request as NewMessageRequest, timestamp)
-        return response
-      case 'getChats':
-        response = await this.getChatsRequest(request as getChatsRequest)
-        return response
-      case 'getMessages':
-        response = await this.getMessagesRequest(request as getMessagesRequest)
-        return response
-      case 'dlvrd':
-        response = await this.dlvrdRequest(request as MarkDeliveredRequest, timestamp)
-        return response
-      case 'read':
-        response = await this.readRequest(request as MarkReadRequest, timestamp)
-        return response
-    }
+    return this.state.blockConcurrencyWhile(async () => {
+      switch (type) {
+        case 'new':
+          const timestamp = this.timestamp()
+          response = await this.newRequest(request as NewMessageRequest, timestamp)
+          return response
+        case 'getChats':
+          response = await this.getChatsRequest(request as GetChatsRequest)
+          return response
+        case 'getMessages':
+          return response
+        case 'dlvrd':
+          response = await this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp())
+          return response
+        case 'read':
+          response = await this.readRequest(request as MarkReadRequest, this.timestamp())
+          return response
+      }
+    })
   }
 
-  async getChatsRequest(payload: getChatsRequest): Promise<ChatList> {
-    const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
-    return chatList
+  async getChatsRequest(payload: GetChatsRequest): Promise<ChatList> {
+    return this.chats
   }
 
-  async getMessagesRequest(payload: getMessagesRequest): Promise<ChatMessage[]> {
+  async getMessagesRequest(payload: GetMessagesRequest): Promise<ChatMessage[]> {
     const messages =
       (await this.state.storage.get<ChatMessage[]>(`messages-${payload.chatId}`)) || []
     return messages
@@ -393,15 +406,12 @@ export class UserMessagingDO implements DurableObject {
       photoUrl: dialog[1],
       isMine: true,
       lastMessageId: messageId,
+      ...(payload.attachments?.length ? { attachmentType: payload.attachments[0].type } : {}),
     }
 
-    const [chats, chat] = toTop(
-      (await this.state.storage.get<ChatList>('chatList')) || [],
-      chatId,
-      chatChanges,
-    )
-    chats.unshift(chat)
-    await this.state.storage.put('chatList', chats)
+    const chat = this.toTop(chatId, chatChanges)
+    this.chats.unshift(chat)
+    await this.state.storage.put('chatList', this.chats)
     const message: DialogMessage = {
       createdAt: timestamp,
       messageId,
@@ -415,7 +425,17 @@ export class UserMessagingDO implements DurableObject {
     await this.sendNewEventFromRequest(chatId, message, timestamp)
 
     await this.state.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
-    return { messageId }
+    return { messageId, timestamp }
+  }
+  toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
+    const currentChatIndex = this.chats.findIndex(chat => chat.id === chatId)
+    const currentChat: ChatListItem =
+      currentChatIndex === -1
+        ? (eventData as ChatListItem)
+        : { ...this.chats[currentChatIndex], ...eventData }
+    if (currentChatIndex >= 0) this.chats.splice(currentChatIndex, 1)
+
+    return currentChat
   }
 
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
@@ -590,7 +610,7 @@ export class UserMessagingDO implements DurableObject {
     await receiverDO.fetch(
       new Request(`${this.env.ORIGIN}/${event.chatId}/typing`, {
         method: 'POST',
-        body: JSON.stringify({ userId: this.userId }),
+        body: JSON.stringify({ userId: this.userId } as TypingInternalEvent),
       }),
     )
   }

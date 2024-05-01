@@ -22,28 +22,10 @@ export class OnlineStatusService {
     }
 
     for (const chat of chatList) {
-      if (chat.type !== 'dialog') {
+      if (chat.type !== 'dialog' || chat.id === this.#userId) {
         continue
       }
 
-      const userId = chat.id
-
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(userId)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
-
-      const chatStatus = await (
-        await receiverDO.fetch(
-          new Request(`${this.env.ORIGIN}/${chat.id}/are-you-online`, {
-            method: 'POST',
-            body: JSON.stringify({ userId: this.#userId }),
-          }),
-        )
-      ).text()
-
-      if (chatStatus === 'online') {
-        const event: OnlineEvent = { userId: chat.id }
-        this.ws.sendEvent('online', event)
-      }
     }
     this.#isOnline = true
   }
@@ -52,7 +34,7 @@ export class OnlineStatusService {
     this.#isOnline = false
     const chatList = await this.state.storage.get<ChatList>('chatList')
     for (const chat of chatList!) {
-      if (chat.type !== 'dialog') {
+      if (chat.type !== 'dialog' || chat.id === this.#userId) {
         continue
       }
       const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)

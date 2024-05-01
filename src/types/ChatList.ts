@@ -1,3 +1,5 @@
+import { AttachmentType } from "./ws/attachments";
+
 export type ChatType = "dialog" | "group" | "channel" | "favorites";
 
 export type MessageStatus = "read" | "unread" | "undelivered";
@@ -7,14 +9,15 @@ export interface ChatListItem {
   id: string;
   photoUrl?: string; // необязательное поле
   name: string;
+  lastMessageId: number;
   lastMessageText: string;
-  lastMessageTime: number; // Используйте тип Date для DateTime
-  lastMessageAuthor?: string; // необязательное поле
+  lastMessageTime: number;
+  lastMessageAuthor?: string;
   lastMessageStatus: MessageStatus;
   missed: number;
   verified?: boolean;
   isMine: boolean;
-  lastMessageId: number;
+	attachmentType?: AttachmentType
 
 }
 

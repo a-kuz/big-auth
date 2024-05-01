@@ -34,12 +34,12 @@ export interface NewMessageRequest {
   message: string
   attachments?: Attachment[]
 }
-export interface getChatRequest {
+export interface GetChatRequest {
   chatId: string
 }
-export interface getChatsRequest {}
+export interface GetChatsRequest {}
 
-export interface getMessagesRequest {
+export interface GetMessagesRequest {
   chatId: string
   endId?: number
   count?: number
@@ -70,4 +70,4 @@ export interface MarkDeliveredRequest {
   chatId: string
   messageId: number
 }
-``
+;``

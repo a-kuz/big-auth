@@ -21,6 +21,7 @@ import { GetChatsHandler } from "./handlers/GetChatsHandler";
 import { GetProfileHandler } from "./handlers/GetProfileHandler";
 import { WebsocketHandler } from "./handlers/WebsocketHandler";
 import { CORS } from "./utils/cors";
+import { GetMessagesHandler } from "./handlers/GetMessagesHandler";
 
 export { RefreshTokenDO } from "./durable-objects/RefreshTokenDO";
 export { UserMessagingDO } from "./durable-objects/messaging";
@@ -55,6 +56,7 @@ router.post("/public/upload", UploadFileHandler);
 router.post("/contacts/whoIsThere", FindContactsHandler);
 
 router.post("/m/send", SendMessageHandler);
+router.get("/m/getMessages", GetMessagesHandler);
 
 router.get("/chats", GetChatsHandler);
 

@@ -24,7 +24,7 @@ export class GetChatsHandler extends OpenAPIRoute {
           chats: new Arr(
             new Obj({
               type: new Enumeration({
-                values: ['dialog', 'group', 'channel'],
+                values: ['dialog', 'group', 'channel', 'favorites'],
                 example: 'dialog',
               }),
               id: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),

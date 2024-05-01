@@ -1,9 +1,9 @@
 import { Num, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { NewMessageRequest } from '~/types/ws/client-requests'
-import { NewMessageEvent } from '~/types/ws/server-events'
 import { AttachmentSchema } from '~/types/zod'
 import { Env } from '../types/Env'
+import { z } from 'zod'
 import { errorResponse } from '../utils/error-response'
 
 export class SendMessageHandler extends OpenAPIRoute {
@@ -12,9 +12,10 @@ export class SendMessageHandler extends OpenAPIRoute {
     summary: 'Send a message between users',
     requestBody: {
       chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
-      attachments: AttachmentSchema.optional().array(),
+      attachments: z.optional(AttachmentSchema.array().optional()),
       message: new Str({ example: 'Hello, how are you?' }),
     },
+
     responses: {
       '200': {
         description: 'Message sent successfully',

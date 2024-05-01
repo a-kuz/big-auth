@@ -29,4 +29,4 @@ export const AttachmentSchema = z.object({
   filename: z.string(),
   url: z.string().url(),
   meta: AttachmentMetaSchema,
-});
+}).optional();

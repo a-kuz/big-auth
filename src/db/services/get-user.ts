@@ -14,8 +14,8 @@ export const getOrCreateUserByPhone = async (
 
     if (!existingUser) {
       const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
-      const id = newId()
-      const createdAt = Math.floor(Date.now()/1000)
+      const id = phoneNumber.startsWith('+9999') ? phoneNumber+newId(2) : newId()
+      const createdAt = Math.floor(Date.now() / 1000)
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
       return new User(id, phoneNumber)
     } else {
@@ -27,7 +27,11 @@ export const getOrCreateUserByPhone = async (
     throw new Error('Failed to retrieve or insert user by phone number')
   }
 }
-export const getUserById = async (d1: D1Database, id: string, errorClass: typeof CustomError = CustomError): Promise<User> => {
+export const getUserById = async (
+  d1: D1Database,
+  id: string,
+  errorClass: typeof CustomError = CustomError,
+): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()

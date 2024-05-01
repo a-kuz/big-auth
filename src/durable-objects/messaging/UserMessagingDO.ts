@@ -1,44 +1,43 @@
 import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
-  TypingClientEvent,
-  GetChatsRequest,
-  GetMessagesRequest,
+	GetChatsRequest,
+	GetMessagesRequest,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
+	TypingClientEvent,
 } from '~/types/ws/client-requests'
 import { ChatMessage, DialogMessage } from '~/types/ws/messages'
 import {
-  ClientEventPayload,
-  ClientRequestPayload,
-  ServerResponsePayload,
+	ClientEventPayload,
+	ClientRequestPayload,
+	ServerResponsePayload,
 } from '~/types/ws/payload-types'
 import {
-  MarkDeliveredEvent,
-  MarkReadEvent,
-  NewMessageEvent,
-  OfflineEvent,
-  OnlineEvent,
-  TypingServerEvent,
+	MarkDeliveredEvent,
+	MarkReadEvent,
+	NewMessageEvent,
+	OfflineEvent,
+	OnlineEvent,
+	TypingServerEvent,
 } from '~/types/ws/server-events'
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
 import {
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  TypingInternalEvent,
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	TypingInternalEvent,
 } from '~/types/ws/internal'
 import { errorResponse } from '~/utils/error-response'
-import { newId } from '../../utils/new-id'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { dialogNameAndAvatar } from './utils/dialog-name-and-avatar'
 
 export class UserMessagingDO implements DurableObject {
-  id = newId(3)
+
   chats: ChatList = []
-  #timestamp = Math.floor(Date.now() / 1000)
+  #timestamp = Date.now()
   private readonly ws: WebSocketGod
   private readonly onlineService: OnlineStatusService
   constructor(
@@ -54,7 +53,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   timestamp() {
-    const current = Math.floor(performance.now() / 1000)
+    const current = performance.now()
     if (current > this.#timestamp) {
       this.#timestamp = current
       return current
@@ -64,7 +63,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async alarm(): Promise<void> {
-    this.ws.alarm()
+    await this.ws.alarm()
   }
 
   async fetch(request: Request) {
@@ -76,7 +75,7 @@ export class UserMessagingDO implements DurableObject {
     this.userId = paths[0]
     this.onlineService.setUserId(this.userId)
     const action = paths[1]
-
+		console.log({userId: this.userId, url})
     switch (action) {
       case 'websocket':
         return this.handleWebsocket(request)

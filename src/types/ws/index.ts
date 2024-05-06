@@ -9,10 +9,11 @@ import {
 	typing,
 	getChat,
 	getChats,
-	getMessages
+	messages,
+	chats
 } from './event-literals'
 
-export type ClientRequestType = nw | edit | read | dlvrd | dlt | getChat | getChats | getMessages
+export type ClientRequestType = nw | edit | read | dlvrd | dlt | getChat | getChats | messages
 export type ClientEventType = typing | offline
 export type ServerEventType =
   | nw
@@ -22,34 +23,16 @@ export type ServerEventType =
   | typing
   | online
   | offline
+	| chats
 
 
+// Response interfaces for WebSocket communication
 export interface NewMessageResponse {
-  messageId: number
+  messageId: number,
+	timestamp: number
 }
 
 export interface EditMessageResponse {}
 
 export interface DeleteMessageResponse {}
 
-export type FileAttachmentPayload = {
-  extension:
-    | 'pdf'
-    | 'txt'
-    | 'docx'
-    | 'xlsx'
-    | 'pptx'
-    | 'zip'
-    | 'rar'
-    | '7z'
-    | 'jpg'
-    | 'png'
-    | 'gif'
-    | 'mp4'
-    | 'mp3'
-    | 'wav'
-    | 'tar'
-    | 'gz'
-    | 'exe'
-    | string
-}

@@ -18,7 +18,7 @@ export const dialogNameAndAvatar = async (
   try {
     const user = await getUserById(DB, id)
     const result: NameAndAvatar = [displayName(user), user.avatarUrl]
-    dialogNameCaches.set(id, {v:result, timestamp: Date.now()})
+    dialogNameCaches.set(id, { v: result, timestamp: Date.now() })
     return result as [string, string?]
   } catch (e) {
     return ['@' + id, undefined]

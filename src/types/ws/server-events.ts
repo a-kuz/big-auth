@@ -1,8 +1,9 @@
 import { ServerEventType } from '.'
-import { AttachmentType, Attachment } from './attachments'
+import { AttachmentType, Attachment } from '../Attachment'
+import { ChatType } from '../ChatList'
 import { ServerEventPayload } from './payload-types'
 
-export interface WebsocketServerEvent<Event extends ServerEventType = ServerEventType> {
+export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
   type: 'event'
   timestamp: number
   id?: number
@@ -25,6 +26,9 @@ export interface DeleteMessageEvent {
 export interface OnlineEvent {
   userId: string
 }
+export interface ChatsEvent {
+
+}
 
 export interface OfflineEvent {
   userId: string
@@ -37,10 +41,12 @@ export interface TypingServerEvent {
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
-  userId?: string
-  message: string
+	type: ChatType
+  sender?: string
+  message?: string
   timestamp?: number
   attachments?: Attachment<A>[]
+	messageId: number
 }
 
 export interface MarkDeliveredEvent {
@@ -55,4 +61,6 @@ export interface MarkReadEvent {
   messageId: number,
 	timestamp: number
 }
+
+
 

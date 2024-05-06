@@ -2,7 +2,7 @@ import { User, UserDB } from '../models/User'
 import { newId } from '../../utils/new-id'
 import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
-import { CustomError } from '~/errors/UnauthorizedError'
+import { CustomError, UnauthorizedError } from '~/errors/UnauthorizedError'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -30,21 +30,21 @@ export const getOrCreateUserByPhone = async (
 export const getUserById = async (
   d1: D1Database,
   id: string,
-  errorClass: typeof CustomError = CustomError,
+  error: CustomError = new UnauthorizedError((`User not found ${{ id }}`)),
 ): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()
 
     if (!existingUser) {
-      throw new errorClass(`User not found ${{ id }}`)
+      throw error
     } else {
       return User.fromDb(existingUser)
     }
   } catch (error) {
     // Handle error
     console.error(error)
-    throw new errorClass('Failed to retrieve user by id')
+    throw error
   }
 }
 

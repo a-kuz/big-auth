@@ -13,7 +13,7 @@ export class CORS extends OpenAPIRoute {
   async handle(req: Request, _env: {}, _ctx: any, _data: Record<string, any>) {
     if (
       req.headers.get('Origin') !== null &&
-      req.headers.get('Access-Control-Request-Method') !== null &&
+      // req.headers.get('Access-Control-Request-Method') !== null &&
       req.headers.get('Access-Control-Request-Headers') !== null
     ) {
       // Handle CORS preflight requests

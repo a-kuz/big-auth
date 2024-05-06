@@ -1,9 +1,9 @@
 import { ClientEventType, ClientRequestType } from '.'
 import { dlt, edit, dlvrd, read, nw, typing } from './event-literals'
 
-import { Attachment } from './attachments'
+import { Attachment } from '../Attachment'
 
-export interface WebsocketClientRequest<Type extends ClientRequestType = ClientRequestType> {
+export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
   timestamp: number
   id: string
@@ -21,7 +21,7 @@ export interface WebsocketClientRequest<Type extends ClientRequestType = ClientR
             : never
 }
 
-export interface WebsocketClientEvent<Type extends ClientEventType = ClientEventType> {
+export interface ClientEvent<Type extends ClientEventType = ClientEventType> {
   type: 'event'
   timestamp: number
   id: string
@@ -37,6 +37,7 @@ export interface NewMessageRequest {
 export interface GetChatRequest {
   chatId: string
 }
+
 export interface GetChatsRequest {}
 
 export interface GetMessagesRequest {
@@ -70,4 +71,9 @@ export interface MarkDeliveredRequest {
   chatId: string
   messageId: number
 }
-;``
+
+export interface CreateChatRequest {
+  name: string
+  imgUrl: string
+  participants: string[]
+}

@@ -82,7 +82,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       const url = new URL(request.url)
 
       return userMessagingDO.fetch(
-        new Request(`${url.origin}/${user.id}/chats`, {
+        new Request(`${url.origin}/${user.id}/client/request/chats`, {
           method: 'POST',
           body: '{}',
         }),
@@ -91,7 +91,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       // Handle any errors
       console.error('Failed to retrieve chats:', error)
 
-      return errorResponse(JSON.stringify(error.message), 500)
+      return errorResponse(JSON.stringify((error as Error).message), 500)
     }
   }
 }

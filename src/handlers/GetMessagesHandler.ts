@@ -3,6 +3,7 @@ import { OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { GetMessagesRequest } from '~/types/ws/client-requests'
 
 export class GetMessagesHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -29,7 +30,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
     security: [{ BearerAuth: [] }],
   }
 
-  async handle(request: Request, env: Env): Promise<Response> {
+  async handle(request: Request, env: Env, ctx: ExecutionContext, data: GetMessagesRequest): Promise<Response> {
     try {
       const url = new URL(request.url)
       const chatId = url.searchParams.get('chatId')
@@ -56,7 +57,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
 
       const userMessagingDO = env.USER_MESSAGING_DO.get(env.USER_MESSAGING_DO.idFromName(user.id))
       return userMessagingDO.fetch(
-        new Request(`${url.origin}/${user.id}/getMessages`, {
+        new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
           method: 'POST',
           body: JSON.stringify({ chatId }),
         }),

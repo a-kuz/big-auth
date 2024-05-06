@@ -1,4 +1,5 @@
 import { NewMessageResponse, EditMessageResponse, DeleteMessageResponse } from '.'
+import { ChatList } from '../ChatList'
 import {
   NewMessageRequest,
   EditMessageRequest,
@@ -34,4 +35,5 @@ export type ServerEventPayload =
   | TypingServerEvent
   | MarkDeliveredEvent
   | MarkReadEvent
+	| ChatList
 export type ClientEventPayload = TypingClientEvent | OfflineEvent

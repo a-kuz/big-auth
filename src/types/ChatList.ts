@@ -1,4 +1,4 @@
-import { AttachmentType } from "./ws/attachments";
+import { AttachmentType } from "./Attachment";
 
 export type ChatType = "dialog" | "group" | "channel" | "favorites";
 

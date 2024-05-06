@@ -1,5 +1,5 @@
 import { OpenAPIRoute, Str } from "@cloudflare/itty-router-openapi";
-import { TEST_NUMBERS, TWILIO_BASE_URL } from "../constants";
+import { TWILIO_BASE_URL } from "../constants";
 import { Env } from "../types/Env";
 import { errorResponse } from "../utils/error-response";
 import { normalizePhoneNumber } from "../utils/normalize-phone-number";
@@ -32,7 +32,7 @@ export class SendCodeHandler extends OpenAPIRoute {
     const phoneNumber = normalizePhoneNumber(body.phoneNumber);
 
     // Check if the phone number is a test number or starts with "+999" to bypass sending an actual OTP
-    if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith("+999")) {
+    if (phoneNumber.startsWith("+999")) {
       return new Response("{}", { status: 200 });
     }
 

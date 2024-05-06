@@ -1,11 +1,11 @@
 import { Env } from '~/types/Env'
 import { ClientRequestType, ServerEventType } from '~/types/ws'
-import { WebsocketClientEvent, WebsocketClientRequest } from '~/types/ws/client-requests'
+import { ClientEvent, ClientRequest } from '~/types/ws/client-requests'
 import { ClientRequestPayload, ServerEventPayload } from '~/types/ws/payload-types'
 import { WebsocketServerResponse } from '~/types/ws/websocket-server-accept'
-import { UserMessagingDO } from './UserMessagingDO'
+import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
-import { WebsocketServerEvent } from '~/types/ws/server-events'
+import { ServerEvent } from '~/types/ws/server-events'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
@@ -47,12 +47,21 @@ export class WebSocketGod {
     if (this.ping(message)) return
 
     try {
-      const packet = JSON.parse(message as string) as WebsocketClientEvent | WebsocketClientRequest
+      const packet = JSON.parse(message as string) as ClientEvent | ClientRequest
       const type = packet.type
       switch (type) {
         case 'event':
           await doo.wsEvent(packet.payloadType, packet.payload)
         case 'request':
+          if (this.#clientRequestsIds.indexOf(packet.id) !== -1) {
+            ws.send(
+              JSON.stringify({
+                error: { id: packet.id, type: 'warning', exception: 'Duplicate request id' },
+              }),
+            )
+            return
+          }
+					this.#clientRequestsIds.push(packet.id)
           const responsePayload = await doo.wsRequest(
             packet.payloadType as ClientRequestType,
             packet.payload as ClientRequestPayload,
@@ -61,7 +70,7 @@ export class WebSocketGod {
           const response: WebsocketServerResponse = {
             type: 'response',
             id: packet.id,
-            timestamp: Math.floor(Date.now() / 1000),
+            timestamp: Math.floor(Date.now()),
             ...(responsePayload ? { payload: responsePayload } : {}),
           }
           ws.send(JSON.stringify(response))
@@ -119,15 +128,16 @@ export class WebSocketGod {
   }
 
   async sendEvent(eventType: ServerEventType, event: ServerEventPayload, id?: number) {
-    if (this.server) {
-      const packet: WebsocketServerEvent = {
-        eventType,
+		if (this.server) {
+			const packet: ServerEvent = {
+				eventType,
         payload: event,
-        timestamp: Math.floor(Date.now() / 1000),
+        timestamp: Math.floor(Date.now()),
         type: 'event',
         ...(!id ? {} : { id }),
       }
       this.server.send(JSON.stringify(packet))
+			this.refreshPing()
       return true
     } else {
       console.warn('Attempted to send message on closed WebSocket')
@@ -143,13 +153,16 @@ export class WebSocketGod {
           try {
             this.server.close()
             this.lastPing = 0
+						this.server = null
           } catch (e) {
             console.error(e)
           }
+					await this.state.storage.deleteAlarm()
           return
         }
 
-      await this.state.storage.setAlarm(Date.now() + 1000, { allowConcurrency: false })
+      await this.state.storage.setAlarm(Date.now() + 5000, { allowConcurrency: false })
     }
   }
+  #clientRequestsIds: string[] = []
 }

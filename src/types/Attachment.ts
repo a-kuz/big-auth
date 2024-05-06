@@ -1,10 +1,31 @@
-import { FileAttachmentPayload } from '.'
-
 const video = 'video'
 const image = 'image'
 const file = 'file'
 const voice = 'voice'
 const audio = 'audio'
+
+// Payload types for WebSocket communication
+export type FileAttachmentPayload = {
+  extension:
+    | 'pdf'
+    | 'txt'
+    | 'docx'
+    | 'xlsx'
+    | 'pptx'
+    | 'zip'
+    | 'rar'
+    | '7z'
+    | 'jpg'
+    | 'png'
+    | 'gif'
+    | 'mp4'
+    | 'mp3'
+    | 'wav'
+    | 'tar'
+    | 'gz'
+    | 'exe'
+    | string
+}
 
 export type ImageAttachmentPayload = {
   mimetype: `image/${'jpeg' | 'png' | 'gif' | 'webp'}`
@@ -24,7 +45,7 @@ export type AudioAttachmentPayload = {
 export type VoiceAttachmentPayload = {
   duration: number
 }
-interface AttachmentPayloads {
+interface AttachmentMetas {
   ImageAttachmentPayload: ImageAttachmentPayload
   VideoAttachmentPayload: VideoAttachmentPayload
   AudioAttachmentPayload: AudioAttachmentPayload
@@ -48,6 +69,6 @@ export interface Attachment<T extends AttachmentType = never> {
   filename: string
   url: string
   size: number
-  payload: AttachmentPayloads[`${Capitalize<T>}AttachmentPayload`]
+  meta: AttachmentMetas[`${Capitalize<T>}AttachmentPayload`]
 }
 

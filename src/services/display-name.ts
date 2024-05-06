@@ -1,11 +1,13 @@
-import {User} from '~/db/models/User'
+import { Dialog } from '~/types/Chat'
 
-export function displayName(user: User): string {
-  if (user.firstName || user.lastName) {
-    return `${user.lastName ?? ''} ${user.firstName ?? ''}`.trim();
-  } else if (user.username || user.phoneNumber) {
-    return `@${user.username || user.phoneNumber}`;
+export function displayName(chat: Dialog): string {
+  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = chat.meta
+  if (firstName || lastName) {
+    return `${firstName} ${lastName}`.trim()
+  } else if (username) {
+    return `@${username}`
+  } else if (phoneNumber) {
+    return `${phoneNumber}`
   }
-	return user.id
+  return chat.chatId
 }
-

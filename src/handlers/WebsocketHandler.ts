@@ -53,7 +53,7 @@ export class WebsocketHandler extends OpenAPIRoute {
         const mDO = env.USER_MESSAGING_DO.get(receiverDOId)
 
         const url = new URL(request.url)
-        return mDO.fetch(new Request(`${url.origin}/${user.id}/${url.pathname}`, request))
+        return mDO.fetch(new Request(`${url.origin}/${user.id}/client/connect/websocket`, request))
       } catch (error) {
         console.error(error)
         return errorResponse('Something went wrong')

@@ -1,20 +1,29 @@
-import { Num, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import {
+  DataOf,
+  Num,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+  inferData,
+} from '@cloudflare/itty-router-openapi'
 import jwt from '@tsndr/cloudflare-worker-jwt'
+import { Schema, z } from 'zod'
 import { NewMessageRequest } from '~/types/ws/client-requests'
 import { AttachmentSchema } from '~/types/zod'
 import { Env } from '../types/Env'
-import { z } from 'zod'
 import { errorResponse } from '../utils/error-response'
 
+const requestBody = {
+  chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
+  attachments: z.optional(AttachmentSchema.array().optional()),
+  message: new Str({ example: 'Hello, how are you?', required: false }),
+}
 export class SendMessageHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     tags: ['messages'],
-    summary: 'Send a message between users',
-    requestBody: {
-      chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
-      attachments: z.optional(AttachmentSchema.array().optional()),
-      message: new Str({ example: 'Hello, how are you?' }),
-    },
+    summary: 'Send a chat message ',
+
+    requestBody,
 
     responses: {
       '200': {
@@ -29,7 +38,7 @@ export class SendMessageHandler extends OpenAPIRoute {
       },
       '500': {
         description: 'Internal Server Error',
-        schema: { message: new Str() },
+        schema: { error: z.string(), status: z.string() },
       },
     },
     security: [{ BearerAuth: [] }],
@@ -71,7 +80,7 @@ export class SendMessageHandler extends OpenAPIRoute {
       const url = new URL(request.url)
 
       return senderDO.fetch(
-        new Request(`${url.origin}/${userId}/send`, {
+        new Request(`${env.ORIGIN}/${userId}/client/request/new`, {
           method: 'POST',
           body: reqBody,
           headers,

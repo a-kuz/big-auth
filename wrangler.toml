@@ -55,9 +55,9 @@ bindings = [
 ]
 
 [[migrations]]
-tag = "v16"
+tag = "v20"
 deleted_classes = ["UserMessagingDO","DialogDO"]
 
 [[migrations]]
-tag = "v17"
+tag = "v21"
 new_classes = ["UserMessagingDO", "DialogDO"]

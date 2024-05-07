@@ -2,7 +2,7 @@ import { AttachmentType } from "./Attachment";
 
 export type ChatType = "dialog" | "group" | "channel" | "favorites";
 
-export type MessageStatus = "read" | "unread" | "undelivered";
+export type MessageStatus = "read" | "unread" | "undelivered" | "deleted";
 
 export interface ChatListItem {
   type: ChatType;
@@ -10,7 +10,7 @@ export interface ChatListItem {
   photoUrl?: string; // необязательное поле
   name: string;
   lastMessageId: number;
-  lastMessageText: string;
+  lastMessageText?: string;
   lastMessageTime: number;
   lastMessageAuthor?: string;
   lastMessageStatus: MessageStatus;

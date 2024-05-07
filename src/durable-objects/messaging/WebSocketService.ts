@@ -2,7 +2,7 @@ import { Env } from '~/types/Env'
 import { ClientRequestType, ServerEventType } from '~/types/ws'
 import { ClientEvent, ClientRequest } from '~/types/ws/client-requests'
 import { ClientRequestPayload, ServerEventPayload } from '~/types/ws/payload-types'
-import { WebsocketServerResponse } from '~/types/ws/websocket-server-accept'
+import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
 import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { ServerEvent } from '~/types/ws/server-events'
@@ -44,7 +44,9 @@ export class WebSocketGod {
     message: string | ArrayBuffer,
     doo: UserMessagingDO,
   ): Promise<void> {
+		this.refreshPing()
     if (this.ping(message)) return
+
 
     try {
       const packet = JSON.parse(message as string) as ClientEvent | ClientRequest
@@ -61,7 +63,7 @@ export class WebSocketGod {
             )
             return
           }
-					this.#clientRequestsIds.push(packet.id)
+          this.#clientRequestsIds.push(packet.id)
           const responsePayload = await doo.wsRequest(
             packet.payloadType as ClientRequestType,
             packet.payload as ClientRequestPayload,
@@ -89,7 +91,7 @@ export class WebSocketGod {
       message === PING ||
       message instanceof ArrayBuffer ||
       // @ts-ignore
-      message.maxByteLength === 1 ||
+      (message.maxByteLength ?? 6) <= 5 ||
       (message.length ?? 6) <= 5
     )
   }
@@ -109,12 +111,12 @@ export class WebSocketGod {
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
     console.error(error)
 
-    try {
-      await this.onlineService.offline()
-    } catch (e) {
-      console.error(e)
-      return
-    }
+    // try {
+    //   await this.onlineService.offline()
+    // } catch (e) {
+    //   console.error(e)
+    //   return
+    // }
     try {
       ws.close()
     } catch (e) {
@@ -128,16 +130,17 @@ export class WebSocketGod {
   }
 
   async sendEvent(eventType: ServerEventType, event: ServerEventPayload, id?: number) {
-		if (this.server) {
-			const packet: ServerEvent = {
-				eventType,
+
+    if (this.server) {
+      const packet: ServerEvent = {
+        eventType,
         payload: event,
         timestamp: Math.floor(Date.now()),
         type: 'event',
         ...(!id ? {} : { id }),
       }
       this.server.send(JSON.stringify(packet))
-			this.refreshPing()
+      this.refreshPing()
       return true
     } else {
       console.warn('Attempted to send message on closed WebSocket')
@@ -148,16 +151,18 @@ export class WebSocketGod {
   async alarm(): Promise<void> {
     if (this.server) {
       if (this.lastPing)
-        if (Date.now() - this.lastPing > 20000) {
+        if (Date.now() - this.lastPing > 200000) {
           //@ts-ignore
           try {
+						if (this.server.readyState === 1)
+						this.server
             this.server.close()
             this.lastPing = 0
-						this.server = null
+
           } catch (e) {
             console.error(e)
           }
-					await this.state.storage.deleteAlarm()
+          await this.state.storage.deleteAlarm()
           return
         }
 

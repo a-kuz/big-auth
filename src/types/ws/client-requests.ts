@@ -33,6 +33,7 @@ export interface NewMessageRequest {
   chatId: string
   message: string
   attachments?: Attachment[]
+	clientMessageId: string
 }
 export interface GetChatRequest {
   chatId: string

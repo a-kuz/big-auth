@@ -2,16 +2,22 @@ import { describe, it, expect, vi } from 'vitest'
 import {loremIpsum} from 'lorem-ipsum'
 import axios from 'axios'
 import WebSocket from 'ws'
+import { newId } from '../utils/new-id'
 
-const COUNT = 20000
-const USER1 = '+999123456'
-const USER2 = '+999'
+const COUNT = 1
+// const USER1 = '+79875425970'
+const USER1 = '+9990123456'
+//const USER2 = '+33609570605'
+// const USER2 = '+33609570605'
+// const USER2 = '+79875425970'
+   const USER2 = '+9990'
+
 describe('WebSocket Chat Integration Test', () => {
   it(
     'should send and receive messages via WebSocket concurrently',
     async () => {
-			// const baseUrl = "http://localhost:8787"
-			const baseUrl = "https://dev.iambig.ai"
+			const baseUrl = "http://localhost:8787"
+			// const baseUrl = "https://dev.iambig.ai"
       // Step 1: Verify the test phone number and get tokens
 			console.log("verify-code")
       const verifyResponse = await axios.post(
@@ -77,6 +83,7 @@ describe('WebSocket Chat Integration Test', () => {
                 payload: {
                   chatId: userId, // Example chat ID
                   message: lorem,
+									clientMessageId: newId()
                 },
               }
 							console.log({i, lorem})

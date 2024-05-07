@@ -4,19 +4,22 @@ import {
   OpenAPIRoute,
   OpenAPIRouteSchema,
   Str,
+  Uuid,
   inferData,
 } from '@cloudflare/itty-router-openapi'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { Schema, z } from 'zod'
 import { NewMessageRequest } from '~/types/ws/client-requests'
-import { AttachmentSchema } from '~/types/zod'
+import { AttachmentSchema } from '~/types/openapi-schemas/Attachments'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { newId } from '~/utils/new-id'
 
 const requestBody = {
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
   attachments: z.optional(AttachmentSchema.array().optional()),
   message: new Str({ example: 'Hello, how are you?', required: false }),
+  clientMessageId: new Str({ example: 'ldjkedlkedlk', required: false }),
 }
 export class SendMessageHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -63,7 +66,7 @@ export class SendMessageHandler extends OpenAPIRoute {
       return errorResponse('Invalid sender', 400)
     }
     try {
-      const { chatId, message, attachments = undefined } = body
+      const { chatId, message, attachments = undefined, clientMessageId = '' } = body
       // Retrieve sender and receiver's durable object IDs
       const senderDOId = env.USER_MESSAGING_DO.idFromName(userId)
       const senderDO = env.USER_MESSAGING_DO.get(senderDOId)
@@ -73,6 +76,7 @@ export class SendMessageHandler extends OpenAPIRoute {
         chatId,
         message,
         attachments,
+        clientMessageId,
       }
 
       const reqBody = JSON.stringify(req)

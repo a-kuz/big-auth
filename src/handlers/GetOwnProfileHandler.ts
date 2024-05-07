@@ -5,7 +5,8 @@ import { getUserById } from '../db/services/get-user'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { getUserByToken } from '../services/get-user-by-token'
-import { CustomError, UnauthorizedError } from '~/errors/UnauthorizedError'
+import { UnauthorizedError } from '~/errors/UnauthorizedError'
+import { CustomError } from "~/errors/CustomError"
 
 export class GetOwnProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {

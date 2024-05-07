@@ -70,7 +70,7 @@ export class CreateChatHandler extends OpenAPIRoute {
         participants.push(user.id)
       }
 
-      const groupId = newId()
+      const groupId = newId(24)
       const doId = env.GROUP_CHATS_DO.idFromName(groupId)
       const groupChatDO = env.GROUP_CHATS_DO.get(doId)
 

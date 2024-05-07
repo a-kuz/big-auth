@@ -5,12 +5,15 @@ import { GetMessagesRequest } from '~/types/ws/client-requests'
 import { InternalEvent, InternalEventType, NewGroupMessageEvent } from '~/types/ws/internal'
 import { ChatsEvent, NewMessageEvent, ServerEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
+import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 
 export class GroupChatsDO extends DurableObject {
   #timestamp = Date.now()
-  messages: GroupChatMessage[] = []
+  #messages: GroupChatMessage[] = []
   chat!: Group
-
+  #id: string = ''
+  #counter = 0
+  #lastRead = new Map<string, number>()
   constructor(
     ctx: DurableObjectState,
     public env: Env,
@@ -26,9 +29,41 @@ export class GroupChatsDO extends DurableObject {
       return
     }
     this.chat = meta
-    this.messages = (await this.ctx.storage.get('messages')) || []
+    this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
+
+    this.#messages = []
+    for (let i = 0; i < this.#counter; i++) {
+      const m = await this.ctx.storage.get<GroupChatMessage>(`message-${i}`)
+      if (m) {
+        this.#messages.push(m)
+      }
+    }
+
+    const participants = Array.from(this.chat.meta.participants)
+    for (let i = this.#counter - 1; i >= 0; i--) {
+      const m = this.#messages[i]
+      if (m.delivering?.length) {
+        for (const d of m.delivering) {
+          if (d.read) {
+            const j = participants.findIndex(e => e === d.userId)
+            if (j >= 0) {
+              this.#lastRead.set(d.userId, m.messageId)
+              participants.splice(j, 1)
+            }
+          }
+        }
+      }
+      if (!participants.length) {
+        break
+      }
+    }
   }
-  timestamp() {
+  private async newId() {
+    this.#counter++
+    await this.ctx.storage.put('counter', this.#counter - 1)
+    return this.#counter - 1
+  }
+  private timestamp() {
     const current = performance.now()
     if (current > this.#timestamp) {
       this.#timestamp = current
@@ -70,13 +105,20 @@ export class GroupChatsDO extends DurableObject {
 
     return new Response(JSON.stringify(await this.newMessage(eventData)))
   }
-
   async getMessagesHandler(request: Request) {
     const data = await request.json<GetMessagesRequest>()
 
-    return new Response(JSON.stringify(this.messages), {
+    return new Response(JSON.stringify(await this.getMessages(data)), {
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+  async getMessages(payload: GetMessagesRequest): Promise<GroupChatMessage[]> {
+    if (!this.#messages) return []
+    const endIndex = payload.endId || this.#messages.length - 1
+    const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
+    const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
+    const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
+    return messages
   }
 
   async dlvrdEventHandler(request: Request) {
@@ -183,6 +225,8 @@ export class GroupChatsDO extends DurableObject {
       lastMessageId: 0,
       photoUrl: imgUrl,
       type: 'group',
+      name,
+      missed: 0,
       meta: {
         name,
         createdAt: Date.now(),
@@ -200,7 +244,7 @@ export class GroupChatsDO extends DurableObject {
   async newMessage(eventData: NewGroupMessageEvent) {
     const timestamp = this.timestamp()
 
-    const messageId = this.messages.length + 1
+    const messageId = this.#messages.length + 1
 
     const message: GroupChatMessage = {
       createdAt: timestamp,
@@ -209,9 +253,10 @@ export class GroupChatsDO extends DurableObject {
       message: eventData.message,
       attachments: eventData.attachments,
       delivering: [],
+      clientMessageId: eventData.clientMessageId,
     }
-    this.messages.push(message)
-    this.messages.sort((a, b) => a.createdAt - b.createdAt)
+    this.#messages.push(message)
+    this.#messages.sort((a, b) => a.createdAt - b.createdAt)
 
     const event: NewGroupMessageEvent = {
       chatId: this.chat.chatId,
@@ -219,10 +264,11 @@ export class GroupChatsDO extends DurableObject {
       attachments: message.attachments,
       type: 'group',
       sender: message.sender,
+      clientMessageId: eventData.clientMessageId,
     }
     await this.broadcastEvent('new', event)
     this.ctx.blockConcurrencyWhile(() =>
-      this.ctx.storage.put<GroupChatMessage[]>(`messages`, this.messages),
+      this.ctx.storage.put<GroupChatMessage[]>(`messages`, this.#messages),
     )
 
     return { messageId, timestamp }
@@ -239,7 +285,7 @@ export class GroupChatsDO extends DurableObject {
       const headers = new Headers({ 'Content-Type': 'application/json' })
 
       const resp = await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${user}/internal/event/new`, {
+        new Request(`${this.env.ORIGIN}/${user}/group/event/new`, {
           method: 'POST',
           body: reqBody,
           headers,
@@ -251,19 +297,19 @@ export class GroupChatsDO extends DurableObject {
     }
   }
 
-	async broadcastEvent(type:InternalEventType, payload: InternalEvent) {
+  async broadcastEvent(type: InternalEventType, payload: InternalEvent) {
     for (const user of this.chat!.meta.participants) {
       const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(user)
       const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
       // Create an event object with message details and timestamp
 
-			const vent: ServerEvent = {eventType: type, payload, timestamp: Date.now(), type:'event', }
-      const reqBody = JSON.stringify({event: payload})
+      const vent: ServerEvent = { eventType: type, payload, timestamp: Date.now(), type: 'event' }
+      const reqBody = JSON.stringify({ event: payload })
       const headers = new Headers({ 'Content-Type': 'application/json' })
 
       const resp = await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${user}/internal/event/${type}`, {
+        new Request(`${this.env.ORIGIN}/${user}/group/event/${type}`, {
           method: 'POST',
           body: reqBody,
           headers,

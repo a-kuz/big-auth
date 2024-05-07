@@ -76,7 +76,7 @@ export class UserMessagingDO implements DurableObject {
 
     const [userId, from, type, action] = paths as [
       string,
-      'internal' | 'client',
+      'dialog' | 'client' | 'group' | 'messaging',
       'event' | 'request' | 'connect',
       ClientEventType | ServerEventType | InternalEventType | ClientRequestType | 'websocket',
     ]
@@ -98,13 +98,18 @@ export class UserMessagingDO implements DurableObject {
             }
         }
 
-      case 'internal': {
+      case 'dialog': {
+        switch (action) {
+          case 'new':
+            return this.newEventHandler(request)
+          case 'dlvrd':
+            return this.dlvrdEventHandler(request)
+          case 'read':
+            return this.readEventHandler(request)
+        }
+      }
+      case 'messaging': {
         switch (type) {
-          case 'request':
-            switch (action) {
-              case 'new':
-                return this.newHandler(request)
-            }
           case 'event':
             switch (action) {
               case 'online':
@@ -113,12 +118,6 @@ export class UserMessagingDO implements DurableObject {
                 return this.friendOffline(request)
               case 'typing':
                 return this.friendTyping(request)
-              case 'new':
-                return this.newEventHandler(request)
-              case 'dlvrd':
-                return this.dlvrdEventHandler(request)
-              case 'read':
-                return this.readEventHandler(request)
             }
         }
       }
@@ -129,12 +128,11 @@ export class UserMessagingDO implements DurableObject {
   async newHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
 
-    const timestamp = this.timestamp()
-
     if (eventData.chatId === this.userId) {
+      const timestamp = this.timestamp()
       return this.sendToFavorites(eventData, timestamp)
     } else {
-      const response = new Response(JSON.stringify(await this.newRequest(eventData, timestamp)))
+      const response = new Response(JSON.stringify(await this.newRequest(eventData)))
 
       return response
     }
@@ -234,23 +232,23 @@ export class UserMessagingDO implements DurableObject {
     let isNew = chatIndex === -1
     const counter = await this.dialogStorage(chatId).counter()
 
-    if (isNew || (counter-1 <= eventData.messageId)) {
+    if (isNew || counter - 1 <= eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: chatId,
         lastMessageStatus: 'undelivered',
-        lastMessageText: eventData.message,
-        lastMessageTime: eventData.timestamp,
-        name: displayName(dialog),
+        lastMessageText: dialog.lastMessageText,
+        lastMessageTime: dialog.lastMessageTime,
+        name: dialog.name,
         type: 'dialog',
         verified: false,
-        lastMessageAuthor: eventData.sender,
+        lastMessageAuthor: dialog.lastMessageAuthor,
         photoUrl: dialog.photoUrl,
-        isMine: false,
-        lastMessageId: eventData.messageId,
-
+        isMine: dialog.isMine,
+        lastMessageId: dialog.lastMessageId,
+        missed: dialog.missed,
       }
       const chat = this.toTop(chatId, chatChanges)
-      chat.missed = (chat.missed ?? 0) + 1
+
       this.chatList.unshift(chat)
       await this.state.storage.put('chatList', this.chatList)
     }
@@ -357,8 +355,7 @@ export class UserMessagingDO implements DurableObject {
 
     switch (type) {
       case 'new':
-        const timestamp = this.timestamp()
-        response = await this.newRequest(request as NewMessageRequest, timestamp)
+        response = await this.newRequest(request as NewMessageRequest)
         return response
       case 'dlvrd':
         return this.state.blockConcurrencyWhile(() =>
@@ -369,10 +366,9 @@ export class UserMessagingDO implements DurableObject {
         response = await this.readRequest(request as MarkReadRequest, this.timestamp())
         return response
       case 'chats':
-      case 'getChats': //deprecated
         response = await this.getChatsRequest(request as GetChatsRequest)
         return response
-      case 'getMessages': // deprecated
+
       case 'messages':
         response = await this.getMessagesRequest(request as GetMessagesRequest)
         return response
@@ -387,17 +383,20 @@ export class UserMessagingDO implements DurableObject {
     return this.dialogStorage(payload.chatId).getMessages(payload)
   }
 
-  async newRequest(payload: NewMessageRequest, timestamp: number) {
+  async newRequest(payload: NewMessageRequest) {
     const chatId = payload.chatId
     if (chatId === this.userId) {
-      return this.sendToFavorites(payload, timestamp)
+      return this.sendToFavorites(payload, this.timestamp())
     }
     const dialogStorage = this.dialogStorage(chatId)
     if (!this.chatList.find(chat => chat.id === chatId)) {
       await this.state.blockConcurrencyWhile(async () => dialogStorage.create(this.userId, chatId))
     }
 
-    const { messageId } = await dialogStorage.newHandler(this.userId, payload, timestamp)
+    const { messageId, timestamp, clientMessageId } = await dialogStorage.newMessage(
+      this.userId,
+      payload,
+    )
 
     const dialog: Dialog = await dialogStorage.chat(this.userId)
     const chatChanges: Partial<ChatListItem> = {
@@ -406,7 +405,7 @@ export class UserMessagingDO implements DurableObject {
       lastMessageText: payload.message,
       lastMessageTime: timestamp,
       missed: 0,
-      name: displayName(dialog),
+      name: dialog.name,
       type: 'dialog',
       verified: false,
       lastMessageAuthor: '',
@@ -420,7 +419,7 @@ export class UserMessagingDO implements DurableObject {
     this.chatList.unshift(chat)
 
     await this.state.storage.put('chatList', this.chatList)
-    return { messageId, timestamp }
+    return { messageId, timestamp, clientMessageId }
   }
 
   toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
@@ -443,7 +442,11 @@ export class UserMessagingDO implements DurableObject {
   async readRequest(payload: MarkReadRequest, timestamp: number) {
     const chatId = payload.chatId
 
-    return this.dialogStorage(chatId).read(this.userId, payload, timestamp)
+    const resp = await this.dialogStorage(chatId).read(this.userId, payload, timestamp)
+    const i = this.chatList.findIndex(chat => chat.id === chatId)
+    this.chatList[i].missed = resp.missed
+    await this.state.storage.put('chatList', this.chatList)
+    return resp
   }
 
   async typingEvent(event: TypingClientEvent) {
@@ -451,7 +454,7 @@ export class UserMessagingDO implements DurableObject {
     const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
     await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${event.chatId}/internal/event/typing`, {
+      new Request(`${this.env.ORIGIN}/${event.chatId}/messaging/event/typing`, {
         method: 'POST',
         body: JSON.stringify({ userId: this.userId } as TypingInternalEvent),
       }),

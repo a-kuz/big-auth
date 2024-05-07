@@ -1,4 +1,5 @@
-import { ChatType } from './ChatList'
+import { AttachmentType } from './Attachment'
+import { ChatType, MessageStatus } from './ChatList'
 
 export type GroupChat = {
   id: string
@@ -8,14 +9,14 @@ export type GroupChat = {
   createdAt: number
 }
 
-interface DialogMeta {
+export interface DialogMeta {
   firstName?: string
   lastName?: string
   username?: string
   phoneNumber?: string
 }
 
-interface GroupMeta {
+export interface GroupMeta {
   name: string
   owner: string
   participants: string[]
@@ -29,11 +30,20 @@ export interface Chat<T extends ChatType>{
   chatId: string
   photoUrl?: string
   type:  ChatType
-  lastMessageId?: number
+	name: string;
+  lastMessageId: number;
+  lastMessageText?: string;
+  lastMessageTime?: number;
+  lastMessageAuthor?: string;
+  lastMessageStatus?: MessageStatus;
+  missed: number;
+  verified?: boolean;
+  isMine?: boolean;
+	attachmentType?: AttachmentType
 	meta: T extends 'dialog'
   ? DialogMeta
   : T extends 'group'
-    ? GroupMeta
+	? GroupMeta : never
 
 }
 

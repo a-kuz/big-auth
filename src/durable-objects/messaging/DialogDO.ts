@@ -1,30 +1,30 @@
 import { DialogMessage } from '~/types/ChatMessage'
-import { NewMessageResponse } from '~/types/ws'
+import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import {
   GetMessagesRequest,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
 } from '~/types/ws/client-requests'
-import { MarkDeliveredEvent, MarkReadEvent, NewMessageEvent } from '~/types/ws/server-events'
-import { ChatList } from '../../types/ChatList'
+import { NewMessageEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
 
 import { DurableObject } from 'cloudflare:workers'
 import { User } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
-import { NotFoundError } from '~/errors/UnauthorizedError'
+import { NotFoundError } from '~/errors/NotFoundError'
+import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
-import { errorResponse } from '~/utils/error-response'
-const DEFAULT_PORTION = 50
-const MAX_PORTION = 500
+import { DEFAULT_PORTION, MAX_PORTION } from './constants'
+
 export class DialogDO extends DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [User, User]
   #id: string = ''
   #counter = 0
+  #lastRead = new Map<string, number>()
 
   constructor(
     readonly ctx: DurableObjectState,
@@ -69,11 +69,15 @@ export class DialogDO extends DurableObject {
       )
 
       this.#users = [user1, user2]
-      await this.ctx.storage.put('users', this.#users)
-      await this.ctx.storage.put('messages', [])
-      await this.ctx.storage.put('counter', 0)
-      await this.ctx.storage.put('createdAt', Date.now())
-      await this.ctx.blockConcurrencyWhile(async () => this.initialize())
+
+      await this.ctx.blockConcurrencyWhile(async () => {
+        await this.ctx.storage.put('users', this.#users)
+        await this.ctx.storage.put('messages', [])
+        await this.ctx.storage.put('counter', 0)
+        await this.ctx.storage.put('createdAt', Date.now())
+        await this.initialize()
+      })
+
       return this.chat(owner)
     })
   }
@@ -85,6 +89,7 @@ export class DialogDO extends DurableObject {
     }
     const user2 = this.#users[0].id === userId ? this.#users[1] : this.#users[0]
 
+    const lastMessage = this.#messages[this.#counter - 1]
     const chat: Dialog = {
       chatId: user2.id,
       lastMessageId: this.#messages.length - 1,
@@ -96,7 +101,16 @@ export class DialogDO extends DurableObject {
         phoneNumber: user2.phoneNumber,
         username: user2.username,
       },
+      missed: this.#counter - (this.#lastRead.get(userId) || 0) - 1,
+      lastMessageText: lastMessage?.message,
+      lastMessageTime: lastMessage?.createdAt,
+      lastMessageAuthor: lastMessage?.sender,
+      lastMessageStatus: lastMessage?.read ? 'read' : lastMessage?.dlvrd ? 'unread' : 'undelivered',
+      isMine: userId === lastMessage?.sender,
+      name: '',
     }
+    chat.name = displayName(chat.meta)
+
     return chat
   }
 
@@ -118,19 +132,8 @@ export class DialogDO extends DurableObject {
     return messages
   }
 
-  async newHandler(
-    sender: string,
-    request: NewMessageRequest,
-    timestamp: number,
-  ): Promise<NewMessageResponse> {
-    return this.newMessage(sender, request, timestamp)
-  }
-
-  async newMessage(
-    sender: string,
-    request: NewMessageRequest,
-    timestamp: number,
-  ): Promise<NewMessageResponse> {
+  async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
+    const timestamp = this.timestamp()
     const messageId = await this.newId()
     console.log(messageId)
     const message: DialogMessage = {
@@ -139,8 +142,9 @@ export class DialogDO extends DurableObject {
       sender: sender,
       message: request.message,
       attachments: request.attachments,
+      clientMessageId: request.clientMessageId,
     }
-    this.#messages.push(message)
+    this.#messages[messageId] = message
 
     await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
@@ -148,11 +152,19 @@ export class DialogDO extends DurableObject {
       await this.ctx.storage.put<DialogMessage>(`message-${messageId}`, message)
       await this.ctx.storage.put<number>('counter', this.#messages.length)
     })
-
-    return { messageId, timestamp }
+    if (messageId > 0) {
+      if (this.#messages[messageId - 1].sender !== sender) {
+        await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      }
+    }
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
-  async dlvrd(sender: string, request: MarkDeliveredRequest, timestamp: number) {
+  async dlvrd(sender: string, request: MarkDeliveredRequest, timestamp: number): Promise<MarkDlvrdResponse> {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
@@ -178,11 +190,15 @@ export class DialogDO extends DurableObject {
       })
     }
 
-		await this.sendDlvrdEventToAuthor(request.chatId, messageId, timestamp)
+    await this.sendDlvrdEventToAuthor(request.chatId, messageId, timestamp)
     return { messageId, timestamp }
   }
 
-  async read(sender: string, request: MarkReadRequest, timestamp: number) {
+  async read(
+    sender: string,
+    request: MarkReadRequest,
+    timestamp: number,
+  ): Promise<MarkReadResponse> {
     if (!this.#messages.length) {
       console.error('read requ for emty chat')
       throw new Error('Chat is empty')
@@ -190,20 +206,23 @@ export class DialogDO extends DurableObject {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
-      endIndex = this.#messages.findLastIndex(m => m.messageId === request.messageId)
+      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId)
 
       if (endIndex === -1) {
         throw new Error(`messageId is not exists`)
       }
     }
     const messageId = this.#messages[endIndex].messageId
-
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
+    let lastUnread = 0
     for (let i = endIndex; i >= 0; i--) {
       const message = this.#messages[i]
       if (message.sender === sender) {
         continue
-      }
-      if (message.read) {
+      } else if (message.read) {
         break
       }
 
@@ -216,7 +235,7 @@ export class DialogDO extends DurableObject {
     }
     await this.sendReadEventToAuthor(request.chatId, messageId, timestamp)
 
-    return { messageId, isLast: messageId === this.#messages.length - 1 }
+    return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
   }
 
   private async sendDlvrdEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
@@ -236,7 +255,7 @@ export class DialogDO extends DurableObject {
     const headers = new Headers({ 'Content-Type': 'application/json' })
 
     const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/internal/event/dlvrd`, {
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/dlvrd`, {
         method: 'POST',
         body: reqBody,
         headers,
@@ -266,7 +285,7 @@ export class DialogDO extends DurableObject {
     const headers = new Headers({ 'Content-Type': 'application/json' })
 
     const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/internal/event/read`, {
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/read`, {
         method: 'POST',
         body: reqBody,
         headers,
@@ -294,15 +313,17 @@ export class DialogDO extends DurableObject {
       chatId: senderId,
       message: message.message,
       attachments: message.attachments,
+      clientMessageId: message.clientMessageId,
       timestamp,
       type: 'dialog',
+      missed: this.#counter - (this.#lastRead.get(senderId) || 0) - 1,
     }
 
     const reqBody = JSON.stringify(event)
     const headers = new Headers({ 'Content-Type': 'application/json' })
 
     const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/internal/event/new`, {
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/new`, {
         method: 'POST',
         body: reqBody,
         headers,
@@ -318,12 +339,25 @@ export class DialogDO extends DurableObject {
     this.#users = await this.ctx.storage.get('users')
     if (this.#users) {
       this.#id = `${this.#users[0].id}:${this.#users[1].id}`
+      // this.#lastRead.set(this.#users[0].id,-1)
+      // this.#lastRead.set(this.#users[1].id,-1)
     }
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
     for (let i = 0; i < this.#counter; i++) {
-      this.#messages.push((await this.ctx.storage.get<DialogMessage>(`message-${i}`))!)
+      const m = await this.ctx.storage.get<DialogMessage>(`message-${i}`)
+      if (m) {
+        this.#messages.push(m)
+        if (m.read) {
+          this.#lastRead.set(this.#id.replace(m.sender, '').replace(':', ''), m.messageId)
+        }
+      }
     }
+  }
+
+  private timestamp() {
+    const current = performance.now()
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 }

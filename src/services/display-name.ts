@@ -1,7 +1,7 @@
-import { Dialog } from '~/types/Chat'
+import { DialogMeta } from '~/types/Chat'
 
-export function displayName(chat: Dialog): string {
-  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = chat.meta
+export function displayName(chatMeta: DialogMeta): string {
+  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = chatMeta
   if (firstName || lastName) {
     return `${firstName} ${lastName}`.trim()
   } else if (username) {
@@ -9,5 +9,5 @@ export function displayName(chat: Dialog): string {
   } else if (phoneNumber) {
     return `${phoneNumber}`
   }
-  return chat.chatId
+  return "????"
 }

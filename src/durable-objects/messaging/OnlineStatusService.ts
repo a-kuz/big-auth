@@ -33,7 +33,7 @@ export class OnlineStatusService {
 
       const chatStatus = await (
         await receiverDO.fetch(
-          new Request(`${this.env.ORIGIN}/${chat.id}/internal/event/online`, {
+          new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/online`, {
             method: 'POST',
             body: JSON.stringify({ userId: this.#userId }),
           }),
@@ -59,7 +59,7 @@ export class OnlineStatusService {
       const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
 
       await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${chat.id}/internal/event/offline`, {
+        new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, {
           method: 'POST',
           body: JSON.stringify({ type: 'offline', userId: this.#userId }),
         }),

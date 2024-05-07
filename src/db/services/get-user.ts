@@ -2,7 +2,8 @@ import { User, UserDB } from '../models/User'
 import { newId } from '../../utils/new-id'
 import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
-import { CustomError, UnauthorizedError } from '~/errors/UnauthorizedError'
+import { UnauthorizedError } from '~/errors/UnauthorizedError'
+import { CustomError } from "~/errors/CustomError"
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,

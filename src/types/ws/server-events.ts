@@ -47,6 +47,8 @@ export interface NewMessageEvent<A extends AttachmentType | never = never> {
   timestamp?: number
   attachments?: Attachment<A>[]
 	messageId: number
+	clientMessageId: string
+	missed: number
 }
 
 export interface MarkDeliveredEvent {

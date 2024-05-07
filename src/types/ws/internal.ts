@@ -19,6 +19,7 @@ export interface TypingInternalEvent {
 
 export interface NewGroupMessageEvent {
 	chatId: string
+	clientMessageId: string
   sender: string
   message?: string
   attachments?: Attachment[],

@@ -7,6 +7,7 @@ import {
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export class WebsocketHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -49,8 +50,7 @@ export class WebsocketHandler extends OpenAPIRoute {
           return errorResponse('user not exist', 401)
         }
 
-        const receiverDOId = env.USER_MESSAGING_DO.idFromName(user.id)
-        const mDO = env.USER_MESSAGING_DO.get(receiverDOId)
+        const mDO = userStorage(env, user.id)
 
         const url = new URL(request.url)
         return mDO.fetch(new Request(`${url.origin}/${user.id}/client/connect/websocket`, request))

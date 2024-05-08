@@ -12,6 +12,7 @@ import {
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export class GetChatsHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -77,7 +78,7 @@ export class GetChatsHandler extends OpenAPIRoute {
         return errorResponse('Unauthorized', 401)
       }
 
-      const userMessagingDO = env.USER_MESSAGING_DO.get(env.USER_MESSAGING_DO.idFromName(user.id))
+      const userMessagingDO = userStorage(env, user.id)
 
       const url = new URL(request.url)
 

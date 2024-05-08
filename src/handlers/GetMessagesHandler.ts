@@ -2,13 +2,11 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { GetMessagesRequest } from '~/types/ws/client-requests'
-import {
-  DialogMessageSchema,
-  GroupChatMessageSchema,
-} from '~/types/openapi-schemas/Messages'
+import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export class GetMessagesHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -72,7 +70,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
         return errorResponse('Unauthorized', 401)
       }
 
-      const userMessagingDO = env.USER_MESSAGING_DO.get(env.USER_MESSAGING_DO.idFromName(user.id))
+      const userMessagingDO = userStorage(env, user.id)
       return userMessagingDO.fetch(
         new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
           method: 'POST',

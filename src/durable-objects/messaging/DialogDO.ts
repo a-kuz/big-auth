@@ -17,6 +17,7 @@ import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
+import { userStorage } from './utils/mdo'
 
 export class DialogDO extends DurableObject {
   #timestamp = Date.now()
@@ -164,7 +165,11 @@ export class DialogDO extends DurableObject {
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
-  async dlvrd(sender: string, request: MarkDeliveredRequest, timestamp: number): Promise<MarkDlvrdResponse> {
+  async dlvrd(
+    sender: string,
+    request: MarkDeliveredRequest,
+    timestamp: number,
+  ): Promise<MarkDlvrdResponse> {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
@@ -241,8 +246,7 @@ export class DialogDO extends DurableObject {
   private async sendDlvrdEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
     // Retrieve sender and receiver's durable object IDs
 
-    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
-    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+    const receiverDO = userStorage(this.env, receiverId)
 
     // Create an event object with message details and timestamp
     const event: MarkDeliveredInternalEvent = {
@@ -271,8 +275,7 @@ export class DialogDO extends DurableObject {
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
     // Retrieve sender and receiver's durable object IDs
 
-    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
-    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+    const receiverDO = userStorage(this.env, receiverId)
     const senderId = this.#id.replace(receiverId, '').replace(':', '')
     // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
@@ -303,8 +306,7 @@ export class DialogDO extends DurableObject {
     message: DialogMessage,
     timestamp: number,
   ) {
-    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(receiverId)
-    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+    const receiverDO = userStorage(this.env, receiverId)
     const senderId = this.#id.replace(receiverId, '').replace(':', '')
 
     const event: NewMessageEvent = {
@@ -339,8 +341,6 @@ export class DialogDO extends DurableObject {
     this.#users = await this.ctx.storage.get('users')
     if (this.#users) {
       this.#id = `${this.#users[0].id}:${this.#users[1].id}`
-      // this.#lastRead.set(this.#users[0].id,-1)
-      // this.#lastRead.set(this.#users[1].id,-1)
     }
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 

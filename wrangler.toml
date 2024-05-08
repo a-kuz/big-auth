@@ -53,11 +53,3 @@ bindings = [
 	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" },
 	{ name = "DIALOG_DO", class_name = "DialogDO" },
 ]
-
-[[migrations]]
-tag = "v20"
-deleted_classes = ["UserMessagingDO","DialogDO"]
-
-[[migrations]]
-tag = "v21"
-new_classes = ["UserMessagingDO", "DialogDO"]

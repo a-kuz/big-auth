@@ -23,15 +23,18 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { displayName } from '~/services/display-name'
-import { Dialog } from '~/types/Chat'
+import { Dialog, Group } from '~/types/Chat'
 import {
   InternalEventType,
   MarkDeliveredInternalEvent,
+  NewChatEvent,
   TypingInternalEvent,
 } from '~/types/ws/internal'
+import { MarkReadResponse } from '~/types/ws/responses'
+import { DialogDO } from './DialogDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
+import { dialogStorage, groupStorage, userStorage } from './utils/mdo'
 
 export class UserMessagingDO implements DurableObject {
   chatList: ChatList = []
@@ -81,6 +84,7 @@ export class UserMessagingDO implements DurableObject {
       ClientEventType | ServerEventType | InternalEventType | ClientRequestType | 'websocket',
     ]
     this.setUserId(userId)
+    console.log({ from, type, action })
 
     switch (from) {
       case 'client':
@@ -98,6 +102,14 @@ export class UserMessagingDO implements DurableObject {
             }
         }
 
+      case 'group': {
+        switch (action) {
+          case 'newChat':
+            return this.newChatEventHandler(request)
+          case 'new':
+            return this.newEventHandler(request)
+        }
+      }
       case 'dialog': {
         switch (action) {
           case 'new':
@@ -142,6 +154,31 @@ export class UserMessagingDO implements DurableObject {
     const eventData = await request.json<NewMessageEvent>()
 
     return new Response(JSON.stringify(await this.receiveMessage(eventData)))
+  }
+  async newChatEventHandler(request: Request) {
+    const eventData = await request.json<NewChatEvent>()
+    console.log(eventData)
+    const { chatId, name, meta } = eventData
+    const { owner } = meta
+    const chat = this.toTop(chatId, {
+      id: chatId,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: 'chat created',
+      lastMessageTime: this.timestamp(),
+      name: name,
+      type: 'group',
+      verified: false,
+      lastMessageAuthor: owner,
+      isMine: owner === this.userId,
+    })
+    chat.missed = 0
+    this.chatList.unshift(chat)
+    await this.state.storage.put('chatList', this.chatList)
+    if (this.onlineService.isOnline()) {
+      await this.ws.sendEvent('chats', this.chatList)
+    }
+
+    return new Response()
   }
 
   async dlvrdEventHandler(request: Request) {
@@ -227,25 +264,25 @@ export class UserMessagingDO implements DurableObject {
 
   async receiveMessage(eventData: NewMessageEvent) {
     const chatId = eventData.chatId
-    const dialog: Dialog = await this.dialogStorage(chatId).chat(this.userId)
+    const chatData = (await this.chatStorage(chatId).chat(this.userId)) as Group | Dialog
     const chatIndex = this.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-    const counter = await this.dialogStorage(chatId).counter()
+    const counter = await this.chatStorage(chatId).counter()
 
-    if (isNew || counter - 1 <= eventData.messageId) {
+    if (isNew || counter - 2 <= eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
-        id: chatId,
+        id: chatData.chatId,
         lastMessageStatus: 'undelivered',
-        lastMessageText: dialog.lastMessageText,
-        lastMessageTime: dialog.lastMessageTime,
-        name: dialog.name,
+        lastMessageText: chatData.lastMessageText,
+        lastMessageTime: chatData.lastMessageTime,
+        name: chatData.name,
         type: 'dialog',
         verified: false,
-        lastMessageAuthor: dialog.lastMessageAuthor,
-        photoUrl: dialog.photoUrl,
-        isMine: dialog.isMine,
-        lastMessageId: dialog.lastMessageId,
-        missed: dialog.missed,
+        lastMessageAuthor: chatData.lastMessageAuthor,
+        photoUrl: chatData.photoUrl,
+        isMine: chatData.isMine,
+        lastMessageId: chatData.lastMessageId,
+        missed: chatData.missed,
       }
       const chat = this.toTop(chatId, chatChanges)
 
@@ -258,7 +295,7 @@ export class UserMessagingDO implements DurableObject {
       if (isNew) {
         await this.ws.sendEvent('chats', this.chatList)
       }
-      await this.ws.sendEvent('new', { ...eventData, sender: eventData.chatId })
+      await this.ws.sendEvent('new', { ...eventData, sender: eventData.sender ?? eventData.chatId })
       dlvrd = true
     }
     return { success: true, dlvrd }
@@ -272,7 +309,7 @@ export class UserMessagingDO implements DurableObject {
   }
   async messagesHandler(request: Request) {
     const data = await request.json<GetMessagesRequest>()
-    const dialog = this.dialogStorage(data.chatId)
+    const dialog = this.chatStorage(data.chatId)
     const messages = await dialog.getMessages(data)
 
     return new Response(JSON.stringify(messages), {
@@ -281,11 +318,13 @@ export class UserMessagingDO implements DurableObject {
   }
 
   private dialogStorage(chatId: string) {
-    const id = this.env.DIALOG_DO.idFromName(
-      [chatId, this.userId].sort((a, b) => (a > b ? 1 : -1)).join(':'),
-    )
-    const dialog = this.env.DIALOG_DO.get(id)
-    return dialog
+    return dialogStorage(this.env, [chatId, this.userId].sort((a, b) => (a > b ? 1 : -1)).join(':'))
+  }
+  private groupStorage(chatId: string) {
+    return groupStorage(this.env, chatId)
+  }
+  private chatStorage(chatId: string) {
+    return this.isGroup(chatId) ? this.groupStorage(chatId) : this.dialogStorage(chatId)
   }
 
   async friendOnline(request: Request) {
@@ -380,7 +419,11 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async getMessagesRequest(payload: GetMessagesRequest): Promise<ChatMessage[]> {
-    return this.dialogStorage(payload.chatId).getMessages(payload)
+    return this.chatStorage(payload.chatId).getMessages(payload)
+  }
+
+  private isGroup(id: string): boolean {
+    return id.length !== 21
   }
 
   async newRequest(payload: NewMessageRequest) {
@@ -388,17 +431,19 @@ export class UserMessagingDO implements DurableObject {
     if (chatId === this.userId) {
       return this.sendToFavorites(payload, this.timestamp())
     }
-    const dialogStorage = this.dialogStorage(chatId)
+
+    const storage = this.chatStorage(chatId)
     if (!this.chatList.find(chat => chat.id === chatId)) {
-      await this.state.blockConcurrencyWhile(async () => dialogStorage.create(this.userId, chatId))
+      if (!this.isGroup(chatId)) {
+        await this.state.blockConcurrencyWhile(async () =>
+          (storage as DurableObjectStub<DialogDO>).create(this.userId, chatId),
+        )
+      }
     }
 
-    const { messageId, timestamp, clientMessageId } = await dialogStorage.newMessage(
-      this.userId,
-      payload,
-    )
+    const { messageId, timestamp, clientMessageId } = await storage.newMessage(this.userId, payload)
 
-    const dialog: Dialog = await dialogStorage.chat(this.userId)
+    const dialog: Dialog = await storage.chat(this.userId)
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
       lastMessageStatus: 'undelivered',
@@ -406,7 +451,7 @@ export class UserMessagingDO implements DurableObject {
       lastMessageTime: timestamp,
       missed: 0,
       name: dialog.name,
-      type: 'dialog',
+      type: this.isGroup(chatId) ? 'group' : 'dialog',
       verified: false,
       lastMessageAuthor: '',
       photoUrl: dialog.photoUrl,
@@ -442,7 +487,11 @@ export class UserMessagingDO implements DurableObject {
   async readRequest(payload: MarkReadRequest, timestamp: number) {
     const chatId = payload.chatId
 
-    const resp = await this.dialogStorage(chatId).read(this.userId, payload, timestamp)
+    const resp = (await this.dialogStorage(chatId).read(
+      this.userId,
+      payload,
+      timestamp,
+    )) as MarkReadResponse
     const i = this.chatList.findIndex(chat => chat.id === chatId)
     this.chatList[i].missed = resp.missed
     await this.state.storage.put('chatList', this.chatList)
@@ -450,8 +499,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async typingEvent(event: TypingClientEvent) {
-    const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(event.chatId)
-    const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+    const receiverDO = userStorage(this.env, event.chatId)
 
     await receiverDO.fetch(
       new Request(`${this.env.ORIGIN}/${event.chatId}/messaging/event/typing`, {

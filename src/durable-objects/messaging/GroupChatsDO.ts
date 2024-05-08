@@ -1,47 +1,115 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Group } from '~/types/Chat'
 import { GroupChatMessage } from '~/types/ChatMessage'
-import { GetMessagesRequest } from '~/types/ws/client-requests'
-import { InternalEvent, InternalEventType, NewGroupMessageEvent } from '~/types/ws/internal'
+import {
+  GetMessagesRequest,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
+} from '~/types/ws/client-requests'
+import {
+  InternalEvent,
+  InternalEventType,
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  NewGroupMessageEvent,
+  Timestamp,
+  UserId,
+} from '~/types/ws/internal'
 import { ChatsEvent, NewMessageEvent, ServerEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
+import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import { MessageStatus } from '~/types/ChatList'
+import { userStorage } from './utils/mdo'
+
+export type OutgoingEvent = {
+  type: InternalEventType
+  receiver: UserId
+  sender: UserId
+  event: InternalEvent
+  timestamp: Timestamp
+}
 
 export class GroupChatsDO extends DurableObject {
   #timestamp = Date.now()
   #messages: GroupChatMessage[] = []
-  chat!: Group
+  group!: Group
   #id: string = ''
   #counter = 0
   #lastRead = new Map<string, number>()
+  #outgoingEvets: OutgoingEvent[] = []
   constructor(
-    ctx: DurableObjectState,
+    public ctx: DurableObjectState,
     public env: Env,
   ) {
     super(ctx, env)
-    this.ctx.blockConcurrencyWhile(this.initialize)
+    this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
+  async alarm(): Promise<void> {
+    const tasks: ((...args: any[]) => Promise<void>)[] = []
+    const completed: number[] = []
+    for (const i in this.#outgoingEvets) {
+      const { timestamp, type, event, sender, receiver } = this.#outgoingEvets[i]
+
+      try {
+        const receiverDO = userStorage(this.env, receiver)
+
+        // Create an event object with message details and timestamp
+
+        const reqBody = JSON.stringify({ ...event })
+        const headers = new Headers({ 'Content-Type': 'application/json' })
+
+        const resp = await receiverDO.fetch(
+          new Request(`${this.env.ORIGIN}/${receiver}/group/event/${type}`, {
+            method: 'POST',
+            body: reqBody,
+            headers,
+          }),
+        )
+        if (resp.status === 200) {
+          completed.push(parseInt(i))
+        } else {
+          console.error(await resp.text())
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    completed.sort((a, b) => b - a)
+    for (let i = 0; i < completed.length; i++) {
+      this.#outgoingEvets.splice(completed[i], 1)
+    }
+    if (this.#outgoingEvets.length > 0) {
+      this.ctx.storage.setAlarm(Date.now() + 1400, { allowConcurrency: true })
+    }
+  }
   // Initialize storage for group chats
   async initialize() {
     const meta = await this.ctx.storage.get<Group>('meta')
+    console.log(meta)
     if (!meta) {
       return
     }
-    this.chat = meta
+    this.#id = meta.chatId
+    this.group = meta
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
     for (let i = 0; i < this.#counter; i++) {
       const m = await this.ctx.storage.get<GroupChatMessage>(`message-${i}`)
       if (m) {
+        if (!m.delivering) m.delivering = []
         this.#messages.push(m)
       }
     }
 
-    const participants = Array.from(this.chat.meta.participants)
+    const participants = Array.from(this.group.meta.participants)
     for (let i = this.#counter - 1; i >= 0; i--) {
       const m = this.#messages[i]
+      if (!m) continue
       if (m.delivering?.length) {
         for (const d of m.delivering) {
           if (d.read) {
@@ -73,45 +141,40 @@ export class GroupChatsDO extends DurableObject {
     return this.#timestamp
   }
 
-  async fetch(request: Request) {
-    const url = new URL(request.url)
-    const paths = url.pathname
-      .split('/')
-      .filter(p => p)
-      .slice(-2)
-
-    const action = paths[1]
-
-    switch (action) {
-      case 'typing':
-      // return this.friendTyping(request)
-      case 'new':
-        return this.newEventHandler(request)
-      case 'messages':
-        return this.getMessagesHandler(request)
-      case 'dlvrd':
-        return this.dlvrdEventHandler(request)
-      case 'read':
-        return this.readEventHandler(request)
-      default:
-        return new Response(`${url.pathname} Not found`, { status: 404 })
+  chat(userId: string): Group {
+    const lastMessage = this.#messages.length ? this.#messages.slice(-1)[0] : undefined
+    const chat: Group = {
+      chatId: this.group.chatId,
+      lastMessageId: lastMessage?.messageId,
+      photoUrl: this.group.photoUrl,
+      type: 'group',
+      meta: this.group.meta,
+      missed: this.#counter - (this.#lastRead.get(userId) || 0) - 1,
+      lastMessageText: lastMessage?.message,
+      lastMessageTime: lastMessage?.createdAt,
+      lastMessageAuthor: lastMessage?.sender,
+      lastMessageStatus: this.messageStatus(lastMessage),
+      isMine: userId === lastMessage?.sender,
+      name: this.group.name,
     }
+
+    return chat
   }
 
-  async newEventHandler(request: Request) {
-    const eventData = await request.json<NewGroupMessageEvent>()
-
-    const timestamp = this.timestamp()
-
-    return new Response(JSON.stringify(await this.newMessage(eventData)))
+  private messageStatus(lastMessage?: GroupChatMessage): MessageStatus {
+    if (!lastMessage || !lastMessage.delivering) return 'undelivered'
+    return lastMessage.delivering.filter(m => m.read && m.userId !== lastMessage.sender).length ===
+      this.group.meta.participants.length - 1
+      ? 'read'
+      : lastMessage.delivering.filter(m => m.dlvrd).length
+        ? 'unread'
+        : 'undelivered'
   }
-  async getMessagesHandler(request: Request) {
-    const data = await request.json<GetMessagesRequest>()
 
-    return new Response(JSON.stringify(await this.getMessages(data)), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+  counter() {
+    return this.#messages.length
   }
+
   async getMessages(payload: GetMessagesRequest): Promise<GroupChatMessage[]> {
     if (!this.#messages) return []
     const endIndex = payload.endId || this.#messages.length - 1
@@ -121,91 +184,153 @@ export class GroupChatsDO extends DurableObject {
     return messages
   }
 
-  async dlvrdEventHandler(request: Request) {
-    // const eventData = await request.json<MarkDeliveredInternalEvent>()
+  async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
+    const timestamp = this.timestamp()
+    const messageId = await this.newId()
+    console.log(messageId)
+    const message: GroupChatMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      message: request.message,
+      attachments: request.attachments,
+      clientMessageId: request.clientMessageId,
+      delivering: [],
+    }
+    this.#messages[messageId] = message
+    const event: NewGroupMessageEvent = {
+      chatId: this.group.chatId,
+      message: message.message,
+      attachments: message.attachments,
+      type: 'group',
+      sender: message.sender,
+      clientMessageId: request.clientMessageId,
+      messageId: message.messageId,
+    }
+    await this.broadcastEvent('new', event, sender, sender)
 
-    // const chatId = eventData.chatId
-    // const messages = (await this.ctx.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+    await this.ctx.storage.put<GroupChatMessage>(`message-${messageId}`, message)
+    await this.ctx.storage.put<number>('counter', this.#messages.length)
 
-    // const endId = messages.findLastIndex(m => m.createdAt === eventData.messageTimestamp)
-    // if (endId === -1) {
-    //   console.error('absolute fail')
-    //   return errorResponse('fail')
-    // }
-    // const messageId = messages[endId].messageId
-    // const event: MarkDeliveredEvent = { chatId, messageId, timestamp: eventData.timestamp }
-
-    // for (let i = endId; i >= 0; i--) {
-    //   const message = messages[i] as GroupChatMessage
-    //   if (message.sender && message.sender !== this.userId) {
-    //     continue
-    //   }
-    //   if (message.dlvrd) {
-    //     break
-    //   }
-    //   message.dlvrd = eventData.timestamp
-    // }
-    // await this.ctx.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
-
-    // if (messages[messages.length - 1].messageId === messageId) {
-    //   const chats = (await this.ctx.storage.get<ChatList>('chatList')) || []
-    //   const i = chats.findIndex(chat => chat.id === chatId)
-    //   if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
-    //     chats[i].lastMessageStatus = 'unread'
-    //   }
-    //   await this.ctx.storage.put('chatList', chats)
-    // }
-
-    // if (this.onlineService.isOnline()) {
-    //   await this.ws.sendEvent('dlvrd', event)
-    // }
-    return new Response()
+    if (messageId > 0) {
+      if (this.#messages[messageId - 1]?.sender !== sender) {
+        await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      }
+    }
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
-  async readEventHandler(request: Request) {
-    // const eventData = await request.json<MarkReadInternalEvent>()
+  async dlvrd(
+    sender: string,
+    request: MarkDeliveredRequest,
+    timestamp: number,
+  ): Promise<MarkDlvrdResponse> {
+    let endIndex = this.#messages.length - 1
 
-    // const chatId = eventData.chatId
-    // const messages = (await this.ctx.storage.get<ChatMessage[]>(`messages-${chatId}`)) || []
+    if (request.messageId) {
+      endIndex = this.#messages.findLastIndex(m => m && m.messageId === request.messageId)
 
-    // const endId = messages.findLastIndex(m => m.createdAt === eventData.messageTimestamp)
-    // if (endId === -1) {
-    //   console.error('absolute fail')
-    //   return errorResponse('fail')
-    // }
-    // const messageId = messages[endId].messageId
-    // const event: MarkReadEvent = { chatId, messageId, timestamp: eventData.timestamp }
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
+    }
+    const messageId = this.#messages[endIndex].messageId
 
-    // for (let i = endId; i >= 0; i--) {
-    //   const message = messages[i] as DialogMessage
-    //   if (message.sender && message.sender !== this.userId) {
-    //     continue
-    //   }
-    //   if (message.read) {
-    //     break
-    //   }
-    //   if (!message.read) {
-    //     message.read = eventData.timestamp
-    //   }
-    //   if (!message.dlvrd) {
-    //     message.dlvrd = eventData.timestamp
-    //   }
-    // }
-    // await this.ctx.storage.put<DialogMessage[]>(`messages-${chatId}`, messages)
+    for (let i = endIndex; i >= 0; i--) {
+      const message = this.#messages[i]
+      if (!message) continue
+      if (message.sender === sender) {
+        continue
+      }
+      let d = message.delivering?.find(d => d.userId === sender)
+      if (!d) {
+        d = message.delivering![message.delivering!.push({ userId: sender, dlvrd: timestamp })]
+      } else if (d.dlvrd) {
+        break
+      }
+      d.dlvrd = timestamp
 
-    // if (messages[messages.length - 1].messageId === messageId) {
-    //   const chats = (await this.ctx.storage.get<ChatList>('chatList')) || []
-    //   const i = chats.findIndex(chat => chat.id === chatId)
-    //   if (!chats[i].lastMessageStatus || chats[i].lastMessageStatus === 'undelivered') {
-    //     chats[i].lastMessageStatus = 'read'
-    //   }
-    //   await this.ctx.storage.put('chatList', chats)
-    // }
+      await this.ctx.storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+        allowConcurrency: false,
+      })
+    }
 
-    // if (this.onlineService.isOnline()) {
-    //   await this.ws.sendEvent('read', event)
-    // }
-    return new Response()
+    await this.broadcastEvent(
+      'dlvrd',
+      {
+        chatId: request.chatId,
+        messageId,
+        timestamp,
+        userId: sender,
+      } as MarkReadInternalEvent,
+      sender,
+      sender,
+    )
+    return { messageId, timestamp }
+  }
+
+  async read(
+    sender: string,
+    request: MarkReadRequest,
+    timestamp: number,
+  ): Promise<MarkReadResponse> {
+    if (!this.#messages.length) {
+      console.error('read requ for emty chat')
+      throw new Error('Chat is empty')
+    }
+    let endIndex = this.#messages.length - 1
+
+    if (request.messageId) {
+      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId)
+
+      if (endIndex === -1) {
+        throw new Error(`messageId is not exists`)
+      }
+    }
+    const messageId = this.#messages[endIndex].messageId
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
+    let lastUnread = 0
+    for (let i = endIndex; i >= 0; i--) {
+      const message = this.#messages[i]
+      if (!message) continue
+      if (message.sender === sender) {
+        continue
+      }
+      let d = message.delivering?.find(d => d.userId === sender)
+      if (!d) {
+        d =
+          message.delivering![
+            message.delivering!.push({ userId: sender, read: timestamp, dlvrd: timestamp }) - 1
+          ]
+      } else if (d.read) {
+        break
+      }
+      d.read = timestamp
+      if (!d.dlvrd) d.dlvrd = timestamp
+      await this.ctx.storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+        allowConcurrency: false,
+      })
+    }
+    await this.broadcastEvent(
+      'read',
+      {
+        chatId: request.chatId,
+        messageId,
+        timestamp,
+        userId: sender,
+      } as MarkReadInternalEvent,
+      sender,
+      sender,
+    )
+
+    return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
   }
 
   // Create a new group chat
@@ -234,90 +359,28 @@ export class GroupChatsDO extends DurableObject {
         owner,
       },
     }
-
+    this.group = newChat
+    this.#id = id
     await this.ctx.storage.put<Group>(`meta`, newChat)
     await this.initialize()
+
+    await this.broadcastEvent('newChat', { ...newChat }, owner)
 
     return newChat
   }
 
-  async newMessage(eventData: NewGroupMessageEvent) {
-    const timestamp = this.timestamp()
+  async broadcastEvent(
+    type: InternalEventType,
+    event: InternalEvent,
+    sender: UserId,
+    exclude?: UserId,
+  ) {
+    this.ctx.storage.deleteAlarm({ allowConcurrency: true })
+    for (const receiver of this.group!.meta.participants) {
+      if (exclude === receiver) continue
+      this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.#timestamp })
 
-    const messageId = this.#messages.length + 1
-
-    const message: GroupChatMessage = {
-      createdAt: timestamp,
-      messageId,
-      sender: eventData.sender!,
-      message: eventData.message,
-      attachments: eventData.attachments,
-      delivering: [],
-      clientMessageId: eventData.clientMessageId,
-    }
-    this.#messages.push(message)
-    this.#messages.sort((a, b) => a.createdAt - b.createdAt)
-
-    const event: NewGroupMessageEvent = {
-      chatId: this.chat.chatId,
-      message: message.message,
-      attachments: message.attachments,
-      type: 'group',
-      sender: message.sender,
-      clientMessageId: eventData.clientMessageId,
-    }
-    await this.broadcastEvent('new', event)
-    this.ctx.blockConcurrencyWhile(() =>
-      this.ctx.storage.put<GroupChatMessage[]>(`messages`, this.#messages),
-    )
-
-    return { messageId, timestamp }
-  }
-
-  async broadcast(event: NewMessageEvent | ChatsEvent) {
-    for (const user of this.chat!.meta.participants) {
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(user)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
-
-      // Create an event object with message details and timestamp
-
-      const reqBody = JSON.stringify(event)
-      const headers = new Headers({ 'Content-Type': 'application/json' })
-
-      const resp = await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${user}/group/event/new`, {
-          method: 'POST',
-          body: reqBody,
-          headers,
-        }),
-      )
-      if (resp.status !== 200) {
-        throw new Error(await resp.text())
-      }
-    }
-  }
-
-  async broadcastEvent(type: InternalEventType, payload: InternalEvent) {
-    for (const user of this.chat!.meta.participants) {
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(user)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
-
-      // Create an event object with message details and timestamp
-
-      const vent: ServerEvent = { eventType: type, payload, timestamp: Date.now(), type: 'event' }
-      const reqBody = JSON.stringify({ event: payload })
-      const headers = new Headers({ 'Content-Type': 'application/json' })
-
-      const resp = await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${user}/group/event/${type}`, {
-          method: 'POST',
-          body: reqBody,
-          headers,
-        }),
-      )
-      if (resp.status !== 200) {
-        throw new Error(await resp.text())
-      }
+      this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: true })
     }
   }
 }

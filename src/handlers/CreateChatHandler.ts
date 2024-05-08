@@ -5,6 +5,7 @@ import { newId } from '../utils/new-id'
 import { errorResponse } from '../utils/error-response'
 import { Env } from '../types/Env'
 import { GroupChatsDO } from '..'
+import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
 
 // Define the request schema using Zod
 const createChatSchema = z.object({
@@ -71,11 +72,12 @@ export class CreateChatHandler extends OpenAPIRoute {
       }
 
       const groupId = newId(24)
-      const doId = env.GROUP_CHATS_DO.idFromName(groupId)
-      const groupChatDO = env.GROUP_CHATS_DO.get(doId)
+      const groupChatDO = groupStorage(env, groupId)
 
       return new Response(
-        JSON.stringify(await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id)),
+        JSON.stringify(
+          await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id),
+        ),
       )
     } catch (error) {
       console.error('Error creating group chat:', error)

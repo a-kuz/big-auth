@@ -2,6 +2,7 @@ import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { WebSocketGod } from './WebSocketService'
 import { OnlineEvent } from '~/types/ws/server-events'
+import { userStorage } from './utils/mdo'
 
 export class OnlineStatusService {
   constructor(
@@ -15,7 +16,7 @@ export class OnlineStatusService {
   }
 
   async online() {
-		this.#isOnline = true
+    this.#isOnline = true
     const chatList = await this.state.storage.get<ChatList>('chatList')
     console.log({ chatList })
     if (!chatList) {
@@ -28,8 +29,7 @@ export class OnlineStatusService {
       }
       const userId = chat.id
 
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(userId)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+      const receiverDO = userStorage(this.env, chat.id)
 
       const chatStatus = await (
         await receiverDO.fetch(
@@ -45,18 +45,16 @@ export class OnlineStatusService {
         this.ws.sendEvent('online', event)
       }
     }
-
   }
 
   async offline() {
     this.#isOnline = false
-    const chatList = await this.state.storage.get<ChatList>('chatList') || [		]
+    const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
     for (const chat of chatList!) {
       if (chat.type !== 'dialog' || chat.id === this.#userId) {
         continue
       }
-      const receiverDOId = this.env.USER_MESSAGING_DO.idFromName(chat.id)
-      const receiverDO = this.env.USER_MESSAGING_DO.get(receiverDOId)
+      const receiverDO = userStorage(this.env, chat.id)
 
       await receiverDO.fetch(
         new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, {
@@ -69,7 +67,6 @@ export class OnlineStatusService {
 
   setUserId(id: string) {
     this.#userId = id
-
   }
   #userId = ''
   #isOnline = false

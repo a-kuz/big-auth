@@ -14,6 +14,7 @@ import { AttachmentSchema } from '~/types/openapi-schemas/Attachments'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '~/utils/new-id'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 const requestBody = {
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
@@ -68,9 +69,8 @@ export class SendMessageHandler extends OpenAPIRoute {
     try {
       const { chatId, message, attachments = undefined, clientMessageId = '' } = body
       // Retrieve sender and receiver's durable object IDs
-      const senderDOId = env.USER_MESSAGING_DO.idFromName(userId)
-      const senderDO = env.USER_MESSAGING_DO.get(senderDOId)
 
+      const senderDO = userStorage(env, userId)
       // Create an event object with message details and timestamp
       const req: NewMessageRequest = {
         chatId,

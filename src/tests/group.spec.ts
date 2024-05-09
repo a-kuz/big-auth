@@ -4,14 +4,13 @@ import axios from 'axios'
 import WebSocket from 'ws'
 import { newId } from '../utils/new-id'
 
-const COUNT = 1
+const COUNT = 100
 // const USER1 = '+79875425970'
-// const USER1 = '+34627068478'
 const USER1 = '+999'
-const USER2 = '+33609570605'
-// const USER2 = '+9999'
-//const USER2 = '+79875425970'
-//const USER2 = '+9999'
+//const USER2 = '+33609570605'
+// const USER2 = '+33609570605'
+// const USER2 = '+79875425970'
+const GROUP = 'aG-9TEv3c_wDrEP6je-dTcmB'
 
 describe('WebSocket Chat Integration Test', () => {
   it(
@@ -38,23 +37,6 @@ describe('WebSocket Chat Integration Test', () => {
       console.log('verify-code ok')
       const { accessToken } = verifyResponse.data
       console.log(accessToken)
-      const verifyResponse2 = await axios.post(
-        `${baseUrl}/verify-code`,
-        {
-          phoneNumber: USER2,
-          code: '000000',
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-        },
-      )
-      const { refreshToken } = verifyResponse2.data
-      // const userId = '+9999Zr'//refreshToken.split(".")[1];
-      const userId = refreshToken.split('.')[1]
-      console.log(userId)
 
       // Step 2: Connect to WebSocket using the accessToken
       const ws = new WebSocket(`wss://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
@@ -82,7 +64,7 @@ describe('WebSocket Chat Integration Test', () => {
                   id: `messageId-${i * Math.random()}`, // Unique ID for each message
                   payloadType: 'new',
                   payload: {
-                    chatId: userId, // Example chat ID
+                    chatId: GROUP, // Example chat ID
                     message: lorem,
                     clientMessageId: newId(),
                   },

@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { OpenAPIRouter } from '@cloudflare/itty-router-openapi'
+import { APIType, OpenAPIRouter } from '@cloudflare/itty-router-openapi'
 
 import { SendCodeHandler } from './handlers/SendCodeHandler'
 import { VerifyCodeHandler } from './handlers/VerifyCodeHandler'
@@ -16,22 +16,39 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
-import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
+import { CreateChatHandler } from './handlers/CreateChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
+import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
+import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { CORS } from './utils/cors'
-import { GetMessagesHandler } from './handlers/GetMessagesHandler'
-import { CreateChatHandler } from './handlers/CreateChatHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
-export { UserMessagingDO, GroupChatsDO, DialogDO } from './durable-objects/messaging'
+export { DialogDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
 
 const router = OpenAPIRouter({
   schema: {
     info: {
       title: 'BIG Auth',
       version: '1.0',
+    },
+  },
+  aiPlugin: {
+    name_for_human: 'B.I.G Ai',
+    name_for_model: 'expert_of_all',
+    description_for_human: "Get data insights from Cloudflare's and BIG messenger point of view.",
+    description_for_model:
+      "Plugin for retrieving the data based on Cloudflare Radar's data. Use it whenever a user asks something that might be related to Internet usage, eg. outages, Internet traffic, or Cloudflare Radar's data in particular.",
+    contact_email: 'support@iambig.ai',
+    legal_info_url: 'https://www.cloudflare.com/website-terms/',
+    logo_url:
+      'https://dev.iambig.ai/public/1feb2e3c2d04dec268da0606dd163e76f6869233129be1633ab9937903640818',
+
+    api: {
+      has_user_authentication: false,
+      type: APIType.OPENAPI,
+      url: '/openai.json',
     },
   },
 })
@@ -55,9 +72,7 @@ router.post('/public/upload', UploadFileHandler)
 
 router.post('/contacts/whoIsThere', FindContactsHandler)
 
-router.post('/m/send', SendMessageHandler)
 router.post('/messages', SendMessageHandler)
-router.get('/m/getMessages', GetMessagesHandler)
 router.get('/messages', GetMessagesHandler)
 
 router.get('/chats', GetChatsHandler)

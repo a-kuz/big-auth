@@ -48,9 +48,18 @@ export class GroupChatsDO extends DurableObject {
   }
 
   async alarm(): Promise<void> {
-    const tasks: ((...args: any[]) => Promise<void>)[] = []
     const completed: number[] = []
-    for (const i in this.#outgoingEvets) {
+    this.#outgoingEvets = this.#outgoingEvets
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .filter(
+        e =>
+          e.type === 'new' ||
+          this.#outgoingEvets.findLast(
+            ee => e.type === ee.type && e.receiver === ee.receiver && e.sender === ee.sender,
+          ) === e,
+      )
+
+    for (let i = this.#outgoingEvets.length - 1; i >= 0; i--) {
       const { timestamp, type, event, sender, receiver } = this.#outgoingEvets[i]
 
       try {
@@ -69,21 +78,18 @@ export class GroupChatsDO extends DurableObject {
           }),
         )
         if (resp.status === 200) {
-          completed.push(parseInt(i))
+          console.log('task completed', { timestamp, type, receiver, event })
+          this.#outgoingEvets.splice(i, 1)
         } else {
           console.error(await resp.text())
         }
       } catch (e) {
-        console.error(e)
+        console.error((e as Error).message, (e as Error).stack)
       }
     }
 
-    completed.sort((a, b) => b - a)
-    for (let i = 0; i < completed.length; i++) {
-      this.#outgoingEvets.splice(completed[i], 1)
-    }
     if (this.#outgoingEvets.length > 0) {
-      this.ctx.storage.setAlarm(Date.now() + 1400, { allowConcurrency: true })
+      this.ctx.storage.setAlarm(Date.now() + 2400, { allowConcurrency: false })
     }
   }
   // Initialize storage for group chats
@@ -210,7 +216,6 @@ export class GroupChatsDO extends DurableObject {
     await this.broadcastEvent('new', event, sender, sender)
 
     await this.ctx.storage.put<GroupChatMessage>(`message-${messageId}`, message)
-    await this.ctx.storage.put<number>('counter', this.#messages.length)
 
     if (messageId > 0) {
       if (this.#messages[messageId - 1]?.sender !== sender) {
@@ -379,8 +384,8 @@ export class GroupChatsDO extends DurableObject {
     for (const receiver of this.group!.meta.participants) {
       if (exclude === receiver) continue
       this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.#timestamp })
-
-      this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: true })
     }
+    this.ctx.storage.deleteAlarm()
+    this.ctx.storage.setAlarm(Date.now() + 1400, { allowConcurrency: false })
   }
 }

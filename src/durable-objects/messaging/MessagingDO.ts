@@ -269,14 +269,14 @@ export class UserMessagingDO implements DurableObject {
     let isNew = chatIndex === -1
     const counter = await this.chatStorage(chatId).counter()
 
-    if (isNew || counter - 2 <= eventData.messageId) {
+    if (isNew || this.chatList[chatIndex].lastMessageId != chatData.lastMessageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: chatData.chatId,
-        lastMessageStatus: 'undelivered',
+        lastMessageStatus: chatData.lastMessageStatus,
         lastMessageText: chatData.lastMessageText,
         lastMessageTime: chatData.lastMessageTime,
         name: chatData.name,
-        type: 'dialog',
+        type: this.isGroup(chatId) ? 'group' : 'dialog',
         verified: false,
         lastMessageAuthor: chatData.lastMessageAuthor,
         photoUrl: chatData.photoUrl,
@@ -481,13 +481,13 @@ export class UserMessagingDO implements DurableObject {
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
     const chatId = payload.chatId
 
-    return this.dialogStorage(chatId).dlvrd(this.userId, payload, timestamp)
+    return this.chatStorage(chatId).dlvrd(this.userId, payload, timestamp)
   }
 
   async readRequest(payload: MarkReadRequest, timestamp: number) {
     const chatId = payload.chatId
 
-    const resp = (await this.dialogStorage(chatId).read(
+    const resp = (await this.chatStorage(chatId).read(
       this.userId,
       payload,
       timestamp,

@@ -6,6 +6,7 @@ import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
 import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { ServerEvent } from '~/types/ws/server-events'
+import { errorResponse } from '~/utils/error-response'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
@@ -19,7 +20,7 @@ export class WebSocketGod {
     private state: DurableObjectState,
     private env: Env,
   ) {
-    this.state.setHibernatableWebSocketEventTimeout(SEVEN_DAYS / 7) // :))
+    this.state.setHibernatableWebSocketEventTimeout(SEVEN_DAYS)
   }
 
   async acceptWebSocket(request: Request): Promise<Response> {
@@ -31,11 +32,15 @@ export class WebSocketGod {
 
     const webSocketPair = new WebSocketPair()
     const [client, server] = Object.values(webSocketPair)
+    if (this.server) {
+      console.error(new Error('Duplicate websocket connection'))
+      return errorResponse('Duplicate websocket connection', 400)
+    }
     this.state.acceptWebSocket(server, ['user'])
     this.server = server
     this.refreshPing()
 
-    this.state.storage.setAlarm(Date.now() + 3000)
+    // this.state.storage.setAlarm(Date.now() + 3000)
     return new Response(null, { status: 101, webSocket: client })
   }
 
@@ -44,9 +49,8 @@ export class WebSocketGod {
     message: string | ArrayBuffer,
     doo: UserMessagingDO,
   ): Promise<void> {
-		this.refreshPing()
+    this.refreshPing()
     if (this.ping(message)) return
-
 
     try {
       const packet = JSON.parse(message as string) as ClientEvent | ClientRequest
@@ -78,10 +82,10 @@ export class WebSocketGod {
           ws.send(JSON.stringify(response))
       }
     } catch (e) {
+			console.error(e.message)
       ws.send(
         JSON.stringify({ error: { incomingMessage: message, exception: (e as Error).message } }),
       )
-      console.error(e)
     }
   }
 
@@ -105,7 +109,6 @@ export class WebSocketGod {
       console.error(e)
     }
     this.server = null
-    ws.close()
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
@@ -114,15 +117,15 @@ export class WebSocketGod {
     // try {
     //   await this.onlineService.offline()
     // } catch (e) {
+    console.error(error.message)
+    //   return
+    // }
+    // try {
+    //   ws.close()
+    // } catch (e) {
     //   console.error(e)
     //   return
     // }
-    try {
-      ws.close()
-    } catch (e) {
-      console.error(e)
-      return
-    }
   }
 
   private refreshPing() {
@@ -130,8 +133,7 @@ export class WebSocketGod {
   }
 
   async sendEvent(eventType: ServerEventType, event: ServerEventPayload, id?: number) {
-
-    if (this.server) {
+    if (this.server && this.server.readyState === WebSocket.OPEN) {
       const packet: ServerEvent = {
         eventType,
         payload: event,
@@ -143,31 +145,31 @@ export class WebSocketGod {
       this.refreshPing()
       return true
     } else {
-      console.warn('Attempted to send message on closed WebSocket')
+      // console.warn('Attempted to send message on closed WebSocket')
     }
     return false
   }
 
   async alarm(): Promise<void> {
-    if (this.server) {
-      if (this.lastPing)
-        if (Date.now() - this.lastPing > 200000) {
-          //@ts-ignore
-          try {
-						if (this.server.readyState === 1)
-						this.server
-            this.server.close()
-            this.lastPing = 0
-
-          } catch (e) {
-            console.error(e)
-          }
-          await this.state.storage.deleteAlarm()
-          return
-        }
-
-      await this.state.storage.setAlarm(Date.now() + 5000, { allowConcurrency: false })
-    }
+    // if (this.server) {
+    //   if (this.server.readyState === 1) {
+    //     if (this.lastPing) {
+    //       if (Date.now() - this.lastPing > 200000) {
+    //         //@ts-ignore
+    //         try {
+    //           if (this.server.readyState === 1) {
+    //             this.server.close()
+    //           }
+    //           this.lastPing = 0
+    //         } catch (e) {
+    //           console.error(e)
+    //         }
+    //         return
+    //       }
+    //       await this.state.storage.setAlarm(Date.now() + 5000, { allowConcurrency: false })
+    //     }
+    //   }
+    // }
   }
   #clientRequestsIds: string[] = []
 }

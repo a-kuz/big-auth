@@ -6,7 +6,7 @@ route = "https://dev.iambig.ai/*"
 
 main = "./src/index.ts"
 logpush = true
-
+tail_consumers = [{ service = "big-auth-tail" }]
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
 
@@ -14,6 +14,8 @@ kv_namespaces = [
 [vars]
 TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
 ORIGIN = "https://dev.iambig.ai"
+AI_AVATAR_URL = "https://dev.iambig.ai/public/23d6658a2a06538a1b04c56aeb1f1874815f6a7f3853481a29609ca46de57bef"
+
 
 [placement]
 mode = "off"
@@ -52,4 +54,24 @@ bindings = [
 	{ name = "GROUP_CHATS_DO", class_name = "GroupChatsDO" },
 	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" },
 	{ name = "DIALOG_DO", class_name = "DialogDO" },
+	{ name = "GPT_DO", class_name = "ChatGptDO" },
 ]
+
+
+[[migrations]]
+tag = "v24"
+deleted_classes = ["UserMessagingDO", "DialogDO", "GroupChatsDO"]
+
+[[migrations]]
+tag = "v25"
+new_classes = ["UserMessagingDO", "DialogDO", "GroupChatsDO"]
+[[migrations]]
+tag = "v26"
+deleted_classes = ["GroupChatsDO", "UserMessagingDO"]
+
+[[migrations]]
+tag = "v27"
+new_classes = ["UserMessagingDO", "GroupChatsDO"]
+[[migrations]]
+tag = "v28"
+new_classes = ["ChatGptDO"]

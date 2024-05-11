@@ -18,16 +18,15 @@ export class OnlineStatusService {
   async online() {
     this.#isOnline = true
     const chatList = await this.state.storage.get<ChatList>('chatList')
-    console.log({ chatList })
+
     if (!chatList) {
       return
     }
 
     for (const chat of chatList) {
-      if (chat.type !== 'dialog' || chat.id === this.#userId) {
+      if (chat.type !== 'dialog' || chat.id === this.#userId || chat.id.length < 20) {
         continue
       }
-      const userId = chat.id
 
       const receiverDO = userStorage(this.env, chat.id)
 

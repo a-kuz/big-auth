@@ -1,6 +1,7 @@
 import { ChatMessage } from '~/types/ChatMessage'
 import { ClientEventType, ClientRequestType, ServerEventType } from '~/types/ws'
 import {
+  GetChatRequest,
   GetChatsRequest,
   GetMessagesRequest,
   MarkDeliveredRequest,
@@ -15,6 +16,7 @@ import {
 } from '~/types/ws/payload-types'
 import {
   MarkDeliveredEvent,
+  MarkReadEvent,
   NewMessageEvent,
   OfflineEvent,
   OnlineEvent,
@@ -27,6 +29,7 @@ import { Dialog, Group } from '~/types/Chat'
 import {
   InternalEventType,
   MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
   NewChatEvent,
   TypingInternalEvent,
 } from '~/types/ws/internal'
@@ -34,7 +37,7 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogDO } from './DialogDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { dialogStorage, groupStorage, userStorage } from './utils/mdo'
+import { dialogStorage, gptStorage, groupStorage, userStorage } from './utils/mdo'
 
 export class UserMessagingDO implements DurableObject {
   chatList: ChatList = []
@@ -95,6 +98,8 @@ export class UserMessagingDO implements DurableObject {
             switch (action) {
               case 'chats':
                 return this.chatsHandler(request)
+              case 'chat':
+                return this.chatHandler(request)
               case 'messages':
                 return this.messagesHandler(request)
               case 'new':
@@ -106,8 +111,14 @@ export class UserMessagingDO implements DurableObject {
         switch (action) {
           case 'newChat':
             return this.newChatEventHandler(request)
+          case 'deleteChat':
+            return this.newChatEventHandler(request)
           case 'new':
             return this.newEventHandler(request)
+          case 'read':
+            return this.readEventHandler(request)
+          case 'dlvrd':
+            return this.dlvrdEventHandler(request)
         }
       }
       case 'dialog': {
@@ -186,7 +197,7 @@ export class UserMessagingDO implements DurableObject {
 
     const chatId = eventData.chatId
 
-    const counter = await this.dialogStorage(chatId).counter()
+    const counter = await this.chatStorage(chatId).counter()
 
     if (counter - 1 === eventData.messageId) {
       const i = this.chatList.findIndex(chat => chat.id === chatId)
@@ -211,11 +222,11 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async readEventHandler(request: Request) {
-    const eventData = await request.json<MarkDeliveredInternalEvent>()
+    const eventData = await request.json<MarkReadInternalEvent>()
 
     const chatId = eventData.chatId
 
-    const counter = await this.dialogStorage(chatId).counter()
+    const counter = await this.chatStorage(chatId).counter()
 
     if (counter - 1 === eventData.messageId) {
       const i = this.chatList.findIndex(chat => chat.id === chatId)
@@ -230,10 +241,11 @@ export class UserMessagingDO implements DurableObject {
     }
 
     if (this.onlineService.isOnline()) {
-      const event: MarkDeliveredEvent = {
+      const event: MarkReadEvent = {
         chatId,
         messageId: eventData.messageId,
         timestamp: eventData.timestamp,
+        userId: eventData.userId,
       }
       await this.ws.sendEvent('read', event)
     }
@@ -302,8 +314,43 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async chatsHandler(request: Request) {
-    const chatList = this.chatList
-    return new Response(JSON.stringify(chatList), {
+    const ai = this.chatList.find(chat => chat.id === 'AI')
+    const gpt = gptStorage(this.env, this.userId)
+    this.chatList = this.chatList.filter((chat, index) =>
+      chat.id === 'AI' || chat.chatId === 'AI'
+        ? this.chatList.findIndex(c => c.id === 'AI') === index
+        : true,
+    )
+    if (!ai) {
+      const chat = await gpt.create(this.userId)
+      this.chatList.unshift(chat)
+
+      await this.state.storage.put('chatList', this.chatList)
+    }
+    return new Response(
+      JSON.stringify(
+        this.chatList
+          .filter((e, i) => this.chatList.findIndex(chat => chat.id == e.id) === i)
+          .map(e => ({
+            ...e,
+            type: e.type === 'ai' ? 'dialog' : e.type,
+            lastMessageId: (e.lastMessageId ?? 0) >= 0 ? e.lastMessageId : 0,
+            missed: (e.missed ?? 0) >= 0 ? e.missed : 0,
+            lastMessageAuthor: e.lastMessageAuthor ?? this.userId,
+            lastMessageTime: e.lastMessageTime ?? Date.now(),
+            lastMessageText: e.lastMessageText ?? '',
+            id: e.id ?? e.chatId,
+          })),
+      ),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
+  }
+  async chatHandler(request: Request) {
+    const { chatId } = await request.json<GetChatRequest>()
+    const chat = await this.chatStorage(chatId).chat(this.userId)
+    return new Response(JSON.stringify(chat), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -324,7 +371,11 @@ export class UserMessagingDO implements DurableObject {
     return groupStorage(this.env, chatId)
   }
   private chatStorage(chatId: string) {
-    return this.isGroup(chatId) ? this.groupStorage(chatId) : this.dialogStorage(chatId)
+    return chatId === 'AI'
+      ? gptStorage(this.env, this.userId)
+      : this.isGroup(chatId)
+        ? this.groupStorage(chatId)
+        : this.dialogStorage(chatId)
   }
 
   async friendOnline(request: Request) {
@@ -352,14 +403,16 @@ export class UserMessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   private async handleWebsocket(request: Request): Promise<Response> {
+    console.log('CONNECT!')
     const response = await this.ws.acceptWebSocket(request)
-    this.state.waitUntil(this.onlineService.online())
+    await this.onlineService.online()
     return response
   }
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    console.log(message)
     this.ws.handlePacket(ws, message, this)
   }
 
@@ -397,10 +450,7 @@ export class UserMessagingDO implements DurableObject {
         response = await this.newRequest(request as NewMessageRequest)
         return response
       case 'dlvrd':
-        return this.state.blockConcurrencyWhile(() =>
-          this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp()),
-        )
-
+        this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp())
       case 'read':
         response = await this.readRequest(request as MarkReadRequest, this.timestamp())
         return response
@@ -423,7 +473,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   private isGroup(id: string): boolean {
-    return id.length !== 21
+    return id !== 'AI' && id.length !== 21
   }
 
   async newRequest(payload: NewMessageRequest) {

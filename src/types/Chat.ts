@@ -33,7 +33,7 @@ export type GroupChat = {
 }
 
 // Define types for the 'type' field which can only be one of these specific strings
-type ChatType = 'dialog' | 'group' | 'channel'
+type ChatType = 'dialog' | 'group' | 'channel' | 'ai' | 'favorotes'
 
 // Define interfaces for Meta, DialogMeta, and GroupMeta
 interface DialogMeta {
@@ -48,4 +48,18 @@ interface GroupMeta {
   owner: string
   participants: string[]
   createdAt: number
+}
+
+export interface DialogAI {
+	chatId: string
+	lastMessageId: number
+	photoUrl: string
+	type: string
+	missed: number
+	lastMessageText: string | undefined
+	lastMessageTime: number
+	lastMessageAuthor: string
+	lastMessageStatus: string
+	isMine: boolean
+	name: string
 }

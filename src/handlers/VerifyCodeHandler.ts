@@ -1,10 +1,11 @@
-import { OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
 import { instanceToPlain } from 'class-transformer'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { getOrCreateUserByPhone } from '../db/services/get-user'
 import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { infer, z } from 'zod'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string
@@ -20,10 +21,10 @@ export class VerifyCodeHandler extends OpenAPIRoute {
   static schema = {
     tags: ['auth'],
     summary: 'Verify OTP',
-    requestBody: {
-      phoneNumber: new Str({ example: '+99901234567' }),
-      code: new Str({ example: '000000' }),
-    },
+    requestBody: z.object({
+      phoneNumber: z.string().startsWith("+").openapi({ example: '+99901234567' }),
+      code: z.string().openapi({ example: '000000' }),
+    }),
     responses: {
       '200': {
         description: 'OTP verification successful',
@@ -44,11 +45,15 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     },
   }
 
-  async handle(request: Request, env: Env, _context: any, data: Record<string, any>) {
-    const { phoneNumber, code } = data.body
+  async handle(
+    request: Request,
+    env: Env,
+    _context: any,
+    { body }: DataOf<typeof VerifyCodeHandler.schema>,
+  ) {
+    const { phoneNumber, code } = body
 
     try {
-      // Verify the code with predefined test values or with Twilio
       if (
         !(
           (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+999')) &&
@@ -120,7 +125,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     const responseData = (await response.json()) as {
       status: 'pending' | 'approved' | string
     }
-		console.log(responseData)
+    console.log(responseData)
 
     return responseData.status
   }

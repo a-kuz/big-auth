@@ -1,10 +1,11 @@
-import { DialogDO, GroupChatsDO } from ".."
+import { ChatGptDO, DialogDO, GroupChatsDO } from '..'
 
 export interface Env {
   readonly TWILIO_ACCOUNT_SID: string
   readonly TWILIO_AUTH_TOKEN: string
   readonly TWILIO_SERVICE_SID: string
   readonly JWT_SECRET: string
+  readonly OPEN_AI_API_KEY: string
 
   readonly DB: D1Database
   readonly billing: any
@@ -15,6 +16,8 @@ export interface Env {
   readonly USER_MESSAGING_DO: DurableObjectNamespace
   readonly GROUP_CHATS_DO: DurableObjectNamespace<GroupChatsDO>
   readonly DIALOG_DO: DurableObjectNamespace<DialogDO>
+  readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
 
+  readonly AI_AVATAR_URL: string
   readonly ORIGIN: string
 }

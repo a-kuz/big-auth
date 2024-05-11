@@ -1,16 +1,17 @@
-import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { getUserByPhoneNumbers } from '../db/services/get-user'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { z } from 'zod'
 
 export class FindContactsHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     summary: 'Find contacts by phone numbers',
     tags: ['contacts'],
-    requestBody: {
-      phoneNumbers: new Arr(new Str({ example: '+79333333333' })),
-    },
+    requestBody: z.object({
+      phoneNumbers: z.array(z.string().startsWith('+').openapi({ example: '+99990123443' })),
+    }),
     responses: {
       '200': {
         description: 'Contacts found',
@@ -38,9 +39,10 @@ export class FindContactsHandler extends OpenAPIRoute {
   async handle(
     request: Request,
     env: Env,
-    _context: any,
-    data: { body: { phoneNumbers: string[] } },
+    context: ExecutionContext,
+    { body }: DataOf<typeof FindContactsHandler.schema>,
   ) {
+    caches.open
     try {
       const authorization = request.headers.get('Authorization')
       const token = authorization?.split(' ')[1]
@@ -58,18 +60,24 @@ export class FindContactsHandler extends OpenAPIRoute {
         }
       } catch (error) {
         console.error(error)
-        return new Response(JSON.stringify({ error: 'Failed to fetch profile' }), {
-          status: 500,
-        })
+        return errorResponse('Failed to fetch profile', 401)
       }
+      const cache = await caches.open('find-contacts')
+      const r = await cache.match(request)
+      if (r) return r
 
-      const contacts = await getUserByPhoneNumbers(env.DB, data.body.phoneNumbers)
-      return new Response(JSON.stringify({ contacts }), {
+      const phoneNumbers = body.phoneNumbers.filter((phoneNumber, i) => {
+        return body.phoneNumbers.indexOf(phoneNumber) === i
+      })
+      const contacts = await getUserByPhoneNumbers(env.DB, phoneNumbers)
+      const response = new Response(JSON.stringify({ contacts }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
         },
       })
+      //await cache.put(request., response)
+      return response
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find contacts')

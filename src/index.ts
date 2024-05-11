@@ -23,9 +23,10 @@ import { GetProfileHandler } from './handlers/GetProfileHandler'
 import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { CORS } from './utils/cors'
+import { GetChatHandler } from './handlers/GetChatHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
-export { DialogDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
+export { DialogDO, GroupChatsDO, UserMessagingDO, ChatGptDO } from './durable-objects/messaging'
 
 const router = OpenAPIRouter({
   schema: {
@@ -33,7 +34,9 @@ const router = OpenAPIRouter({
       title: 'BIG Auth',
       version: '1.0',
     },
+
   },
+
   aiPlugin: {
     name_for_human: 'B.I.G Ai',
     name_for_model: 'expert_of_all',
@@ -75,6 +78,7 @@ router.post('/contacts/whoIsThere', FindContactsHandler)
 router.post('/messages', SendMessageHandler)
 router.get('/messages', GetMessagesHandler)
 
+router.get('/chat', GetChatHandler)
 router.get('/chats', GetChatsHandler)
 router.post('/chats', CreateChatHandler)
 
@@ -91,4 +95,5 @@ router.all('*', () => new Response('Not Found.', { status: 404 }))
 
 export default {
   fetch: router.handle,
+
 }

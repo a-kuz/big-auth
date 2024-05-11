@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Group } from '~/types/Chat'
+import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
   GetMessagesRequest,
@@ -10,18 +11,16 @@ import {
 import {
   InternalEvent,
   InternalEventType,
-  MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   NewGroupMessageEvent,
   Timestamp,
   UserId,
 } from '~/types/ws/internal'
-import { ChatsEvent, NewMessageEvent, ServerEvent } from '~/types/ws/server-events'
+import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
-import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
-import { MessageStatus } from '~/types/ChatList'
 import { userStorage } from './utils/mdo'
+import { GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -39,6 +38,7 @@ export class GroupChatsDO extends DurableObject {
   #counter = 0
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
+  #runningEvents: OutgoingEvent[] = []
   constructor(
     public ctx: DurableObjectState,
     public env: Env,
@@ -59,9 +59,14 @@ export class GroupChatsDO extends DurableObject {
           ) === e,
       )
 
-    for (let i = this.#outgoingEvets.length - 1; i >= 0; i--) {
-      const { timestamp, type, event, sender, receiver } = this.#outgoingEvets[i]
+    let n = 0
 
+    for (let i = this.#outgoingEvets.length - 1; i >= 0; i--) {
+			const { timestamp, type, event, sender, receiver } = this.#outgoingEvets[i]
+			this.#runningEvents.push(this.#outgoingEvets[i])
+			this.#outgoingEvets.splice(i, 1)
+      n++
+      if (n > 3) break
       try {
         const receiverDO = userStorage(this.env, receiver)
 
@@ -70,26 +75,49 @@ export class GroupChatsDO extends DurableObject {
         const reqBody = JSON.stringify({ ...event })
         const headers = new Headers({ 'Content-Type': 'application/json' })
 
-        const resp = await receiverDO.fetch(
-          new Request(`${this.env.ORIGIN}/${receiver}/group/event/${type}`, {
-            method: 'POST',
-            body: reqBody,
-            headers,
-          }),
-        )
-        if (resp.status === 200) {
-          console.log('task completed', { timestamp, type, receiver, event })
-          this.#outgoingEvets.splice(i, 1)
-        } else {
-          console.error(await resp.text())
-        }
+        const resp = receiverDO
+          .fetch(
+            new Request(`${this.env.ORIGIN}/${receiver}/group/event/${type}`, {
+              method: 'POST',
+              body: reqBody,
+              headers,
+            }),
+          )
+          .then(resp => {
+            if (resp.status === 200) {
+              console.log('task completed', JSON.stringify({ timestamp, type, receiver, event }))
+              if (type === 'new') {
+                this.#outgoingEvets = this.#outgoingEvets.filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp === timestamp
+                    ),
+                )
+              } else {
+                this.#outgoingEvets = this.#outgoingEvets.filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp <= timestamp
+                    ),
+                )
+              }
+            } else {
+              resp.text().then(text => console.error(text))
+            }
+          })
       } catch (e) {
         console.error((e as Error).message, (e as Error).stack)
       }
     }
 
     if (this.#outgoingEvets.length > 0) {
-      this.ctx.storage.setAlarm(Date.now() + 2400, { allowConcurrency: false })
+      this.ctx.storage.setAlarm(Date.now() + 100, { allowConcurrency: false })
     }
   }
   // Initialize storage for group chats
@@ -104,13 +132,21 @@ export class GroupChatsDO extends DurableObject {
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
+    let arr = []
     for (let i = 0; i < this.#counter; i++) {
-      const m = await this.ctx.storage.get<GroupChatMessage>(`message-${i}`)
-      if (m) {
-        if (!m.delivering) m.delivering = []
-        this.#messages.push(m)
-      }
+      arr.push(
+        new Promise<void>((resolve, reject) =>
+          this.ctx.storage.get<GroupChatMessage>(`message-${i}`).then(m => {
+            if (m) {
+              if (!m.delivering) m.delivering = []
+              this.#messages.push(m)
+              resolve()
+            }
+          }),
+        ),
+      )
     }
+    const t = await Promise.all(arr)
 
     const participants = Array.from(this.group.meta.participants)
     for (let i = this.#counter - 1; i >= 0; i--) {
@@ -208,10 +244,11 @@ export class GroupChatsDO extends DurableObject {
       chatId: this.group.chatId,
       message: message.message,
       attachments: message.attachments,
-      type: 'group',
       sender: message.sender,
       clientMessageId: request.clientMessageId,
       messageId: message.messageId,
+      timestamp,
+      missed: 1,
     }
     await this.broadcastEvent('new', event, sender, sender)
 
@@ -374,7 +411,7 @@ export class GroupChatsDO extends DurableObject {
     return newChat
   }
 
-  async broadcastEvent(
+  private async broadcastEvent(
     type: InternalEventType,
     event: InternalEvent,
     sender: UserId,

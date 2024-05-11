@@ -1,24 +1,23 @@
-import { AttachmentType } from "./Attachment";
+import { AttachmentType } from './Attachment'
 
-export type ChatType = "dialog" | "group" | "channel" | "favorites";
+export type ChatType = 'dialog' | 'group' | 'channel' | 'favorites' | 'ai'
 
-export type MessageStatus = "read" | "unread" | "undelivered" | "deleted";
+export type MessageStatus = 'read' | 'unread' | 'undelivered' | 'deleted'
 
 export interface ChatListItem {
-  type: ChatType;
-  id: string;
-  photoUrl?: string; // необязательное поле
-  name: string;
-  lastMessageId: number;
-  lastMessageText?: string;
-  lastMessageTime: number;
-  lastMessageAuthor?: string;
-  lastMessageStatus: MessageStatus;
-  missed: number;
-  verified?: boolean;
-  isMine: boolean;
-	attachmentType?: AttachmentType
-
+  type: ChatType
+  id: string
+  photoUrl?: string // необязательное поле
+  name: string
+  lastMessageId: number
+  lastMessageText?: string
+  lastMessageTime: number
+  lastMessageAuthor?: string
+  lastMessageStatus: MessageStatus
+  missed: number
+  verified?: boolean
+  isMine: boolean
+  attachmentType?: AttachmentType
 }
 
-export type ChatList = ChatListItem[];
+export type ChatList = ChatListItem[]

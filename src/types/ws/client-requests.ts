@@ -2,6 +2,7 @@ import { ClientEventType, ClientRequestType } from '.'
 import { dlt, edit, dlvrd, read, nw, typing } from './event-literals'
 
 import { Attachment } from '../Attachment'
+import { UserId } from './internal'
 
 export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
@@ -33,7 +34,7 @@ export interface NewMessageRequest {
   chatId: string
   message: string
   attachments?: Attachment[]
-	clientMessageId: string
+  clientMessageId: string
 }
 export interface GetChatRequest {
   chatId: string
@@ -66,6 +67,7 @@ export interface DeleteMessageRequest {
 export interface MarkReadRequest {
   chatId: string
   messageId: number
+  userId?: UserId
 }
 
 export interface MarkDeliveredRequest {

@@ -26,9 +26,7 @@ export interface DeleteMessageEvent {
 export interface OnlineEvent {
   userId: string
 }
-export interface ChatsEvent {
-
-}
+export interface ChatsEvent {}
 
 export interface OfflineEvent {
   userId: string
@@ -41,28 +39,24 @@ export interface TypingServerEvent {
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
-	type: ChatType
   sender?: string
   message?: string
   timestamp?: number
   attachments?: Attachment<A>[]
-	messageId: number
-	clientMessageId: string
-	missed: number
+  messageId: number
+  clientMessageId: string
+  missed: number
 }
 
 export interface MarkDeliveredEvent {
   chatId: string
-	userId?: string
-  messageId: number,
-	timestamp: number
+  userId?: string
+  messageId: number
+  timestamp: number
 }
 export interface MarkReadEvent {
   chatId: string
-	userId?: string
-  messageId: number,
-	timestamp: number
+  userId?: string
+  messageId: number
+  timestamp: number
 }
-
-
-

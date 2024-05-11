@@ -15,3 +15,8 @@ export const groupStorage = ({ GROUP_CHATS_DO }: Env, name: string) => {
   const id = GROUP_CHATS_DO.idFromName(name)
   return GROUP_CHATS_DO.get(id, { locationHint: 'weur' })
 }
+
+export const gptStorage = ({ GPT_DO }: Env, name: string) => {
+  const id = GPT_DO.idFromName(name)
+  return GPT_DO.get(id, { locationHint: 'weur' })
+}

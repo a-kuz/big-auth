@@ -1,4 +1,4 @@
 export * from './MessagingDO'
 export * from './GroupChatsDO'
-export * from './DialogDO'
+export * from './DialogsDO'
 export * from './ChatGptDO'

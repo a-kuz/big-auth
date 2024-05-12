@@ -1,6 +1,6 @@
 name = "big-auth"
 
-compatibility_date = "2024-04-03"
+compatibility_date = "2024-05-11"
 route = "https://dev.iambig.ai/*"
 
 
@@ -9,16 +9,16 @@ logpush = true
 tail_consumers = [{ service = "big-auth-tail" }]
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
-
 ]
+
 [vars]
 TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
 ORIGIN = "https://dev.iambig.ai"
 AI_AVATAR_URL = "https://dev.iambig.ai/public/23d6658a2a06538a1b04c56aeb1f1874815f6a7f3853481a29609ca46de57bef"
 
-
 [placement]
 mode = "off"
+
 
 [env.development]
 workers_dev = true
@@ -33,7 +33,7 @@ workers_dev = false
 
 [env.production.vars]
 ENV = "production"
-ORIGIN = "https://iambig.ai"
+ORIGIN = "https://dev.iambig.ai"
 
 [[d1_databases]]
 binding = "DB"
@@ -53,25 +53,15 @@ bindings = [
 	{ name = "REFRESH_TOKEN_DO", class_name = "RefreshTokenDO" },
 	{ name = "GROUP_CHATS_DO", class_name = "GroupChatsDO" },
 	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" },
-	{ name = "DIALOG_DO", class_name = "DialogDO" },
+	{ name = "DIALOG_DO", class_name = "DialogsDO" },
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 ]
 
 
 [[migrations]]
-tag = "v24"
-deleted_classes = ["UserMessagingDO", "DialogDO", "GroupChatsDO"]
+tag = "v35"
+deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
 
 [[migrations]]
-tag = "v25"
-new_classes = ["UserMessagingDO", "DialogDO", "GroupChatsDO"]
-[[migrations]]
-tag = "v26"
-deleted_classes = ["GroupChatsDO", "UserMessagingDO"]
-
-[[migrations]]
-tag = "v27"
-new_classes = ["UserMessagingDO", "GroupChatsDO"]
-[[migrations]]
-tag = "v28"
-new_classes = ["ChatGptDO"]
+tag = "v36"
+new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]

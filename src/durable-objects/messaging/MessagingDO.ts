@@ -34,7 +34,7 @@ import {
   TypingInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
-import { DialogDO } from './DialogDO'
+import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { dialogStorage, gptStorage, groupStorage, userStorage } from './utils/mdo'
@@ -405,7 +405,7 @@ export class UserMessagingDO implements DurableObject {
   private async handleWebsocket(request: Request): Promise<Response> {
     console.log('CONNECT!')
     const response = await this.ws.acceptWebSocket(request)
-    await this.onlineService.online()
+    this.state.waitUntil(this.onlineService.online())
     return response
   }
   ////////////////////////////////////////////////////////////////////////////////////
@@ -443,14 +443,14 @@ export class UserMessagingDO implements DurableObject {
 
   async wsRequest(type: ClientRequestType, request: ClientRequestPayload): Promise<void | Object> {
     let response: ServerResponsePayload = {}
-    console.log('wsRequest: ', { type, request })
+    console.log('wsRequest: ', JSON.stringify({ type, request }))
 
     switch (type) {
       case 'new':
         response = await this.newRequest(request as NewMessageRequest)
         return response
       case 'dlvrd':
-        this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp())
+        return this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp())
       case 'read':
         response = await this.readRequest(request as MarkReadRequest, this.timestamp())
         return response
@@ -473,7 +473,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   private isGroup(id: string): boolean {
-    return id !== 'AI' && id.length !== 21
+    return id !== 'AI' && id.length > 21
   }
 
   async newRequest(payload: NewMessageRequest) {
@@ -486,7 +486,7 @@ export class UserMessagingDO implements DurableObject {
     if (!this.chatList.find(chat => chat.id === chatId)) {
       if (!this.isGroup(chatId)) {
         await this.state.blockConcurrencyWhile(async () =>
-          (storage as DurableObjectStub<DialogDO>).create(this.userId, chatId),
+          (storage as DurableObjectStub<DialogsDO>).create(this.userId, chatId),
         )
       }
     }

@@ -18,8 +18,9 @@ import { Dialog } from '~/types/Chat'
 import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
+import { serializeError } from 'serialize-error'
 
-export class DialogDO extends DurableObject {
+export class DialogsDO extends DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [User, User]
@@ -32,61 +33,71 @@ export class DialogDO extends DurableObject {
     readonly env: Env,
   ) {
     super(ctx, env)
-    console.log({ 'this.ctx.id.name': this.ctx.id.name })
-    this.ctx.blockConcurrencyWhile(async () => this.initialize())
+
+    this.ctx.blockConcurrencyWhile(() => this.initialize())
     ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
   }
 
   async alarm(): Promise<void> {
-    if (!this.#users?.length) {
-      return
+    try {
+      if (!this.#users?.length) {
+        return
+      }
+      try {
+        this.#users[0] = await getUserById(this.env.DB, this.#users[0].id)
+      } catch (e) {
+        console.error(serializeError(e))
+      }
+
+      try {
+        this.#users[1] = await getUserById(this.env.DB, this.#users[1].id)
+      } catch (e) {
+        console.error(serializeError(e))
+      }
+
+      await this.ctx.storage.put('users', this.#users)
+      this.ctx.storage.setAlarm(Date.now() + 1000 * 10)
+    } catch (e) {
+      console.error(serializeError(e))
     }
-    const user1 = await getUserById(this.env.DB, this.#users[0].id)
-
-    const user2 = await getUserById(this.env.DB, this.#users[1].id)
-
-    this.#users = [user1, user2]
-    await this.ctx.storage.put('users', this.#users)
-    this.ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
   }
 
-  async create(owner: string, secondUser: string) {
+  async create(owner: string, secondUser: string): Promise<Dialog> {
+    if (this.#users?.length) return this.chat(owner)
+    // if (this.#messages.length) throw new Error('DO dialog: "messages" is not empty')
+    const [user1Id, user2Id] = [owner, secondUser].sort((a, b) => (a > b ? 1 : -1))
+    this.#id = `${user1Id}:${user2Id}`
+
+    const user1 = await getUserById(
+      this.env.DB,
+      user1Id,
+      new NotFoundError(`user ${user2Id} is not exists`),
+    )
+
+    const user2 = await getUserById(
+      this.env.DB,
+      user2Id,
+      new NotFoundError(`user ${user2Id} is not exists`),
+    )
+
+    this.#users = [user1, user2]
+
+    await this.ctx.storage.put('users', this.#users)
+    await this.ctx.storage.put('messages', [])
+    await this.ctx.storage.put('counter', 0)
+    await this.ctx.storage.put('createdAt', Date.now())
+
     return this.ctx.blockConcurrencyWhile(async () => {
-      if (this.#users?.length) return
-      // if (this.#messages.length) throw new Error('DO dialog: "messages" is not empty')
-      const [user1Id, user2Id] = [owner, secondUser].sort((a, b) => (a > b ? 1 : -1))
-      this.#id = `${user1Id}:${user2Id}`
-
-      const user1 = await getUserById(
-        this.env.DB,
-        user1Id,
-        new NotFoundError(`user ${user2Id} is not exists`),
-      )
-
-      const user2 = await getUserById(
-        this.env.DB,
-        user2Id,
-        new NotFoundError(`user ${user2Id} is not exists`),
-      )
-
-      this.#users = [user1, user2]
-
-      await this.ctx.blockConcurrencyWhile(async () => {
-        await this.ctx.storage.put('users', this.#users)
-        await this.ctx.storage.put('messages', [])
-        await this.ctx.storage.put('counter', 0)
-        await this.ctx.storage.put('createdAt', Date.now())
-        await this.initialize()
-      })
+      await this.initialize()
 
       return this.chat(owner)
     })
   }
 
-  chat(userId: string) {
+  chat(userId: string): Dialog {
     if (!this.#users) {
-      console.log(this.env)
-      throw new Error(`DO dialog ${this.ctx.id}: "users" is not initialized`)
+      console.error("DO dialog: 'users' is not initialized")
+      throw new Error("DO dialog: 'users' is not initialized")
     }
     const user2 = this.#users[0].id === userId ? this.#users[1] : this.#users[0]
 
@@ -330,12 +341,15 @@ export class DialogDO extends DurableObject {
     )
     if (resp.status !== 200) {
       console.error(await resp.text())
+      console.error("couldn't send event")
       throw new Error("Couldn't send event")
     }
   }
 
   private async initialize() {
-    this.#users = await this.ctx.storage.get('users')
+    if (!this.#users || !this.#users.length) {
+      this.#users = await this.ctx.storage.get('users')
+    }
     if (this.#users) {
       this.#id = `${this.#users[0].id}:${this.#users[1].id}`
     }

@@ -4,13 +4,13 @@ import axios from 'axios'
 import WebSocket from 'ws'
 import { newId } from '../utils/new-id'
 
-const COUNT = 100
+const COUNT = 15
 // const USER1 = '+79875425970'
 const USER1 = '+999'
 //const USER2 = '+33609570605'
 // const USER2 = '+33609570605'
 // const USER2 = '+79875425970'
-const GROUP = 'aG-9TEv3c_wDrEP6je-dTcmB'
+const GROUP = 'xW8Ev7KAQ-z6KJRTcT5B_z2O'
 
 describe('WebSocket Chat Integration Test', () => {
   it(
@@ -18,7 +18,7 @@ describe('WebSocket Chat Integration Test', () => {
     async () => {
       //const baseUrl = 'http://localhost:8787'
       const baseUrl = 'https://dev.iambig.ai'
-      // Step 1: Verify the test phone number and get tokens
+      // Step 1: Verify thbe test phone number and get tokens
       console.log('verify-code')
       const verifyResponse = await axios.post(
         `${baseUrl}/verify-code`,

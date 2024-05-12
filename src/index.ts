@@ -26,7 +26,12 @@ import { CORS } from './utils/cors'
 import { GetChatHandler } from './handlers/GetChatHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
-export { DialogDO, GroupChatsDO, UserMessagingDO, ChatGptDO } from './durable-objects/messaging'
+export {
+  DialogsDO,
+  GroupChatsDO,
+  UserMessagingDO,
+  ChatGptDO,
+} from './durable-objects/messaging'
 
 const router = OpenAPIRouter({
   schema: {
@@ -34,7 +39,6 @@ const router = OpenAPIRouter({
       title: 'BIG Auth',
       version: '1.0',
     },
-
   },
 
   aiPlugin: {
@@ -95,5 +99,4 @@ router.all('*', () => new Response('Not Found.', { status: 404 }))
 
 export default {
   fetch: router.handle,
-
 }

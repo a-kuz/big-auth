@@ -1,4 +1,4 @@
-import { ChatGptDO, DialogDO, GroupChatsDO } from '..'
+import { ChatGptDO, DialogsDO, GroupChatsDO } from '..'
 
 export interface Env {
   readonly TWILIO_ACCOUNT_SID: string
@@ -15,7 +15,7 @@ export interface Env {
   readonly FILES_KV: KVNamespace
   readonly USER_MESSAGING_DO: DurableObjectNamespace
   readonly GROUP_CHATS_DO: DurableObjectNamespace<GroupChatsDO>
-  readonly DIALOG_DO: DurableObjectNamespace<DialogDO>
+  readonly DIALOG_DO: DurableObjectNamespace<DialogsDO>
   readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
 
   readonly AI_AVATAR_URL: string

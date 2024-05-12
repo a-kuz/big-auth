@@ -53,7 +53,7 @@ export class WebsocketHandler extends OpenAPIRoute {
         const mDO = userStorage(env, user.id)
 
         const url = new URL(request.url)
-        return mDO.fetch(new Request(`${url.origin}/${user.id}/client/connect/websocket`, request))
+        return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))
       } catch (error) {
         console.error(error)
         return errorResponse('Something went wrong')

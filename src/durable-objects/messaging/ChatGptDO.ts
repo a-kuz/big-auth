@@ -88,7 +88,7 @@ export class ChatGptDO extends DurableObject {
       attachments: message.attachments,
       clientMessageId: message.clientMessageId,
       timestamp,
-      missed: this.#counter - (this.#lastRead.get(senderId) || 0) - 1,
+      missed: 1,
     }
 
     const reqBody = JSON.stringify(event)
@@ -153,7 +153,7 @@ export class ChatGptDO extends DurableObject {
       lastMessageId: this.#messages.length ? this.#messages.length - 1 : 0,
       photoUrl: this.env.AI_AVATAR_URL,
       type: 'ai',
-      missed: this.#counter - (this.#lastRead.get(this.#id) || 0),
+      missed: this.#counter - (this.#lastRead.get(this.#id) || 0) - 1,
       lastMessageText: lastMessage?.message ?? '',
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,
@@ -260,7 +260,7 @@ export class ChatGptDO extends DurableObject {
     }
     await this.sendReadEventToAuthor(request.chatId, messageId, timestamp)
 
-    return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
+    return { messageId, timestamp, missed: 0 }
   }
 
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {

@@ -176,8 +176,8 @@ export class GroupChatsDO extends DurableObject {
       if (!(row === -1)) {
         this.#users.splice(row, 1)
       }
-      const { lastName, firstName, id, username, phoneNumber } = user
-      this.#users.push({ lastName, firstName, id, username, phoneNumber })
+      const { lastName, firstName, id, username, phoneNumber, avatarUrl } = user
+      this.#users.push({ lastName, firstName, id, username, phoneNumber, avatarUrl })
     }
     for (let i = this.#users.length - 1; i >= 0; i--) {
       if (this.group.meta?.participants?.indexOf(this.#users[i].id) === -1) {

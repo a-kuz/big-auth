@@ -37,13 +37,14 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { dialogStorage, gptStorage, groupStorage, userStorage } from './utils/mdo'
+import { dialogStorage, gptStorage, groupStorage, pushStorage, userStorage } from './utils/mdo'
 
 export class UserMessagingDO implements DurableObject {
   chatList: ChatList = []
   chatMessages: { [key: string]: ChatMessage[] } = {}
   chatsMeta: { [key: string]: { lastId?: number } } = {}
   #timestamp = Date.now()
+  #deviceToken = ''
   private readonly ws: WebSocketGod
   private readonly onlineService: OnlineStatusService
   constructor(
@@ -84,9 +85,19 @@ export class UserMessagingDO implements DurableObject {
       string,
       'dialog' | 'client' | 'group' | 'messaging',
       'event' | 'request' | 'connect',
-      ClientEventType | ServerEventType | InternalEventType | ClientRequestType | 'websocket',
+      (
+        | ClientEventType
+        | ServerEventType
+        | InternalEventType
+        | ClientRequestType
+        | 'websocket'
+        | 'setDeviceToken'
+      ),
     ]
-    this.setUserId(userId)
+    if (!this.userId) {
+      this.setUserId(userId)
+      this.setDeviceToken()
+    }
     console.log({ from, type, action })
 
     switch (from) {
@@ -104,6 +115,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.messagesHandler(request)
               case 'new':
                 return this.newHandler(request)
+              case 'setDeviceToken':
+                return this.setDeviceTokenHandler(request)
             }
         }
 
@@ -310,16 +323,45 @@ export class UserMessagingDO implements DurableObject {
       await this.ws.sendEvent('new', { ...eventData, sender: eventData.sender ?? eventData.chatId })
       dlvrd = true
     }
+    this.toQ({ ...eventData, ...{ alreadySentByWebsocket: dlvrd } })
     return { success: true, dlvrd }
+  }
+
+  private async setDeviceTokenHandler(request: Request) {
+    const data = await request.json<{ fingerprint: string; deviceToken: string }>()
+    this.setDeviceToken(data.deviceToken)
+    return new Response()
+  }
+  private async setDeviceToken(token?: string) {
+    if (!token) {
+      if (!this.#deviceToken) {
+        const tokens = await pushStorage(this.env, this.userId).getTokens()
+        if (tokens && tokens.length) {
+          this.#deviceToken = tokens[0].deviceToken
+        } else {
+          return
+        }
+      }
+    } else {
+      this.#deviceToken = token
+    }
+  }
+
+  private async toQ(eventData: NewMessageEvent<never>) {
+    if (!this.#deviceToken) return
+    this.state.waitUntil(
+      this.env.PUSH_QUEUE.send(
+        { event: eventData, ...{ deviceToken: this.#deviceToken } },
+        { contentType: 'json' },
+      ),
+    )
   }
 
   async chatsHandler(request: Request) {
     const ai = this.chatList.find(chat => chat.id === 'AI')
     const gpt = gptStorage(this.env, this.userId)
     this.chatList = this.chatList.filter((chat, index) =>
-      chat.id === 'AI' || chat.chatId === 'AI'
-        ? this.chatList.findIndex(c => c.id === 'AI') === index
-        : true,
+      chat.id === 'AI' ? this.chatList.findIndex(c => c.id === 'AI') === index : true,
     )
     if (!ai) {
       const chat = await gpt.create(this.userId)
@@ -339,7 +381,7 @@ export class UserMessagingDO implements DurableObject {
             lastMessageAuthor: e.lastMessageAuthor ?? this.userId,
             lastMessageTime: e.lastMessageTime ?? Date.now(),
             lastMessageText: e.lastMessageText ?? '',
-            id: e.id ?? e.chatId,
+            id: e.id,
           })),
       ),
       {
@@ -456,6 +498,9 @@ export class UserMessagingDO implements DurableObject {
         return response
       case 'chats':
         response = await this.getChatsRequest(request as GetChatsRequest)
+        return response
+      case 'chat':
+        response = await this.chatStorage((request as GetChatRequest).chatId).chat(this.userId)
         return response
 
       case 'messages':

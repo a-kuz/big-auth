@@ -42,7 +42,6 @@ export class FindContactsHandler extends OpenAPIRoute {
     context: ExecutionContext,
     { body }: DataOf<typeof FindContactsHandler.schema>,
   ) {
-    caches.open
     try {
       const authorization = request.headers.get('Authorization')
       const token = authorization?.split(' ')[1]
@@ -62,9 +61,6 @@ export class FindContactsHandler extends OpenAPIRoute {
         console.error(error)
         return errorResponse('Failed to fetch profile', 401)
       }
-      const cache = await caches.open('find-contacts')
-      const r = await cache.match(request)
-      if (r) return r
 
       const phoneNumbers = body.phoneNumbers.filter((phoneNumber, i) => {
         return body.phoneNumbers.indexOf(phoneNumber) === i

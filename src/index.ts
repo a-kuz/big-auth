@@ -24,14 +24,12 @@ import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { CORS } from './utils/cors'
 import { GetChatHandler } from './handlers/GetChatHandler'
+import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
+import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
-export {
-  DialogsDO,
-  GroupChatsDO,
-  UserMessagingDO,
-  ChatGptDO,
-} from './durable-objects/messaging'
+export { PushDO } from './durable-objects/PushDO'
+export { DialogsDO, GroupChatsDO, UserMessagingDO, ChatGptDO } from './durable-objects/messaging'
 
 const router = OpenAPIRouter({
   schema: {
@@ -86,11 +84,13 @@ router.get('/chat', GetChatHandler)
 router.get('/chats', GetChatsHandler)
 router.post('/chats', CreateChatHandler)
 
+router.post('/deviceToken', StoreDeviceTokenHandler)
+
 router.get('/network', NetworkInfoHandler)
 
 router.get('/websocket', WebsocketHandler)
 router.options('*', CORS) // TODO: add security CORS
-
+router.get('/avatar/:userId', GetAvatarHandler)
 // Redirect root request to the /docs page
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
 

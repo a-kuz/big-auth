@@ -2,6 +2,7 @@ import { DialogMessage } from '~/types/ChatMessage'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import {
   GetMessagesRequest,
+  GetMessagesResponse,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
@@ -39,6 +40,7 @@ export class DialogsDO extends DurableObject {
   }
 
   async alarm(): Promise<void> {
+    console.log('Dialog ALARM')
     try {
       if (!this.#users?.length) {
         return
@@ -55,8 +57,14 @@ export class DialogsDO extends DurableObject {
         console.error(serializeError(e))
       }
 
-      await this.ctx.storage.put('users', this.#users)
-      this.ctx.storage.setAlarm(Date.now() + 1000 * 10)
+      await this.ctx.storage.put('users', this.#users, {
+        allowConcurrency: true,
+        allowUnconfirmed: true,
+      }),
+        await this.ctx.storage.setAlarm(Date.now() + 1000 * 10 * 60, {
+          allowConcurrency: true,
+          allowUnconfirmed: true,
+        })
     } catch (e) {
       console.error(serializeError(e))
     }
@@ -135,13 +143,13 @@ export class DialogsDO extends DurableObject {
     await this.ctx.storage.put('counter', this.#counter - 1)
     return this.#counter - 1
   }
-  async getMessages(payload: GetMessagesRequest): Promise<DialogMessage[]> {
-    if (!this.#messages) return []
+  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+    if (!this.#messages) return { messages: [], authors: [] }
     const endIndex = payload.endId || this.#messages.length - 1
     const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
     const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
     const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-    return messages
+    return { messages, authors: [] }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {

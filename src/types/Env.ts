@@ -1,3 +1,4 @@
+import { PushDO } from '~/durable-objects/PushDO'
 import { ChatGptDO, DialogsDO, GroupChatsDO } from '..'
 
 export interface Env {
@@ -17,6 +18,9 @@ export interface Env {
   readonly GROUP_CHATS_DO: DurableObjectNamespace<GroupChatsDO>
   readonly DIALOG_DO: DurableObjectNamespace<DialogsDO>
   readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
+  readonly PUSH_DO: DurableObjectNamespace<PushDO>
+
+	readonly PUSH_QUEUE: Queue
 
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string

@@ -47,6 +47,9 @@ binding = 'USER_FILES'
 bucket_name = 'user-files'
 preview_bucket_name = 'user-files-preview'
 
+[[queues.producers]]
+queue = "push-queue"
+binding = "PUSH_QUEUE"
 
 [durable_objects]
 bindings = [
@@ -55,6 +58,7 @@ bindings = [
 	{ name = "USER_MESSAGING_DO", class_name = "UserMessagingDO" },
 	{ name = "DIALOG_DO", class_name = "DialogsDO" },
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
+	{ name = "PUSH_DO", class_name = "PushDO" },
 ]
 
 
@@ -64,4 +68,15 @@ deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
 
 [[migrations]]
 tag = "v36"
+new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
+
+[[migrations]]
+tag = "v37"
+new_classes = ["PushDO"]
+
+[[migrations]]
+tag = "v38"
+deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
+[[migrations]]
+tag = "v39"
 new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]

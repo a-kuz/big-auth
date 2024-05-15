@@ -1,9 +1,13 @@
 import { DurableObject } from 'cloudflare:workers'
+import { serializeError } from 'serialize-error'
+import { Profile, User } from '~/db/models/User'
+import { getUserById } from '~/db/services/get-user'
 import { Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
   GetMessagesRequest,
+  GetMessagesResponse,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
@@ -18,12 +22,10 @@ import {
   UserId,
 } from '~/types/ws/internal'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
-import { splitArray } from '~/utils/split-array'
-import { serializeError } from 'serialize-error'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -39,6 +41,8 @@ export class GroupChatsDO extends DurableObject {
   group!: Group
   #id: string = ''
   #counter = 0
+  #users: Profile[] = []
+  #lastFetchUsers = 0
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
   #runningEvents: OutgoingEvent[] = []
@@ -51,6 +55,13 @@ export class GroupChatsDO extends DurableObject {
   }
 
   async alarm(): Promise<void> {
+    console.log('GROUp ALARM')
+    if (this.#lastFetchUsers < Date.now() - 1000 * 10 * 5) {
+      if (await this.fetchUsers()) {
+        this.ctx.storage.setAlarm(Date.now() + 300)
+        return
+      }
+    }
     try {
       const completed: number[] = []
       this.#outgoingEvets = this.#outgoingEvets
@@ -70,21 +81,19 @@ export class GroupChatsDO extends DurableObject {
         this.#runningEvents.push(this.#outgoingEvets[i])
         this.#outgoingEvets.splice(i, 1)
         n++
-        if (n > 3) break
+        if (n > 2) break
         try {
           const receiverDO = userStorage(this.env, receiver)
 
           // Create an event object with message details and timestamp
 
           const reqBody = JSON.stringify({ ...event })
-          const headers = new Headers({ 'Content-Type': 'application/json' })
 
           const resp = receiverDO
             .fetch(
               new Request(`${this.env.ORIGIN}/${receiver}/group/event/${type}`, {
                 method: 'POST',
                 body: reqBody,
-                headers,
               }),
             )
             .then(resp => {
@@ -130,7 +139,10 @@ export class GroupChatsDO extends DurableObject {
                   )
                 }
               } else {
-                resp.text().then(text => console.error(text))
+                resp
+                  .text()
+                  .then(text => console.error(text))
+                  .catch(error => console.error(serializeError(error)))
               }
             })
             .catch(e => console.error(serializeError(e)))
@@ -140,7 +152,7 @@ export class GroupChatsDO extends DurableObject {
       }
 
       if (this.#outgoingEvets.length > 0 || this.#runningEvents.length > 0) {
-        this.ctx.storage.setAlarm(Date.now() + 100, { allowConcurrency: false })
+        await this.ctx.storage.setAlarm(Date.now() + 50, { allowConcurrency: false })
       }
 
       this.#outgoingEvets = [
@@ -152,10 +164,36 @@ export class GroupChatsDO extends DurableObject {
       console.error(serializeError(e))
     }
   }
+
+  async fetchUsers() {
+    if (!this.group?.meta?.participants) {
+      return false
+    }
+    this.#lastFetchUsers = Date.now()
+    for (const u of this.group.meta.participants) {
+      const user = await getUserById(this.env.DB, u)
+      const row = this.#users.findIndex(u => u.id === user.id)
+      if (!(row === -1)) {
+        this.#users.splice(row, 1)
+      }
+      const { lastName, firstName, id, username, phoneNumber } = user
+      this.#users.push({ lastName, firstName, id, username, phoneNumber })
+    }
+    for (let i = this.#users.length - 1; i >= 0; i--) {
+      if (this.group.meta?.participants?.indexOf(this.#users[i].id) === -1) {
+        this.#users.splice(i, 1)
+      }
+    }
+    return true
+  }
   // Initialize storage for group chats
   async initialize() {
     const start = performance.now()
     const meta = await this.ctx.storage.get<Group>('meta')
+    this.#users =
+      (await this.ctx.storage.get<
+        Pick<User, 'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber'>[]
+      >('users')) || []
     console.log(meta)
     if (!meta) {
       return
@@ -219,19 +257,20 @@ export class GroupChatsDO extends DurableObject {
 
   chat(userId: string): Group {
     const lastMessage = this.#messages.length ? this.#messages.slice(-1)[0] : undefined
+
     const chat: Group = {
-      chatId: this.group.chatId,
+      chatId: this.group?.chatId,
       lastMessageId: lastMessage?.messageId,
-      photoUrl: this.group.photoUrl,
+      photoUrl: this.group?.photoUrl,
       type: 'group',
-      meta: this.group.meta,
-      missed: this.#counter - (this.#lastRead.get(userId) || 0) - 1,
+      meta: { ...this.group.meta, participants: this.#users },
+      missed: Math.max(this.#counter - (this.#lastRead.get(userId) || 0) - 1, 0),
       lastMessageText: lastMessage?.message,
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,
       lastMessageStatus: this.messageStatus(lastMessage),
       isMine: userId === lastMessage?.sender,
-      name: this.group.name,
+      name: this.group?.name,
     }
 
     return chat
@@ -251,13 +290,18 @@ export class GroupChatsDO extends DurableObject {
     return this.#messages.length
   }
 
-  async getMessages(payload: GetMessagesRequest): Promise<GroupChatMessage[]> {
-    if (!this.#messages) return []
+  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+    if (!this.#messages) return { messages: [], authors: [] }
+
     const endIndex = payload.endId || this.#messages.length - 1
     const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
     const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
     const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-    return messages
+
+    // Collect userIds from the senders of the returned messages
+    const senderIds = new Set(messages.map(m => m.sender))
+    const authors = this.#users.filter(u => senderIds.has(u.id))
+    return { messages, authors }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
@@ -274,19 +318,21 @@ export class GroupChatsDO extends DurableObject {
       delivering: [],
     }
     this.#messages[messageId] = message
-    const event: NewGroupMessageEvent = {
-      chatId: this.group.chatId,
-      message: message.message,
-      attachments: message.attachments,
-      sender: message.sender,
-      clientMessageId: request.clientMessageId,
-      messageId: message.messageId,
-      timestamp,
-      missed: 1,
-    }
-    await this.broadcastEvent('new', event, sender, sender)
-
     await this.ctx.storage.put<GroupChatMessage>(`message-${messageId}`, message)
+
+    for (const receiver of this.group.meta.participants.filter(m => m !== sender)) {
+      const event: NewGroupMessageEvent = {
+        chatId: this.group.chatId,
+        message: message.message,
+        attachments: message.attachments,
+        sender: message.sender,
+        clientMessageId: request.clientMessageId,
+        messageId: message.messageId,
+        timestamp,
+        missed: Math.max(this.#counter - (this.#lastRead.get(receiver) || 0) - 1, 0),
+      }
+      this.#outgoingEvets.push({ event, sender, receiver, type: 'new', timestamp })
+    }
 
     if (messageId > 0) {
       if (this.#messages[messageId - 1] && this.#messages[messageId - 1].sender !== sender) {
@@ -297,6 +343,7 @@ export class GroupChatsDO extends DurableObject {
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
     }
+    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
@@ -445,6 +492,8 @@ export class GroupChatsDO extends DurableObject {
     }
     this.group = newChat
     this.#id = id
+    await this.fetchUsers()
+    await this.ctx.storage.put('users', this.#users)
     await this.ctx.storage.put<Group>(`meta`, newChat)
     await this.initialize()
 
@@ -459,23 +508,23 @@ export class GroupChatsDO extends DurableObject {
     sender: UserId,
     exclude?: UserId,
   ) {
-    this.ctx.storage.deleteAlarm({ allowConcurrency: true })
+    await this.ctx.storage.deleteAlarm()
     for (const receiver of this.group!.meta.participants) {
       if (exclude === receiver) continue
-      this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.#timestamp })
+      this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.timestamp() })
     }
     this.ctx.storage.deleteAlarm()
-    this.ctx.storage.setAlarm(Date.now() + 1400, { allowConcurrency: false })
+    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
+
   private async broadcastEventTo(
     type: InternalEventType,
     event: InternalEvent,
     sender: UserId,
     receiver: UserId,
   ) {
-    this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.#timestamp })
+    this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.timestamp() })
 
-    this.ctx.storage.deleteAlarm()
-    this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
+    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
 }

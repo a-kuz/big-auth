@@ -3,6 +3,8 @@ import { dlt, edit, dlvrd, read, nw, typing } from './event-literals'
 
 import { Attachment } from '../Attachment'
 import { UserId } from './internal'
+import { ChatMessage } from '../ChatMessage'
+import { Profile, User } from '~/db/models/User'
 
 export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
@@ -46,6 +48,11 @@ export interface GetMessagesRequest {
   chatId: string
   endId?: number
   count?: number
+}
+
+export type GetMessagesResponse = {
+  messages: ChatMessage[]
+  authors: Profile[]
 }
 
 export interface TypingClientEvent {

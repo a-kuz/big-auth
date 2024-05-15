@@ -36,7 +36,7 @@ export class SendCodeHandler extends OpenAPIRoute {
     }
 
     // Construct the URL for Twilio's Verification API
-
+    const url = `${TWILIO_BASE_URL}/${env.TWILIO_SERVICE_SID}/Verifications`
     // Encode the credentials for Basic Auth
     const authHeader = 'Basic ' + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)
 

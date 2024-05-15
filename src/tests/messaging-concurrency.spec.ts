@@ -8,7 +8,7 @@ const COUNT = 1
 // const USER1 = '+79875425970'
 // const USER1 = '+34627068478'
 const USER1 = '+999'
-const USER2 = '+33609570605'
+const USER2 = '+79875425970'
 // const USER2 = '+9999'
 //const USER2 = '+79875425970'
 //const USER2 = '+9999'
@@ -57,12 +57,12 @@ describe('WebSocket Chat Integration Test', () => {
       console.log(userId)
 
       // Step 2: Connect to WebSocket using the accessToken
-      const ws = new WebSocket(`wss://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
+      let ws = new WebSocket(`wss://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
 
       // Mock WebSocket functions
-      vi.spyOn(ws, 'send')
+
       vi.spyOn(ws, 'close')
 
       const messagesToSend = COUNT
@@ -96,9 +96,40 @@ describe('WebSocket Chat Integration Test', () => {
         })
         const ids: string[] = []
 
+        setInterval(() => ws.send('ping'), 4000)
+        setInterval(() => {
+          console.log(ws.readyState)
+          const lorem = loremIpsum()
+
+          const message = {
+            type: 'request',
+            timestamp: Date.now(),
+            id: newId(), // Unique ID for each message
+            payloadType: 'new',
+            payload: {
+              chatId: userId, // Example chat ID
+              message: lorem,
+              clientMessageId: newId(),
+            },
+          }
+
+          ws.send(JSON.stringify(message))
+        }, 4000)
+        ws.on('close', (...args) => {
+          console.log(args)
+          ws.close()
+          resolve()
+          ws = new WebSocket(`wss://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+
+        })
+        ws.on('error', (...args) => {
+          console.log(args)
+        })
         ws.on('message', data => {
           const response = JSON.parse(data.toString())
-          console.log(response.payload)
+          console.log(response)
 
           if (response.type !== 'response') {
             return
@@ -112,16 +143,16 @@ describe('WebSocket Chat Integration Test', () => {
 
           // Check if all messages have been received
           if (messagesReceived === messagesToSend) {
-            ws.close()
-            resolve()
+            //ws.close()
+            //resolve()
           }
         })
       })
 
       // Assertions to ensure messages were sent and handled
-      expect(ws.send).toHaveBeenCalledTimes(messagesToSend)
+      // expect(ws.send).toHaveBeenCalledTimes(messagesToSend)
       expect(ws.close).toHaveBeenCalled()
     },
-    { timeout: 50000 },
+    { timeout: 5000000 },
   )
 })

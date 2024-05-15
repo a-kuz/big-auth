@@ -1,3 +1,4 @@
+import { Profile } from '~/db/models/User'
 import { AttachmentType } from './Attachment'
 import { MessageStatus } from './ChatList'
 
@@ -46,20 +47,20 @@ interface DialogMeta {
 interface GroupMeta {
   name: string
   owner: string
-  participants: string[]
+  participants: Profile[] | string[] // TODO
   createdAt: number
 }
 
 export interface DialogAI {
-	chatId: string
-	lastMessageId: number
-	photoUrl: string
-	type: string
-	missed: number
-	lastMessageText: string | undefined
-	lastMessageTime: number
-	lastMessageAuthor: string
-	lastMessageStatus: string
-	isMine: boolean
-	name: string
+  chatId: string
+  lastMessageId: number
+  photoUrl: string
+  type: string
+  missed: number
+  lastMessageText: string | undefined
+  lastMessageTime: number
+  lastMessageAuthor: string
+  lastMessageStatus: string
+  isMine: boolean
+  name: string
 }

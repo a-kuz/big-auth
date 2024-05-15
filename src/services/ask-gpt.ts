@@ -31,7 +31,7 @@ export const askGPT = async (messages: GPTmessage[], env: Env) => {
 	more emoticons and jokes`,
   })
   const data = {
-    model: 'gpt-4-turbo-preview',
+    model: 'gpt-4o',
     messages,
   }
   const headers = {

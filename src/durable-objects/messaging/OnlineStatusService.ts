@@ -24,7 +24,7 @@ export class OnlineStatusService {
     }
 
     for (const chat of chatList) {
-      if (chat.type !== 'dialog' || chat.id === this.#userId || chat.id.length < 20) {
+      if (chat.type !== 'dialog' || chat.id === this.userId || chat.id.length < 20) {
         continue
       }
 
@@ -34,7 +34,7 @@ export class OnlineStatusService {
         await receiverDO.fetch(
           new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/online`, {
             method: 'POST',
-            body: JSON.stringify({ userId: this.#userId }),
+            body: JSON.stringify({ userId: this.userId }),
           }),
         )
       ).text()
@@ -50,7 +50,7 @@ export class OnlineStatusService {
     this.#isOnline = false
     const chatList = (await this.state.storage.get<ChatList>('chatList')) || []
     for (const chat of chatList!) {
-      if (chat.type !== 'dialog' || chat.id === this.#userId) {
+      if (chat.type !== 'dialog' || chat.id === this.userId) {
         continue
       }
       const receiverDO = userStorage(this.env, chat.id)
@@ -58,15 +58,15 @@ export class OnlineStatusService {
       await receiverDO.fetch(
         new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, {
           method: 'POST',
-          body: JSON.stringify({ type: 'offline', userId: this.#userId }),
+          body: JSON.stringify({ type: 'offline', userId: this.userId }),
         }),
       )
     }
   }
 
   setUserId(id: string) {
-    this.#userId = id
+    this.userId = id
   }
-  #userId = ''
+  userId = ''
   #isOnline = false
 }

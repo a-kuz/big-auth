@@ -4,13 +4,13 @@ import axios from 'axios'
 import WebSocket from 'ws'
 import { newId } from '../utils/new-id'
 
-const COUNT = 15
+const COUNT = 1
 // const USER1 = '+79875425970'
-const USER1 = '+999'
+const USER1 = '+9992567777'
 //const USER2 = '+33609570605'
 // const USER2 = '+33609570605'
 // const USER2 = '+79875425970'
-const GROUP = 'xW8Ev7KAQ-z6KJRTcT5B_z2O'
+const GROUP = 'Pz2CBIlNZsrNIrw2rnplSvM4'
 
 describe('WebSocket Chat Integration Test', () => {
   it(

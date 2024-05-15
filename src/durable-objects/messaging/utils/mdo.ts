@@ -20,3 +20,7 @@ export const gptStorage = ({ GPT_DO }: Env, name: string) => {
   const id = GPT_DO.idFromName(name)
   return GPT_DO.get(id, { locationHint: 'weur' })
 }
+export const pushStorage = ({ PUSH_DO }: Env, name: string) => {
+  const id = PUSH_DO.idFromName(name)
+  return PUSH_DO.get(id, { locationHint: 'weur' })
+}

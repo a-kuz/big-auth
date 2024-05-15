@@ -1,6 +1,7 @@
 import { ChatMessage, DialogMessage } from '~/types/ChatMessage'
 import {
   GetMessagesRequest,
+  GetMessagesResponse,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
@@ -20,6 +21,7 @@ import { GPTmessage, askGPT } from '~/services/ask-gpt'
 import { newId } from '~/utils/new-id'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { ChatListItem } from '~/types/ChatList'
+import { serializeError } from 'serialize-error'
 
 export class ChatGptDO extends DurableObject {
   #timestamp = Date.now()
@@ -39,36 +41,42 @@ export class ChatGptDO extends DurableObject {
   }
 
   async alarm(): Promise<void> {
-    if (this.#messages.slice(-1)[0].sender === this.#id) {
-      const GPTmessages = this.#messages.slice(-20).map<GPTmessage>(e => ({
-        content: e.message!,
-        role: e.sender === this.#id ? 'user' : 'assistant',
-      }))
-      const answer = await askGPT(GPTmessages, this.env)
-      if (!answer) {
-        return
-      }
-      const message: ChatMessage = {
-        clientMessageId: newId(),
-        createdAt: this.timestamp(),
-        messageId: await this.newId(),
-        sender: 'ai',
-        message: answer,
-      }
+    console.log('GPT ALARM')
 
-      const event: NewMessageEvent = {
-        messageId: message.messageId,
-        sender: 'ai',
-        chatId: 'AI',
-        message: message.message,
-        clientMessageId: message.clientMessageId,
-        timestamp: message.createdAt,
-        missed: 1,
+    try {
+      if (this.#messages.slice(-1)[0].sender === this.#id) {
+        const GPTmessages = this.#messages.slice(-20).map<GPTmessage>(e => ({
+          content: e.message!,
+          role: e.sender === this.#id ? 'user' : 'assistant',
+        }))
+        const answer = await askGPT(GPTmessages, this.env)
+        if (!answer) {
+          return
+        }
+        const message: ChatMessage = {
+          clientMessageId: newId(),
+          createdAt: this.timestamp(),
+          messageId: await this.newId(),
+          sender: 'ai',
+          message: answer,
+        }
+
+        const event: NewMessageEvent = {
+          messageId: message.messageId,
+          sender: 'ai',
+          chatId: 'AI',
+          message: message.message,
+          clientMessageId: message.clientMessageId,
+          timestamp: message.createdAt,
+          missed: 1,
+        }
+        this.#messages.push(message)
+        await this.ctx.storage.put<DialogMessage>(`message-${message.messageId}`, message)
+        await this.ctx.storage.put<number>('counter', this.#messages.length)
+        await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
       }
-      this.#messages.push(message)
-      await this.ctx.storage.put<DialogMessage>(`message-${message.messageId}`, message)
-      await this.ctx.storage.put<number>('counter', this.#messages.length)
-      await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
+    } catch (e) {
+      console.error(serializeError(e))
     }
   }
 
@@ -174,16 +182,17 @@ export class ChatGptDO extends DurableObject {
     await this.ctx.storage.put('counter', this.#counter - 1)
     return this.#counter - 1
   }
-  async getMessages(payload: GetMessagesRequest): Promise<DialogMessage[]> {
+  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
     if (!this.#messages) return []
     const endIndex = payload.endId || this.#messages.length - 1
     const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
     const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
     const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-    return messages
+    return { messages, authors: [] }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
+    await this.ctx.storage.deleteAlarm()
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     console.log(messageId)
@@ -208,7 +217,8 @@ export class ChatGptDO extends DurableObject {
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
     }
-    this.ctx.storage.setAlarm(new Date(Date.now() + 100))
+
+    await this.ctx.storage.setAlarm(new Date(Date.now() + 500))
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 

@@ -6,11 +6,11 @@ import { newId } from '../utils/new-id'
 
 const COUNT = 1
 // const USER1 = '+79875425970'
-const USER1 = '+9992567777'
+const USER1 = '+999999999'
 //const USER2 = '+33609570605'
 // const USER2 = '+33609570605'
 // const USER2 = '+79875425970'
-const GROUP = 'Pz2CBIlNZsrNIrw2rnplSvM4'
+const GROUP = 'lHPBMB___Sv75USysZEnJxx1'
 
 describe('WebSocket Chat Integration Test', () => {
   it(

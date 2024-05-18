@@ -224,10 +224,10 @@ export class ChatGptDO extends DurableObject {
 
   async dlvrd(
     sender: string,
-    request: MarkReadRequest,
+    request: MarkDeliveredRequest,
     timestamp: number,
   ): Promise<MarkDlvrdResponse> {
-    return { ...request, timestamp: this.#timestamp }
+    return { ...request, messageId: this.#counter - 1, timestamp: this.#timestamp }
   }
   async read(
     sender: string,
@@ -241,7 +241,7 @@ export class ChatGptDO extends DurableObject {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
-      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId)
+      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId!)
 
       if (endIndex === -1) {
         throw new Error(`messageId is not exists`)

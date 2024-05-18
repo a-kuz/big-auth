@@ -1,5 +1,6 @@
 import { PushDO } from '~/durable-objects/PushDO'
 import { ChatGptDO, DialogsDO, GroupChatsDO } from '..'
+import { PushNotification } from './queue/PushNotification'
 
 export interface Env {
   readonly TWILIO_ACCOUNT_SID: string
@@ -20,7 +21,7 @@ export interface Env {
   readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
   readonly PUSH_DO: DurableObjectNamespace<PushDO>
 
-	readonly PUSH_QUEUE: Queue
+  readonly PUSH_QUEUE: Queue<PushNotification>
 
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string

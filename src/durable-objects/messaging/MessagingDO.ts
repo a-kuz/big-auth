@@ -25,19 +25,28 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Dialog, Group } from '~/types/Chat'
+import { Chat, Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
 import {
   InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   NewChatEvent,
+  NewGroupMessageEvent,
   TypingInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { dialogStorage, gptStorage, groupStorage, pushStorage, userStorage } from './utils/mdo'
+import {
+  chatStorage,
+  dialogStorage,
+  gptStorage,
+  groupStorage,
+  pushStorage,
+  userStorage,
+} from './utils/mdo'
+import { PushNotification } from '~/types/queue/PushNotification'
 
 export class UserMessagingDO implements DurableObject {
   chatList: ChatList = []
@@ -323,7 +332,7 @@ export class UserMessagingDO implements DurableObject {
       await this.ws.sendEvent('new', { ...eventData, sender: eventData.sender ?? eventData.chatId })
       dlvrd = true
     }
-    this.toQ({ ...eventData, ...{ alreadySentByWebsocket: dlvrd } })
+    this.toQ(eventData, chatData, dlvrd)
     return { success: true, dlvrd }
   }
 
@@ -344,17 +353,24 @@ export class UserMessagingDO implements DurableObject {
       }
     } else {
       this.#deviceToken = token
+
     }
   }
 
-  private async toQ(eventData: NewMessageEvent<never>) {
+  private async toQ(
+    eventData: NewMessageEvent,
+    chat: Group | Dialog | DialogAI,
+    alreadySentByWebsocket: boolean,
+  ) {
     if (!this.#deviceToken) return
-    this.state.waitUntil(
-      this.env.PUSH_QUEUE.send(
-        { event: eventData, ...{ deviceToken: this.#deviceToken } },
-        { contentType: 'json' },
-      ),
-    )
+    if (!eventData.message) return
+    const push: PushNotification = {
+      event: eventData,
+      deviceToken: this.#deviceToken,
+      body: eventData.message,
+      title: chat.name,
+    }
+    this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }
 
   async chatsHandler(request: Request) {
@@ -406,18 +422,8 @@ export class UserMessagingDO implements DurableObject {
     })
   }
 
-  private dialogStorage(chatId: string) {
-    return dialogStorage(this.env, [chatId, this.userId].sort((a, b) => (a > b ? 1 : -1)).join(':'))
-  }
-  private groupStorage(chatId: string) {
-    return groupStorage(this.env, chatId)
-  }
   private chatStorage(chatId: string) {
-    return chatId === 'AI'
-      ? gptStorage(this.env, this.userId)
-      : this.isGroup(chatId)
-        ? this.groupStorage(chatId)
-        : this.dialogStorage(chatId)
+    return chatStorage(this.env, chatId, this.userId)
   }
 
   async friendOnline(request: Request) {

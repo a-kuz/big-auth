@@ -73,13 +73,13 @@ export interface DeleteMessageRequest {
 
 export interface MarkReadRequest {
   chatId: string
-  messageId: number
+  messageId?: number
   userId?: UserId
 }
 
 export interface MarkDeliveredRequest {
   chatId: string
-  messageId: number
+  messageId?: number
 }
 
 export interface CreateChatRequest {

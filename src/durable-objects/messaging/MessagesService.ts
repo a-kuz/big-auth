@@ -5,10 +5,12 @@ import { OnlineEvent } from '~/types/ws/server-events'
 
 export class MessagesService {
   constructor(
-    private state: DurableObjectState,
-    private env: Env,
-    private ws: WebSocketGod,
+    private storage: DurableObjectStorage,
   ) {}
+
+ loadMessages() {
+
+ }
 
 
 

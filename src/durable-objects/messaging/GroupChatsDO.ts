@@ -190,10 +190,7 @@ export class GroupChatsDO extends DurableObject {
   async initialize() {
     const start = performance.now()
     const meta = await this.ctx.storage.get<Group>('meta')
-    this.#users =
-      (await this.ctx.storage.get<
-        Pick<User, 'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber'>[]
-      >('users')) || []
+    this.#users = (await this.ctx.storage.get<Profile[]>('users')) || []
     console.log(meta)
     if (!meta) {
       return

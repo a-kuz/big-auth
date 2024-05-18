@@ -38,12 +38,12 @@ export class WebSocketGod {
     const [client, server] = Object.values(webSocketPair)
     this.server = server
     this.client = client
-    this.state.acceptWebSocket(this.server, ['user'])
+    this.state.acceptWebSocket(server, ['user'])
 
     this.refreshPing()
 
     await this.state.storage.setAlarm(Date.now() + 3000)
-    return new Response(null, { status: 101, webSocket: this.client })
+    return new Response(null, { status: 101, webSocket: client })
   }
 
   async handlePacket(
@@ -51,8 +51,7 @@ export class WebSocketGod {
     message: string | ArrayBuffer,
     doo: UserMessagingDO,
   ): Promise<void> {
-    console.log(message)
-    this.refreshPing()
+    console.error(JSON.stringify(message))
     if (this.ping(message)) return
 
     try {
@@ -86,9 +85,13 @@ export class WebSocketGod {
       }
     } catch (e) {
       console.error(serializeError(e))
-      ws.send(
-        JSON.stringify({ error: { incomingMessage: message, exception: (e as Error).message } }),
-      )
+      try {
+        ws.send(
+          JSON.stringify({ error: { incomingMessage: message, exception: (e as Error).message } }),
+        )
+      } catch (e) {
+        console.error(serializeError(e))
+      }
     }
   }
 
@@ -98,20 +101,18 @@ export class WebSocketGod {
       message === PING ||
       message instanceof ArrayBuffer ||
       // @ts-ignore
-      (message.maxByteLength ?? 6) <= 5 ||
-      (message.length ?? 6) <= 5
+      (message.maxByteLength ?? message.length ?? 6) <= 5
     )
   }
 
   async handleClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
-    console.log({ f: 'webSocketClose', code, reason, wasClean })
+    console.log(JSON.stringify({ f: 'webSocketClose', code, reason, wasClean }))
 
-    try {
-      await this.onlineService.offline()
-    } catch (e) {
-      console.error(e)
-    }
-    this.server = null
+    if (
+      this.state.getWebSockets().filter(w => w !== ws && w.readyState === WebSocket.OPEN).length ===
+      0
+    )
+      this.state.waitUntil(this.onlineService.offline())
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
@@ -147,7 +148,6 @@ export class WebSocketGod {
         ...(!id ? {} : { id }),
       }
       ws.send(JSON.stringify(packet))
-      this.refreshPing()
       wasSent = true
     }
 
@@ -165,7 +165,7 @@ export class WebSocketGod {
         JSON.stringify({ userId: this.onlineService.userId, readystate: socket.readyState }),
       )
       if (this.lastPing) {
-        if (Date.now() - this.lastPing > 60000) {
+        if (Date.now() - this.lastPing > 20000) {
           try {
             if (socket.readyState != WebSocket.CLOSING) {
               await socket.close(1011, `last ping: ${this.lastPing}, now: ${Date.now()}`)
@@ -180,7 +180,10 @@ export class WebSocketGod {
             socket.send(`{"event": "pong"}`)
           }
         }
-        await this.state.storage.setAlarm(Date.now() + 5000, { allowConcurrency: true })
+        await this.state.storage.setAlarm(Date.now() + 5000, {
+          allowConcurrency: true,
+          allowUnconfirmed: true,
+        })
       }
     }
   }

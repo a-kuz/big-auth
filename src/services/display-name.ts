@@ -9,5 +9,5 @@ export function displayName(chatMeta: DialogMeta): string {
   } else if (phoneNumber) {
     return `${phoneNumber}`
   }
-  return "????"
+  return '????'
 }

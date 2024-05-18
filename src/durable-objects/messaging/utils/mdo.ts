@@ -24,3 +24,15 @@ export const pushStorage = ({ PUSH_DO }: Env, name: string) => {
   const id = PUSH_DO.idFromName(name)
   return PUSH_DO.get(id, { locationHint: 'weur' })
 }
+
+export const chatStorage = (env: Env, chatId: string, userId: string) => {
+  return chatId === 'AI'
+    ? gptStorage(env, userId)
+    : isGroup(chatId)
+      ? groupStorage(env, chatId)
+      : dialogStorage(env, [chatId, userId].sort((a, b) => (a > b ? 1 : -1)).join(':'))
+}
+
+export const isGroup = (id: string): boolean => {
+  return id !== 'AI' && id.length > 21
+}

@@ -4,7 +4,7 @@ import axios from 'axios'
 import WebSocket from 'ws'
 import { newId } from '../utils/new-id'
 
-const COUNT = 1
+const COUNT = 100
 // const USER1 = '+79875425970'
 const USER1 = '+999999999'
 //const USER2 = '+33609570605'

@@ -52,11 +52,13 @@ export interface MarkDeliveredEvent {
   chatId: string
   userId?: string
   messageId: number
+	clientMessageId: string
   timestamp: number
 }
 export interface MarkReadEvent {
   chatId: string
   userId?: string
   messageId: number
+	clientMessageId: string
   timestamp: number
 }

@@ -52,7 +52,10 @@ export class WebSocketGod {
     doo: UserMessagingDO,
   ): Promise<void> {
     console.error(JSON.stringify(message))
-    if (this.ping(message)) return
+    if (this.ping(message)) {
+      ws.send(`{"event": "pong"}`)
+      return
+    }
 
     try {
       const packet = JSON.parse(message as string) as ClientEvent | ClientRequest

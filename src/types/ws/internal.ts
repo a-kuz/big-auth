@@ -6,12 +6,14 @@ export interface MarkDeliveredInternalEvent {
   chatId: string
   userId?: string
   messageId: number
+	clientMessageId: string
   timestamp: number
 }
 export interface MarkReadInternalEvent {
   chatId: string
   userId?: string
   messageId: number
+	clientMessageId: string
   timestamp: number
 }
 export interface TypingInternalEvent {

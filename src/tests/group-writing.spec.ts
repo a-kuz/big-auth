@@ -51,7 +51,7 @@ describe('all is friends', () => {
               },
               {
                 headers: {
-                  'Content-Type': 'application/json', 
+                  'Content-Type': 'application/json',
                   Accept: 'application/json',
                   Authorization: `Bearer ${accessToken1}`,
                 },

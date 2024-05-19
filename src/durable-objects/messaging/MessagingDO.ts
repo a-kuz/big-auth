@@ -234,9 +234,8 @@ export class UserMessagingDO implements DurableObject {
 
     if (this.onlineService.isOnline()) {
       const event: MarkDeliveredEvent = {
+        ...eventData,
         chatId,
-        messageId: eventData.messageId,
-        timestamp: eventData.timestamp,
       }
       await this.ws.sendEvent('dlvrd', event)
     }
@@ -258,16 +257,14 @@ export class UserMessagingDO implements DurableObject {
         this.chatList[i].lastMessageStatus === 'unread'
       ) {
         this.chatList[i].lastMessageStatus = 'read'
+        await this.state.storage.put('chatList', this.chatList)
       }
-      await this.state.storage.put('chatList', this.chatList)
     }
 
     if (this.onlineService.isOnline()) {
       const event: MarkReadEvent = {
+        ...eventData,
         chatId,
-        messageId: eventData.messageId,
-        timestamp: eventData.timestamp,
-        userId: eventData.userId,
       }
       await this.ws.sendEvent('read', event)
     }
@@ -353,7 +350,6 @@ export class UserMessagingDO implements DurableObject {
       }
     } else {
       this.#deviceToken = token
-
     }
   }
 

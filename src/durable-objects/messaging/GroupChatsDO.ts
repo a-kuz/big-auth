@@ -407,7 +407,7 @@ export class GroupChatsDO extends DurableObject {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
-      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId)
+      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId!)
 
       if (endIndex === -1) {
         throw new Error(`messageId is not exists`)

@@ -34,7 +34,7 @@ export class DialogsDO extends DurableObject {
     readonly env: Env,
   ) {
     super(ctx, env)
-
+    this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
     this.ctx.blockConcurrencyWhile(() => this.initialize())
     ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
   }
@@ -212,7 +212,7 @@ export class DialogsDO extends DurableObject {
       })
     }
 
-    await this.sendDlvrdEventToAuthor(request.chatId, messageId, timestamp)
+    await this.sendDlvrdEventToAuthor(request.chatId, this.#messages[messageId], timestamp)
     return { messageId, timestamp }
   }
 
@@ -228,13 +228,22 @@ export class DialogsDO extends DurableObject {
     let endIndex = this.#messages.length - 1
 
     if (request.messageId) {
-      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId)
+      endIndex = this.#messages.findLastIndex(m => m.messageId <= request.messageId!)
 
       if (endIndex === -1) {
         throw new Error(`messageId is not exists`)
       }
     }
+    const message = this.#messages[endIndex]
+    if (message.read) {
+      return {
+        messageId: message.messageId,
+        timestamp: message.read,
+        missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+      }
+    }
     const messageId = this.#messages[endIndex].messageId
+
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
@@ -255,12 +264,16 @@ export class DialogsDO extends DurableObject {
         allowConcurrency: false,
       })
     }
-    await this.sendReadEventToAuthor(request.chatId, messageId, timestamp)
+    await this.sendReadEventToAuthor(request.chatId, this.#messages[messageId], timestamp)
 
     return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
   }
 
-  private async sendDlvrdEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
+  private async sendDlvrdEventToAuthor(
+    receiverId: string,
+    message: DialogMessage,
+    timestamp: number,
+  ) {
     // Retrieve sender and receiver's durable object IDs
 
     const receiverDO = userStorage(this.env, receiverId)
@@ -268,7 +281,8 @@ export class DialogsDO extends DurableObject {
     // Create an event object with message details and timestamp
     const event: MarkDeliveredInternalEvent = {
       chatId: this.chat(receiverId).chatId,
-      messageId,
+      messageId: message.messageId,
+      clientMessageId: message.clientMessageId,
       timestamp,
     }
 
@@ -289,7 +303,11 @@ export class DialogsDO extends DurableObject {
     }
   }
 
-  private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
+  private async sendReadEventToAuthor(
+    receiverId: string,
+    message: DialogMessage,
+    timestamp: number,
+  ) {
     // Retrieve sender and receiver's durable object IDs
 
     const receiverDO = userStorage(this.env, receiverId)
@@ -297,7 +315,8 @@ export class DialogsDO extends DurableObject {
     // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
       chatId: senderId,
-      messageId,
+      messageId: message.messageId,
+      clientMessageId: message.clientMessageId,
       timestamp,
     }
 

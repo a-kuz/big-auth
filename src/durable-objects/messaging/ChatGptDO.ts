@@ -183,7 +183,7 @@ export class ChatGptDO extends DurableObject {
     return this.#counter - 1
   }
   async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
-    if (!this.#messages) return []
+    if (!this.#messages) return { messages: [], authors: [] }
     const endIndex = payload.endId || this.#messages.length - 1
     const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
     const startIndex = endIndex > portion ? endIndex - portion + 1 : 0

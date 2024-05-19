@@ -26,41 +26,42 @@ import { CORS } from './utils/cors'
 import { GetChatHandler } from './handlers/GetChatHandler'
 import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
+import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { PushDO } from './durable-objects/PushDO'
 export { DialogsDO, GroupChatsDO, UserMessagingDO, ChatGptDO } from './durable-objects/messaging'
 
 const router = OpenAPIRouter({
-  schema: {
-    info: {
-      title: 'BIG Auth',
-      version: '1.0',
-    },
-  },
+	schema: {
+		info: {
+			title: 'BIG Auth',
+			version: '1.0',
+		},
+	},
 
-  aiPlugin: {
-    name_for_human: 'B.I.G Ai',
-    name_for_model: 'expert_of_all',
-    description_for_human: "Get data insights from Cloudflare's and BIG messenger point of view.",
-    description_for_model:
-      "Plugin for retrieving the data based on Cloudflare Radar's data. Use it whenever a user asks something that might be related to Internet usage, eg. outages, Internet traffic, or Cloudflare Radar's data in particular.",
-    contact_email: 'support@iambig.ai',
-    legal_info_url: 'https://www.cloudflare.com/website-terms/',
-    logo_url:
-      'https://dev.iambig.ai/public/1feb2e3c2d04dec268da0606dd163e76f6869233129be1633ab9937903640818',
+	aiPlugin: {
+		name_for_human: 'B.I.G Ai',
+		name_for_model: 'expert_of_all',
+		description_for_human: "Get data insights from Cloudflare's and BIG messenger point of view.",
+		description_for_model:
+			"Plugin for retrieving the data based on Cloudflare Radar's data. Use it whenever a user asks something that might be related to Internet usage, eg. outages, Internet traffic, or Cloudflare Radar's data in particular.",
+		contact_email: 'support@iambig.ai',
+		legal_info_url: 'https://www.cloudflare.com/website-terms/',
+		logo_url:
+			'https://dev.iambig.ai/public/1feb2e3c2d04dec268da0606dd163e76f6869233129be1633ab9937903640818',
 
-    api: {
-      has_user_authentication: false,
-      type: APIType.OPENAPI,
-      url: '/openai.json',
-    },
-  },
+		api: {
+			has_user_authentication: false,
+			type: APIType.OPENAPI,
+			url: '/openai.json',
+		},
+	},
 })
 
 router.registry.registerComponent('securitySchemes', 'BearerAuth', {
-  type: 'http',
-  scheme: 'bearer',
+	type: 'http',
+	scheme: 'bearer',
 })
 
 router.post('/send-code', SendCodeHandler)
@@ -91,6 +92,8 @@ router.get('/network', NetworkInfoHandler)
 router.get('/websocket', WebsocketHandler)
 router.options('*', CORS) // TODO: add security CORS
 router.get('/avatar/:userId', GetAvatarHandler)
+router.get('/deviceTokens/:userId', GetDeviceTokensHandler) // Add new route for device tokens
+
 // Redirect root request to the /docs page
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
 
@@ -98,5 +101,5 @@ router.original.get('/', (request: Request) => Response.redirect(`${request.url}
 router.all('*', () => new Response('Not Found.', { status: 404 }))
 
 export default {
-  fetch: router.handle,
+	fetch: router.handle,
 }

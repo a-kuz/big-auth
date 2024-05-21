@@ -20,23 +20,31 @@ import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/in
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { serializeError } from 'serialize-error'
+import { boolean } from 'zod'
+import { splitArray } from '~/utils/split-array'
+import { TM_DurableObject, Task, withTaskManager } from 'do-taskmanager'
 
-export class DialogsDO extends DurableObject {
+class DO extends DurableObject implements TM_DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [User, User]
   #id: string = ''
   #counter = 0
   #lastRead = new Map<string, number>()
+  storage?: DurableObjectStorage
 
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
     super(ctx, env)
+    console.log('Dialog constructor')
+    this.storage = ctx.storage
     this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
-    this.ctx.blockConcurrencyWhile(() => this.initialize())
-    ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
+    this.ctx.blockConcurrencyWhile(async () => this.initialize())
+  }
+  processTask(task: Task): Promise<void> {
+    throw new Error('Method not implemented.')
   }
 
   async alarm(): Promise<void> {
@@ -197,6 +205,9 @@ export class DialogsDO extends DurableObject {
       }
     }
     const messageId = this.#messages[endIndex].messageId
+    if (this.#messages[endIndex].dlvrd) {
+      return { messageId, timestamp: this.#messages[endIndex].dlvrd! }
+    }
 
     for (let i = endIndex; i >= 0; i--) {
       const message = this.#messages[i] as DialogMessage
@@ -370,6 +381,19 @@ export class DialogsDO extends DurableObject {
       console.error(await resp.text())
       console.error("couldn't send event")
       throw new Error("Couldn't send event")
+    } else {
+      const { dlvrd = false } = await resp.json<{ dlvrd?: boolean }>()
+      if (dlvrd) {
+        this.#messages[message.messageId] = {
+          ...this.#messages[message.messageId],
+          dlvrd: timestamp,
+        }
+        this.ctx.waitUntil(
+          this.ctx.storage.put<DialogMessage>(`message-${message.messageId}`, message, {
+            allowConcurrency: true,
+          }),
+        )
+      }
     }
   }
 
@@ -380,22 +404,57 @@ export class DialogsDO extends DurableObject {
     if (this.#users) {
       this.#id = `${this.#users[0].id}:${this.#users[1].id}`
     }
+    console.log('this.#id: ', this.#id)
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
-    for (let i = 0; i < this.#counter; i++) {
-      const m = await this.ctx.storage.get<DialogMessage>(`message-${i}`)
-      if (m) {
-        this.#messages.push(m)
-        if (m.read) {
-          this.#lastRead.set(this.#id.replace(m.sender, '').replace(':', ''), m.messageId)
+    let arr = []
+    const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
+    const keyChunks = splitArray(keys, 128)
+
+    for (const chunk of keyChunks) {
+      const messagesChunk = await this.ctx.storage.get<DialogMessage>(chunk)
+      for (const key of messagesChunk.keys()) {
+        const i = keys.indexOf(key)
+        const message = messagesChunk.get(key)
+        if (message) {
+          this.#messages[i] = message
+
+          if (message.read) {
+            this.#lastRead.set(
+              this.#id.replace(message.sender, '').replace(':', ''),
+              message.messageId,
+            )
+          }
         }
       }
     }
+    let except
+    if (this.#messages.length) {
+      const lastMessage = this.#messages.slice(-1)[0]
+      this.#lastRead.set(lastMessage!.sender, lastMessage!.messageId)
+      const receiver = this.#id.replace(lastMessage!.sender, '').replace(':', '')
+      this.#lastRead.set(
+        receiver,
+        this.#messages.findLastIndex(
+          message =>
+            (message.read && message.sender === lastMessage.sender) || message.sender === receiver,
+        ),
+      )
+    }
+
+    if (!(await this.ctx.storage.getAlarm()))
+      await this.ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
   }
 
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
+  async processTask(task: Task): Promise<void> {}
+
+  async fetch(request: Request<unknown, CfProperties<unknown>>): Promise<Response> {
+    return new Response()
+  }
 }
+export const DialogsDO = DO

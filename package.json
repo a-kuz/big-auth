@@ -19,6 +19,7 @@
 		"@cloudflare/itty-router-openapi": "^1.1.1",
 		"@tsndr/cloudflare-worker-jwt": "^2.5.3",
 		"class-transformer": "^0.5.1",
+		"do-taskmanager": "2.0.0-rc.0",
 		"nanoid": "^5.0.7",
 		"reflect-metadata": "^0.2.2",
 		"serialize-error": "^11.0.3",

@@ -36,9 +36,7 @@ export class StoreDeviceTokenHandler extends OpenAPIRoute {
     const token = authorization?.split(' ')[1]
 
     if (!token) {
-      return new Response(JSON.stringify({ error: 'Authorization required' }), {
-        status: 401,
-      })
+      return this.handleWithoutToken(env, deviceToken, fingerprint)
     }
     let user
     try {
@@ -52,8 +50,21 @@ export class StoreDeviceTokenHandler extends OpenAPIRoute {
     }
     const userId = user.id
     try {
-      const push = pushStorage(env, userId)
-      await push.setToken(userId, fingerprint, deviceToken)
+      await pushStorage(env, userId).setToken(userId, fingerprint, deviceToken)
+      await pushStorage(env, fingerprint).setToken(fingerprint, fingerprint, deviceToken)
+      console.log(JSON.stringify({ fingerprint }))
+
+      return new Response(JSON.stringify({ message: 'Device token stored successfully' }), {
+        status: 200,
+      })
+    } catch (error) {
+      console.error(serializeError(error))
+      return errorResponse('Failed to store device token', 500)
+    }
+  }
+  async handleWithoutToken(env: Env, deviceToken: string, fingerprint: string) {
+    try {
+      await pushStorage(env, fingerprint).setToken(fingerprint, fingerprint, deviceToken)
 
       return new Response(JSON.stringify({ message: 'Device token stored successfully' }), {
         status: 200,

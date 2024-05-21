@@ -49,6 +49,7 @@ import {
 import { PushNotification } from '~/types/queue/PushNotification'
 
 export class UserMessagingDO implements DurableObject {
+  readonly ['__DURABLE_OBJECT_BRAND']!: never
   chatList: ChatList = []
   chatMessages: { [key: string]: ChatMessage[] } = {}
   chatsMeta: { [key: string]: { lastId?: number } } = {}
@@ -341,7 +342,7 @@ export class UserMessagingDO implements DurableObject {
   private async setDeviceToken(token?: string) {
     if (!token) {
       if (!this.#deviceToken) {
-        const tokens = await pushStorage(this.env, this.userId).getTokens()
+        const tokens = await pushStorage(this.env, this.fingerprint).getTokens()
         if (tokens && tokens.length) {
           this.#deviceToken = tokens[0].deviceToken
         } else {

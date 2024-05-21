@@ -12,14 +12,16 @@ export class PushDO extends DurableObject {
   }
 
   async setToken(userId: UserId, fingerprint: string, deviceToken: string) {
-    const receiverDO = userStorage(this.env, userId)
+    if (userId.length <= 21) {
+      const receiverDO = userStorage(this.env, userId)
 
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${userId}/client/request/setDeviceToken`, {
-        method: 'POST',
-        body: JSON.stringify({ fingerprint, deviceToken }),
-      }),
-    )
+      const resp = await receiverDO.fetch(
+        new Request(`${this.env.ORIGIN}/${userId}/client/request/setDeviceToken`, {
+          method: 'POST',
+          body: JSON.stringify({ fingerprint, deviceToken }),
+        }),
+      )
+    }
     await this.ctx.storage.deleteAll()
     await this.ctx.storage.put(`${userId}:${fingerprint}`, deviceToken)
   }

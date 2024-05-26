@@ -22,6 +22,7 @@ import { newId } from '~/utils/new-id'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { ChatListItem } from '~/types/ChatList'
 import { serializeError } from 'serialize-error'
+import { splitArray } from '~/utils/split-array'
 
 export class ChatGptDO extends DurableObject {
   #timestamp = Date.now()
@@ -40,11 +41,16 @@ export class ChatGptDO extends DurableObject {
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
+  lastMessage() {}
   async alarm(): Promise<void> {
     console.log('GPT ALARM')
-
     try {
       if (this.#messages.slice(-1)[0].sender === this.#id) {
+        await this.read(
+          'AI',
+          { chatId: this.#id, messageId: this.#messages.slice(-1)[0].messageId },
+          Date.now(),
+        )
         const GPTmessages = this.#messages.slice(-20).map<GPTmessage>(e => ({
           content: e.message!,
           role: e.sender === this.#id ? 'user' : 'assistant',
@@ -72,7 +78,6 @@ export class ChatGptDO extends DurableObject {
         }
         this.#messages.push(message)
         await this.ctx.storage.put<DialogMessage>(`message-${message.messageId}`, message)
-        await this.ctx.storage.put<number>('counter', this.#messages.length)
         await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
       }
     } catch (e) {
@@ -153,7 +158,7 @@ export class ChatGptDO extends DurableObject {
       this.#id = userId
     }
 
-    const lastMessage = this.#messages[this.#counter - 1]
+    const lastMessage = this.#messages.slice(-1)[0]
     const chat: ChatListItem | DialogAI = {
       chatId: 'AI',
       id: 'AI',
@@ -179,7 +184,7 @@ export class ChatGptDO extends DurableObject {
 
   async newId() {
     this.#counter++
-    await this.ctx.storage.put('counter', this.#counter - 1)
+    await this.ctx.storage.put('counter', this.#counter)
     return this.#counter - 1
   }
   async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
@@ -203,11 +208,12 @@ export class ChatGptDO extends DurableObject {
       message: request.message,
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
+      read: timestamp,
+      dlvrd: timestamp,
     }
     this.#messages[messageId] = message
 
     await this.ctx.storage.put<DialogMessage>(`message-${messageId}`, message)
-    await this.ctx.storage.put<number>('counter', this.#messages.length)
     if (messageId > 0) {
       if (this.#messages[messageId - 1].sender !== sender) {
         await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
@@ -216,9 +222,10 @@ export class ChatGptDO extends DurableObject {
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
+      await this.ctx.storage.put(`lastRead`, lastRead)
     }
 
-    await this.ctx.storage.setAlarm(new Date(Date.now() + 500))
+    await this.ctx.storage.setAlarm(new Date(Date.now() + 50))
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
@@ -268,7 +275,7 @@ export class ChatGptDO extends DurableObject {
         allowConcurrency: false,
       })
     }
-    await this.sendReadEventToAuthor(request.chatId, messageId, timestamp)
+    await this.sendReadEventToAuthor(this.#id, messageId, timestamp)
 
     return { messageId, timestamp, missed: 0 }
   }
@@ -277,12 +284,13 @@ export class ChatGptDO extends DurableObject {
     // Retrieve sender and receiver's durable object IDs
     if (receiverId === 'ai') return
     const receiverDO = userStorage(this.env, receiverId)
-    const senderId = this.#id.replace(receiverId, '').replace(':', '')
+
     // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
-      chatId: senderId,
+      chatId: 'AI',
       messageId,
       timestamp,
+      clientMessageId: this.#messages[messageId].clientMessageId,
     }
 
     const reqBody = JSON.stringify(event)
@@ -313,13 +321,25 @@ export class ChatGptDO extends DurableObject {
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
-    for (let i = 0; i < this.#counter; i++) {
-      const m = await this.ctx.storage.get<DialogMessage>(`message-${i}`)
-      if (m) {
-        this.#messages.push(m)
-        if (m.read) {
-          this.#lastRead.set(this.#id, m.messageId)
+    const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
+    const keyChunks = splitArray(keys, 128)
+
+    for (const chunk of keyChunks) {
+      const messagesChunk = await this.ctx.storage.get<DialogMessage>(chunk)
+      for (const key of messagesChunk.keys()) {
+        const i = keys.indexOf(key)
+        const message = messagesChunk.get(key)
+        if (message) {
+          this.#messages[i] = message
         }
+      }
+    }
+    if (this.#messages.length) {
+      const lastMessage = this.#messages.slice(-1)[0]
+      if (lastMessage.sender === 'AI' && !lastMessage.read) {
+        this.#lastRead.set(this.#id, lastMessage.messageId - 1)
+      } else {
+        this.#lastRead.set(this.#id, lastMessage.messageId)
       }
     }
   }

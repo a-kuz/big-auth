@@ -24,7 +24,7 @@ import { boolean } from 'zod'
 import { splitArray } from '~/utils/split-array'
 import { TM_DurableObject, Task, withTaskManager } from 'do-taskmanager'
 
-class DO extends DurableObject implements TM_DurableObject {
+export class DialogsDO extends DurableObject implements TM_DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [User, User]
@@ -42,9 +42,6 @@ class DO extends DurableObject implements TM_DurableObject {
     this.storage = ctx.storage
     this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
-  }
-  processTask(task: Task): Promise<void> {
-    throw new Error('Method not implemented.')
   }
 
   async alarm(): Promise<void> {
@@ -408,7 +405,6 @@ class DO extends DurableObject implements TM_DurableObject {
     this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
 
     this.#messages = []
-    let arr = []
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
     const keyChunks = splitArray(keys, 128)
 
@@ -457,4 +453,3 @@ class DO extends DurableObject implements TM_DurableObject {
     return new Response()
   }
 }
-export const DialogsDO = DO

@@ -63,20 +63,8 @@ bindings = [
 
 
 [[migrations]]
-tag = "v35"
-deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
-
-[[migrations]]
-tag = "v36"
-new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
-
-[[migrations]]
-tag = "v37"
-new_classes = ["PushDO"]
-
-[[migrations]]
-tag = "v38"
+tag = "v52"
 deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
 [[migrations]]
-tag = "v39"
+tag = "v53"
 new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]

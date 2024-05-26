@@ -4,6 +4,9 @@ import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { z } from 'zod'
+import { digest } from '~/utils/digest'
+import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
+import { putContacts } from '~/services/contacts'
 
 export class FindContactsHandler extends OpenAPIRoute {
   static schema = {
@@ -43,36 +46,31 @@ export class FindContactsHandler extends OpenAPIRoute {
     { body }: DataOf<typeof FindContactsHandler.schema>,
   ) {
     try {
-      const authorization = request.headers.get('Authorization')
-      const token = authorization?.split(' ')[1]
+      let phoneNumbers = body.phoneNumbers.map(normalizePhoneNumber)
 
-      if (!token) {
-        return new Response(JSON.stringify({ error: 'Authorization required' }), {
-          status: 401,
-        })
-      }
+      phoneNumbers = phoneNumbers
+        .filter((phoneNumber, i) => phoneNumbers.indexOf(phoneNumber) === i)
+        .filter(u => u !== env.user.phoneNumber)
 
-      try {
-        const user = await getUserByToken(env.DB, token, env.JWT_SECRET)
-        if (!user) {
-          return errorResponse('user not exist', 401)
-        }
-      } catch (error) {
-        console.error(error)
-        return errorResponse('Failed to fetch profile', 401)
-      }
+      const hash = await digest(JSON.stringify(phoneNumbers))
+      const cache = await caches.open(hash)
+      const resp = await cache.match(request.url + '/' + hash)
+      if (resp) return resp
 
-      const phoneNumbers = body.phoneNumbers.filter((phoneNumber, i) => {
-        return body.phoneNumbers.indexOf(phoneNumber) === i
-      })
-      const contacts = await getUserByPhoneNumbers(env.DB, phoneNumbers)
-      const response = new Response(JSON.stringify({ contacts }), {
+      const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
+        u => u.id !== env.user.id,
+      )
+      const responseBody = JSON.stringify({ contacts })
+
+      const response = new Response(responseBody, {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
         },
       })
-      //await cache.put(request., response)
+
+      await cache.put(request.url + '/' + hash, new Response(responseBody))
+      context.waitUntil(putContacts(env.user, phoneNumbers, contacts, env))
       return response
     } catch (error) {
       console.error(error)

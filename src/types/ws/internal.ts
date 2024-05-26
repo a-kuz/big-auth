@@ -6,14 +6,14 @@ export interface MarkDeliveredInternalEvent {
   chatId: string
   userId?: string
   messageId: number
-	clientMessageId: string
+  clientMessageId: string
   timestamp: number
 }
 export interface MarkReadInternalEvent {
   chatId: string
   userId?: string
   messageId: number
-	clientMessageId: string
+  clientMessageId: string
   timestamp: number
 }
 export interface TypingInternalEvent {
@@ -24,6 +24,7 @@ export interface NewGroupMessageEvent {
   chatId: ChatId
   clientMessageId: string
   sender: UserId
+  senderName: string
   message?: string
   attachments?: Attachment[]
   messageId: number

@@ -1,7 +1,8 @@
+import { TaskManager } from 'do-taskmanager/dist/types'
+import { User } from '~/db/models/User'
 import { PushDO } from '~/durable-objects/PushDO'
 import { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from '..'
 import { PushNotification } from './queue/PushNotification'
-import { TM_Env, TaskManager } from 'do-taskmanager/dist/types'
 
 export interface Env {
   readonly TWILIO_ACCOUNT_SID: string
@@ -27,4 +28,5 @@ export interface Env {
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string
   readonly TASK_MANAGER: TaskManager
+  user: User
 }

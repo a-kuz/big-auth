@@ -146,7 +146,7 @@ export class WebSocketGod {
       const packet: ServerEvent = {
         eventType,
         payload: event,
-        timestamp: Math.floor(Date.now()),
+        timestamp: Date.now(),
         type: 'event',
         ...(!id ? {} : { id }),
       }

@@ -3,7 +3,7 @@ import { newId } from '../../utils/new-id'
 import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
-import { CustomError } from "~/errors/CustomError"
+import { CustomError } from '~/errors/CustomError'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -15,7 +15,7 @@ export const getOrCreateUserByPhone = async (
 
     if (!existingUser) {
       const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
-      const id = phoneNumber.startsWith('+9999') ? phoneNumber+newId(2) : newId()
+      const id = phoneNumber.startsWith('+9999') ? phoneNumber + newId(2) : newId()
       const createdAt = Math.floor(Date.now() / 1000)
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
       return new User(id, phoneNumber)
@@ -31,7 +31,7 @@ export const getOrCreateUserByPhone = async (
 export const getUserById = async (
   d1: D1Database,
   id: string,
-  error: CustomError = new UnauthorizedError((`User not found ${{ id }}`)),
+  error: CustomError = new UnauthorizedError(`User not found ${{ id }}`),
 ): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
@@ -59,20 +59,25 @@ export const getUserByPhoneNumbers = async (
     10,
   )
   const result: User[] = []
+  const promises: Promise<User[]>[] = []
   for (const phoneNumbers of chunks) {
-    const placeholders = phoneNumbers.map(() => '?').join(',')
-    const query = `SELECT * FROM users WHERE phone_number IN (${placeholders}) and deleted_at is null`
+    promises.push(
+      new Promise(async resolve => {
+        const placeholders = phoneNumbers.map(() => '?').join(',')
+        const query = `SELECT * FROM users WHERE phone_number IN (${placeholders}) and deleted_at is null`
 
-    try {
-      const users = await d1
-        .prepare(query)
-        .bind(...phoneNumbers)
-        .all<UserDB>()
-      result.push(...users.results.map(User.fromDb))
-    } catch (error) {
-      console.error('Failed to retrieve users by phone numbers:', error)
-      throw new Error('Failed to retrieve users by phone numbers')
-    }
+        try {
+          const users = await d1
+            .prepare(query)
+            .bind(...phoneNumbers)
+            .all<UserDB>()
+          resolve(users.results.map(User.fromDb))
+        } catch (error) {
+          console.error('Failed to retrieve users by phone numbers:', error)
+          throw new Error('Failed to retrieve users by phone numbers')
+        }
+      }),
+    )
   }
-  return result
+  return (await Promise.all(promises)).flat()
 }

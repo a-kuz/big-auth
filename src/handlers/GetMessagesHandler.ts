@@ -1,5 +1,5 @@
 // File: /src/handlers/GetMessagesHandler.ts
-import { OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
+import { DataOf, OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { GetMessagesRequest } from '~/types/ws/client-requests'
 import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
@@ -9,7 +9,7 @@ import { errorResponse } from '../utils/error-response'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export class GetMessagesHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     summary: 'Retrieve messages for a chat',
     tags: ['messages'],
 
@@ -44,37 +44,20 @@ export class GetMessagesHandler extends OpenAPIRoute {
     request: Request,
     env: Env,
     ctx: ExecutionContext,
-    data: GetMessagesRequest,
+    data: DataOf<typeof GetMessagesHandler.schema>,
   ): Promise<Response> {
     try {
       const url = new URL(request.url)
-      const chatId = url.searchParams.get('chatId')
+      const { chatId, count = undefined, endId = undefined } = data.query
       if (!chatId) {
         return errorResponse('chatId parameter is required', 400)
       }
-      let user
-
-      try {
-        // Authenticate the user
-        user = await getUserByToken(
-          env.DB,
-          request.headers.get('Authorization')!.split(' ')[1],
-          env.JWT_SECRET,
-        )
-      } catch (error) {}
-      if (!user) {
-        return errorResponse('Unauthorized', 401)
-      }
-
-      if (!user) {
-        return errorResponse('Unauthorized', 401)
-      }
-
+      let user = env.user
       const userMessagingDO = userStorage(env, user.id)
       return userMessagingDO.fetch(
         new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
           method: 'POST',
-          body: JSON.stringify({ chatId }),
+          body: JSON.stringify({ chatId, count, endId }),
         }),
       )
     } catch (error) {

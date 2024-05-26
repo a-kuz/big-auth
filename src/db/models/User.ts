@@ -47,7 +47,7 @@ export class User {
   }
 }
 
-export type UserDB = ObjectCamelToSnakeCase<User>
+export type UserDB = Omit<ObjectCamelToSnakeCase<User>, 'profile'>
 export type Profile = Pick<
   User,
   'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl'

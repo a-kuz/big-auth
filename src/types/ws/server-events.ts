@@ -41,6 +41,7 @@ export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
   sender?: string
   message?: string
+  senderName?: string
   timestamp?: number
   attachments?: Attachment<A>[]
   messageId: number
@@ -52,13 +53,13 @@ export interface MarkDeliveredEvent {
   chatId: string
   userId?: string
   messageId: number
-	clientMessageId: string
+  clientMessageId: string
   timestamp: number
 }
 export interface MarkReadEvent {
   chatId: string
   userId?: string
   messageId: number
-	clientMessageId: string
+  clientMessageId: string
   timestamp: number
 }

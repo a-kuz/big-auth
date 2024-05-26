@@ -25,7 +25,8 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Chat, Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
+import { Dialog, DialogAI, Group } from '~/types/Chat'
+import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
   MarkDeliveredInternalEvent,
@@ -38,15 +39,8 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import {
-  chatStorage,
-  dialogStorage,
-  gptStorage,
-  groupStorage,
-  pushStorage,
-  userStorage,
-} from './utils/mdo'
-import { PushNotification } from '~/types/queue/PushNotification'
+import { chatStorage, gptStorage, pushStorage, userStorage } from './utils/mdo'
+import { aC } from 'vitest/dist/reporters-yx5ZTtEV'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -55,6 +49,7 @@ export class UserMessagingDO implements DurableObject {
   chatsMeta: { [key: string]: { lastId?: number } } = {}
   #timestamp = Date.now()
   #deviceToken = ''
+  #fingerprint = ''
   private readonly ws: WebSocketGod
   private readonly onlineService: OnlineStatusService
   constructor(
@@ -66,6 +61,8 @@ export class UserMessagingDO implements DurableObject {
     this.ws.onlineService = this.onlineService
     this.state.blockConcurrencyWhile(async () => {
       this.chatList = (await this.state.storage.get<ChatList>('chatList')) || []
+      this.#fingerprint = (await this.state.storage.get<string>('fingerprint')) || ''
+      this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
     })
   }
 
@@ -106,7 +103,9 @@ export class UserMessagingDO implements DurableObject {
     ]
     if (!this.userId) {
       this.setUserId(userId)
-      this.setDeviceToken()
+      if (action !== 'setDeviceToken') {
+        this.setDeviceToken()
+      }
     }
     console.log({ from, type, action })
 
@@ -185,7 +184,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async newEventHandler(request: Request) {
-    const eventData = await request.json<NewMessageEvent>()
+    const eventData = await request.json<NewMessageEvent | NewGroupMessageEvent>()
 
     return new Response(JSON.stringify(await this.receiveMessage(eventData)))
   }
@@ -294,7 +293,7 @@ export class UserMessagingDO implements DurableObject {
     })
   }
 
-  async receiveMessage(eventData: NewMessageEvent) {
+  async receiveMessage(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
     const chatData = (await this.chatStorage(chatId).chat(this.userId)) as Group | Dialog
     const chatIndex = this.chatList.findIndex(ch => ch.id === chatId)
@@ -336,36 +335,56 @@ export class UserMessagingDO implements DurableObject {
 
   private async setDeviceTokenHandler(request: Request) {
     const data = await request.json<{ fingerprint: string; deviceToken: string }>()
+    this.setFingerprint(data.fingerprint)
     this.setDeviceToken(data.deviceToken)
+
     return new Response()
   }
+  private async setFingerprint(fingerprint: string) {
+    await this.state.storage.put('fingerprint', fingerprint)
+    this.#fingerprint = fingerprint
+  }
   private async setDeviceToken(token?: string) {
-    if (!token) {
+    if (token) {
+      await this.state.storage.put('deviceToken', token)
+      this.#deviceToken = token
+    } else {
       if (!this.#deviceToken) {
-        const tokens = await pushStorage(this.env, this.fingerprint).getTokens()
-        if (tokens && tokens.length) {
-          this.#deviceToken = tokens[0].deviceToken
-        } else {
-          return
+        this.#deviceToken = (await this.state.storage.get('deviceToken')) || ''
+        if (!this.#deviceToken) {
+          const tokens = await pushStorage(this.env, this.userId).getTokens()
+          if (tokens && tokens.length) {
+            this.#deviceToken = tokens[0].deviceToken
+          }
+        }
+        if (!this.#deviceToken) {
+          const tokens = await pushStorage(this.env, this.#fingerprint).getTokens()
+          if (tokens && tokens.length) {
+            this.#deviceToken = tokens[0].deviceToken
+          }
         }
       }
-    } else {
-      this.#deviceToken = token
     }
   }
 
   private async toQ(
-    eventData: NewMessageEvent,
+    eventData: NewGroupMessageEvent | NewMessageEvent,
     chat: Group | Dialog | DialogAI,
     alreadySentByWebsocket: boolean,
   ) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
+
+    // Count the number of chats with missed messages > 0
+    const missedCount = this.chatList.reduce<number>((p, c, i, a) => p + (c.missed ?? 0), 0)
+
     const push: PushNotification = {
       event: eventData,
       deviceToken: this.#deviceToken,
       body: eventData.message,
       title: chat.name,
+      subtitle: eventData.senderName,
+      badge: missedCount,
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }

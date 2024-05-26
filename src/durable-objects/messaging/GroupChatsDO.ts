@@ -26,11 +26,12 @@ import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
+import { displayName } from '~/services/display-name'
 
 export type OutgoingEvent = {
   type: InternalEventType
   receiver: UserId
-  sender: UserId
+  sender: Profile
   event: InternalEvent
   timestamp: Timestamp
 }
@@ -215,7 +216,7 @@ export class GroupChatsDO extends DurableObject {
       }
     }
 
-    const participants = Array.from(this.group.meta.participants)
+    const participants = Array.from(this.group.meta.participants as string[])
     for (let i = this.#counter - 1; i >= 0; i--) {
       const m = this.#messages[i]
       if (!m) continue
@@ -317,18 +318,25 @@ export class GroupChatsDO extends DurableObject {
     this.#messages[messageId] = message
     await this.ctx.storage.put<GroupChatMessage>(`message-${messageId}`, message)
 
-    for (const receiver of this.group.meta.participants.filter(m => m !== sender)) {
+    for (const receiver of (this.group.meta.participants as string[]).filter(m => m !== sender)) {
       const event: NewGroupMessageEvent = {
         chatId: this.group.chatId,
         message: message.message,
         attachments: message.attachments,
         sender: message.sender,
+        senderName: displayName(this.#users.find(u => u.id === message.sender)!),
         clientMessageId: request.clientMessageId,
         messageId: message.messageId,
         timestamp,
         missed: Math.max(this.#counter - (this.#lastRead.get(receiver) || 0) - 1, 0),
       }
-      this.#outgoingEvets.push({ event, sender, receiver, type: 'new', timestamp })
+      this.#outgoingEvets.push({
+        event,
+        sender: this.#users.find(u => u.id === sender)!,
+        receiver: receiver as string,
+        type: 'new',
+        timestamp,
+      })
     }
 
     if (messageId > 0) {
@@ -506,9 +514,15 @@ export class GroupChatsDO extends DurableObject {
     exclude?: UserId,
   ) {
     await this.ctx.storage.deleteAlarm()
-    for (const receiver of this.group!.meta.participants) {
+    for (const receiver of this.group!.meta.participants as string[]) {
       if (exclude === receiver) continue
-      this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.timestamp() })
+      this.#outgoingEvets.push({
+        event,
+        sender: this.#users.find(u => u.id === sender)!,
+        receiver,
+        type,
+        timestamp: this.timestamp(),
+      })
     }
     this.ctx.storage.deleteAlarm()
     await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
@@ -520,7 +534,13 @@ export class GroupChatsDO extends DurableObject {
     sender: UserId,
     receiver: UserId,
   ) {
-    this.#outgoingEvets.push({ event, sender, receiver, type, timestamp: this.timestamp() })
+    this.#outgoingEvets.push({
+      event,
+      sender: this.#users.find(u => u.id === sender)!,
+      receiver,
+      type,
+      timestamp: this.timestamp(),
+    })
 
     await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }

@@ -1,7 +1,7 @@
-import { DialogMeta } from '~/types/Chat'
+import { DialogMeta as Profile } from '~/types/Chat'
 
-export function displayName(chatMeta: DialogMeta): string {
-  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = chatMeta
+export function displayName(u: Profile): string {
+  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = u
   if (firstName || lastName) {
     return `${firstName} ${lastName}`.trim()
   } else if (username) {

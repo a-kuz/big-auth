@@ -245,6 +245,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     const message = this.#messages[endIndex]
     if (message.read) {
       return {
+        chatId: request.chatId,
         messageId: message.messageId,
         timestamp: message.read,
         missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
@@ -274,7 +275,12 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     }
     await this.sendReadEventToAuthor(request.chatId, this.#messages[messageId], timestamp)
 
-    return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
+    return {
+      chatId: request.chatId,
+      messageId,
+      timestamp,
+      missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+    }
   }
 
   private async sendDlvrdEventToAuthor(

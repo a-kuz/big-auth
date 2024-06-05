@@ -277,7 +277,7 @@ export class ChatGptDO extends DurableObject {
     }
     await this.sendReadEventToAuthor(this.#id, messageId, timestamp)
 
-    return { messageId, timestamp, missed: 0 }
+    return { chatId: request.chatId, messageId, timestamp, missed: 0 }
   }
 
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {

@@ -172,7 +172,7 @@ export class GroupChatsDO extends DurableObject {
     }
     this.#lastFetchUsers = Date.now()
     for (const u of this.group.meta.participants) {
-      const user = await getUserById(this.env.DB, u)
+      const user = await getUserById(this.env.DB, u as string)
       const row = this.#users.findIndex(u => u.id === user.id)
       if (!(row === -1)) {
         this.#users.splice(row, 1)
@@ -181,7 +181,7 @@ export class GroupChatsDO extends DurableObject {
       this.#users.push({ lastName, firstName, id, username, phoneNumber, avatarUrl })
     }
     for (let i = this.#users.length - 1; i >= 0; i--) {
-      if (this.group.meta?.participants?.indexOf(this.#users[i].id) === -1) {
+      if ((this.group.meta?.participants as string[])?.indexOf(this.#users[i].id) === -1) {
         this.#users.splice(i, 1)
       }
     }
@@ -466,7 +466,12 @@ export class GroupChatsDO extends DurableObject {
         messageSender,
       )
 
-    return { messageId, timestamp, missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1 }
+    return {
+      chatId: request.chatId,
+      messageId,
+      timestamp,
+      missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+    }
   }
 
   // Create a new group chat

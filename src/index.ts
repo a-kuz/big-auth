@@ -3,6 +3,11 @@ import 'reflect-metadata'
 import { APIType, OpenAPIRouter } from '@cloudflare/itty-router-openapi'
 
 import { SendCodeHandler } from './handlers/SendCodeHandler'
+import { CreateContactHandler } from './handlers/CreateContactHandler'
+import { UpdateContactHandler } from './handlers/UpdateContactHandler'
+import { GetContactsHandler } from './handlers/GetContactsHandler'
+import { GetContactHandler } from './handlers/GetContactHandler'
+import { DeleteContactHandler } from './handlers/DeleteContactHandler'
 import { VerifyCodeHandler } from './handlers/VerifyCodeHandler'
 
 import { RefreshTokenHandler } from './handlers/RefreshTokenHandler'
@@ -71,6 +76,11 @@ router.options('*', CORS) // TODO: add security CORS
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
 
 router.post('/send-code', SendCodeHandler)
+router.post('/contacts', CreateContactHandler)
+router.post('/contacts/:id', UpdateContactHandler)
+router.get('/contacts', GetContactsHandler)
+router.get('/contacts/:id', GetContactHandler)
+router.delete('/contacts/:id', DeleteContactHandler)
 router.post('/verify-code', VerifyCodeHandler)
 
 router.get('/public/:id/', RetrieveFileHandler)

@@ -41,25 +41,6 @@ export async function putContacts(
 
     const contact = contacts.find(c => c.phoneNumber === pn)
     if (contact) {
-      const userMessagingDO = userStorage(env, user.id)
-      const m = await (
-        await userMessagingDO.fetch(
-          new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
-            method: 'POST',
-            body: JSON.stringify({ chatId: contact.id, count: 1 }),
-          }),
-        )
-      ).json<GetMessagesResponse>()
-      if (!m.messages.length) {
-        sendMessage(
-          {
-            chatId: contact.id,
-            clientMessageId: newId(),
-            message: '👋 чат создан автоматически',
-          },
-          env,
-        )
-      }
     }
   }
 }

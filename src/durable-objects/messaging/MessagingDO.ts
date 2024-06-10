@@ -39,7 +39,7 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { chatStorage, gptStorage, pushStorage, userStorage } from './utils/mdo'
+import { chatStorage, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -47,6 +47,7 @@ export class UserMessagingDO implements DurableObject {
   #timestamp = Date.now()
   #deviceToken = ''
   #fingerprint = ''
+  #chatListTimer: NodeJS.Timeout | undefined
   private readonly wsService: WebSocketGod
   private readonly onlineService: OnlineStatusService
   constructor(
@@ -107,7 +108,8 @@ export class UserMessagingDO implements DurableObject {
     console.log({ from, type, action })
 
     switch (from) {
-      case 'client':
+
+			case 'client':
         switch (type) {
           case 'connect':
             return this.handleWebsocket(request)
@@ -203,7 +205,7 @@ export class UserMessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.#chatList.unshift(chat)
-    await this.state.storage.put('chatList', this.#chatList)
+    this.save()
     if (this.onlineService.isOnline()) {
       await this.wsService.sendEvent('chats', this.#chatList)
     }
@@ -225,8 +227,8 @@ export class UserMessagingDO implements DurableObject {
         this.#chatList[i].lastMessageStatus === 'undelivered'
       ) {
         this.#chatList[i].lastMessageStatus = 'unread'
+        this.save()
       }
-      await this.state.storage.put('chatList', this.#chatList)
     }
 
     if (this.onlineService.isOnline()) {
@@ -254,7 +256,7 @@ export class UserMessagingDO implements DurableObject {
         this.#chatList[i].lastMessageStatus === 'unread'
       ) {
         this.#chatList[i].lastMessageStatus = 'read'
-        await this.state.storage.put('chatList', this.#chatList)
+        this.save()
       }
     }
 
@@ -283,7 +285,7 @@ export class UserMessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.#chatList.unshift(chat)
-    await this.state.storage.put('chatList', this.#chatList)
+    this.save()
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
@@ -304,7 +306,7 @@ export class UserMessagingDO implements DurableObject {
         lastMessageText: chatData.lastMessageText,
         lastMessageTime: chatData.lastMessageTime,
         name: chatData.name,
-        type: this.isGroup(chatId) ? 'group' : 'dialog',
+        type: isGroup(chatId) ? 'group' : 'dialog',
         verified: false,
         lastMessageAuthor: chatData.lastMessageAuthor,
         photoUrl: chatData.photoUrl,
@@ -315,7 +317,7 @@ export class UserMessagingDO implements DurableObject {
       const chat = this.toTop(chatId, chatChanges)
 
       this.#chatList.unshift(chat)
-      await this.state.storage.put('chatList', this.#chatList)
+      this.save()
     }
 
     let dlvrd = false
@@ -399,7 +401,7 @@ export class UserMessagingDO implements DurableObject {
       const chat = await gpt.create(this.#userId)
       this.#chatList.unshift(chat)
 
-      await this.state.storage.put('chatList', this.#chatList)
+      this.save()
     }
     return new Response(
       JSON.stringify(
@@ -539,10 +541,6 @@ export class UserMessagingDO implements DurableObject {
     return this.chatStorage(payload.chatId).getMessages(payload)
   }
 
-  private isGroup(id: string): boolean {
-    return id !== 'AI' && id.length > 21
-  }
-
   async newRequest(payload: NewMessageRequest) {
     const chatId = payload.chatId
     if (chatId === this.#userId) {
@@ -551,7 +549,7 @@ export class UserMessagingDO implements DurableObject {
 
     const storage = this.chatStorage(chatId)
     if (!this.#chatList.find(chat => chat.id === chatId)) {
-      if (!this.isGroup(chatId)) {
+      if (!isGroup(chatId)) {
         await this.state.blockConcurrencyWhile(async () =>
           (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId),
         )
@@ -571,7 +569,7 @@ export class UserMessagingDO implements DurableObject {
       lastMessageTime: timestamp,
       missed: 0,
       name: dialog.name,
-      type: this.isGroup(chatId) ? 'group' : 'dialog',
+      type: isGroup(chatId) ? 'group' : 'dialog',
       verified: false,
       lastMessageAuthor: '',
       photoUrl: dialog.photoUrl,
@@ -583,7 +581,7 @@ export class UserMessagingDO implements DurableObject {
     const chat = this.toTop(chatId, chatChanges)
     this.#chatList.unshift(chat)
 
-    await this.state.storage.put('chatList', this.#chatList)
+    this.save()
     return { messageId, timestamp, clientMessageId }
   }
 
@@ -612,8 +610,21 @@ export class UserMessagingDO implements DurableObject {
     )) as MarkReadResponse
     const i = this.#chatList.findIndex(chat => chat.id === chatId)
     this.#chatList[i].missed = resp.missed
-    await this.state.storage.put('chatList', this.#chatList)
+    this.save()
     return resp
+  }
+
+  save() {
+    if (this.#chatListTimer) {
+      clearTimeout(this.#chatListTimer)
+    }
+    this.#chatListTimer = setTimeout(async () => {
+      await this.state.storage.put('chatList', this.#chatList, {
+        allowUnconfirmed: true,
+        allowConcurrency: true,
+      })
+      this.#chatListTimer = undefined
+    }, 10)
   }
 
   async typingEvent(event: TypingClientEvent) {

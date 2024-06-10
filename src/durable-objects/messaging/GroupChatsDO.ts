@@ -36,6 +36,7 @@ export type OutgoingEvent = {
   timestamp: Timestamp
 }
 
+const MESSAGES_LOAD_CHUNK_SIZE = 128
 export class GroupChatsDO extends DurableObject {
   #timestamp = Date.now()
   #messages: GroupChatMessage[] = []
@@ -202,8 +203,9 @@ export class GroupChatsDO extends DurableObject {
 
     this.#messages = []
     let arr = []
+    this.ctx.storage.list({ prefix: 'message-', reverse: true, limit: MESSAGES_LOAD_CHUNK_SIZE })
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
-    const keyChunks = splitArray(keys, 128)
+    const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
 
     for (const chunk of keyChunks) {
       const messagesChunk = await this.ctx.storage.get<GroupChatMessage>(chunk)

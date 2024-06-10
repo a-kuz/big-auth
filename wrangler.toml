@@ -63,8 +63,8 @@ bindings = [
 
 
 [[migrations]]
-tag = "v52"
+tag = "v54"
 deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
 [[migrations]]
-tag = "v53"
+tag = "v55"
 new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]

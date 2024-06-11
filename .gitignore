@@ -178,3 +178,4 @@ src/.DS_Store
 site
 nfs
 smol-specs
+.aider*

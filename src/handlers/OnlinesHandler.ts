@@ -15,7 +15,9 @@ export class OnlinesHandler extends OpenAPIRoute {
     summary: 'Find contacts by phone numbers',
     tags: ['contacts'],
     requestBody: z.object({
-      phoneNumbers: z.array(z.string().startsWith('+').openapi({ example: '+99990123443' })).optional(),
+      phoneNumbers: z
+        .array(z.string().startsWith('+').openapi({ example: '+99990123443' }))
+        .optional(),
     }),
     responses: {
       '200': {
@@ -38,7 +40,7 @@ export class OnlinesHandler extends OpenAPIRoute {
         description: 'Server Error',
       },
     },
-    security: [{  }],
+    security: [{}],
   }
 
   async handle(
@@ -48,22 +50,19 @@ export class OnlinesHandler extends OpenAPIRoute {
     { body }: DataOf<typeof OnlinesHandler.schema>,
   ) {
     try {
+      // const t =userStorage(env).lis
+      // const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
+      //   u => u.id !== env.user.id,
+      // )
+      // const responseBody = JSON.stringify({ contacts })
 
-			env.REFRESH_TOKEN_DO.get
-      const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
-        u => u.id !== env.user.id,
-      )
-      const responseBody = JSON.stringify({ contacts })
-
-      const response = new Response(responseBody, {
+      const response = new Response('', {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
         },
       })
 
-      await cache.put(request.url + '/' + hash, new Response(responseBody))
-      context.waitUntil(putContacts(env.user, phoneNumbers, contacts, env))
       return response
     } catch (error) {
       console.error(error)

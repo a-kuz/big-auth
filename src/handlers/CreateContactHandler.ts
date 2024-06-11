@@ -31,7 +31,8 @@ export class CreateContactHandler extends OpenAPIRoute {
         description: 'Internal Server Error',
       },
     },
-  }
+  },
+  security: [{ BearerAuth: [] }],
 
   async handle(request: Request, env: Env, _ctx: any, data: DataOf<typeof CreateContactHandler.schema>) {
     try {

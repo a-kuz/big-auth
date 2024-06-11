@@ -1,4 +1,10 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/itty-router-openapi'
+import {
+  DataOf,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Path,
+  Str,
+} from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { deleteContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
@@ -24,11 +30,16 @@ export class DeleteContactHandler extends OpenAPIRoute {
     },
   }
 
-  async handle(request: Request, env: Env, _ctx: any, data: DataOf<typeof DeleteContactHandler.schema>) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: any,
+    data: DataOf<typeof DeleteContactHandler.schema>,
+  ) {
     try {
       const { id } = data.params
-      const ownerId = env.user.id;
-      const success = await deleteContact(env, id, ownerId);
+      const ownerId = env.user.id
+      const success = await deleteContact(env, id, ownerId)
       if (!success) {
         return errorResponse('Contact not found', 404)
       }

@@ -31,8 +31,8 @@ export class GetContactsHandler extends OpenAPIRoute {
 
   async handle(request: Request, env: Env, _ctx: any) {
     try {
-      const ownerId = env.user.id;
-      const contacts = await getContacts(env, ownerId);
+      const ownerId = env.user.id
+      const contacts = await getContacts(env, ownerId)
       return new Response(JSON.stringify({ contacts }), { status: 200 })
     } catch (error) {
       console.error(error)

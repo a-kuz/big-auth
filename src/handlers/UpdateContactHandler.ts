@@ -1,14 +1,21 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Str, DataOf, Path } from '@cloudflare/itty-router-openapi'
+import {
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+  DataOf,
+  Path,
+} from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { updateContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
+import { z } from 'zod'
 
 export class UpdateContactHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     tags: ['contacts'],
     summary: 'Update a contact',
     parameters: { id: Path(Str) },
-    requestBody: {
+    requestBody: z.object({
       clientId: new Str({ required: false }),
       userId: new Str({ required: false }),
       phoneNumber: new Str({ required: false }),
@@ -16,7 +23,7 @@ export class UpdateContactHandler extends OpenAPIRoute {
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
       avatarUrl: new Str({ required: false }),
-    },
+    }),
     responses: {
       '200': {
         description: 'Contact updated successfully',
@@ -36,13 +43,18 @@ export class UpdateContactHandler extends OpenAPIRoute {
     },
   }
 
-  async handle(request: Request, env: Env, _ctx: any, data: DataOf<typeof UpdateContactHandler.schema>) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: any,
+    data: DataOf<typeof UpdateContactHandler.schema>,
+  ) {
     try {
       const { id } = data.params
       const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = data.body
-      const ownerId = env.user.id;
-      const updates = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl };
-      const updatedContact = await updateContact(env, id, updates, ownerId);
+      const ownerId = env.user.id
+      const updates = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl }
+      const updatedContact = await updateContact(env, id, updates, ownerId)
       if (!updatedContact) {
         return errorResponse('Contact not found', 404)
       }

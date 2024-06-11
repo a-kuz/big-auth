@@ -1,4 +1,10 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/itty-router-openapi'
+import {
+  DataOf,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Path,
+  Str,
+} from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { getContactById } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
@@ -31,11 +37,16 @@ export class GetContactHandler extends OpenAPIRoute {
     },
   }
 
-  async handle(request: Request, env: Env, _ctx: any, data: DataOf<typeof GetContactHandler.schema>) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: any,
+    data: DataOf<typeof GetContactHandler.schema>,
+  ) {
     try {
       const { id } = data.params
-      const ownerId = env.user.id;
-      const contact = await getContactById(env, id, ownerId);
+      const ownerId = env.user.id
+      const contact = await getContactById(env, id, ownerId)
       if (!contact) {
         return errorResponse('Contact not found', 404)
       }

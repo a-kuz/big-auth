@@ -1,5 +1,6 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Str, DataOf, Path } from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
+import { updateContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
 
 export class UpdateContactHandler extends OpenAPIRoute {
@@ -39,14 +40,13 @@ export class UpdateContactHandler extends OpenAPIRoute {
     try {
       const { id } = data.params
       const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = data.body
-      const contact = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl }
-      const result = await env.DB.prepare('UPDATE contacts SET clientId = ?, userId = ?, phoneNumber = ?, userName = ?, firstName = ?, lastName = ?, avatarUrl = ? WHERE id = ?')
-        .bind(clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, id)
-        .run()
-      if (result.changes === 0) {
+      const ownerId = env.user.id;
+      const updates = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl };
+      const updatedContact = await updateContact(env, id, updates, ownerId);
+      if (!updatedContact) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify({ id }), { status: 200 })
+      return new Response(JSON.stringify(updatedContact), { status: 200 })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to update contact', 500)

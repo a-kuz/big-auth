@@ -1,0 +1,1 @@
+ALTER TABLE contacts ADD COLUMN owner_id TEXT NOT NULL;

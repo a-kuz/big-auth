@@ -1,6 +1,8 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Str, DataOf } from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
+import { createContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
+import { fromSnakeToCamel } from '~/utils/name-сases'
 
 export class CreateContactHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -35,11 +37,10 @@ export class CreateContactHandler extends OpenAPIRoute {
     try {
       const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = data.body
       const id = newId()
-      const contact = { id, clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl }
-      await env.DB.prepare('INSERT INTO contacts (id, clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl)
-        .run()
-      return new Response(JSON.stringify({ id }), { status: 200 })
+      const ownerId = env.user.id;
+      const contact = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, ownerId };
+      const newContact = await createContact(env, contact);
+      return new Response(JSON.stringify(fromSnakeToCamel(newContact)), { status: 200 })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to create contact', 500)

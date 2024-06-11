@@ -65,10 +65,7 @@ export class WebsocketHandler extends OpenAPIRoute {
             body: JSON.stringify({ fingerprint, deviceToken }),
           }),
         )
-        return mDO.fetch(
-          new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request),
-          { headers: { fingerprint } },
-        )
+        return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))
       } catch (error) {
         console.error(error)
         return errorResponse('Something went wrong')

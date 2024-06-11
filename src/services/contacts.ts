@@ -46,6 +46,20 @@ export async function putContacts(
 export async function createContact(env: Env, contact: any) {
   const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, ownerId } =
     contact
+  // Validate that user_id exists in the Users table
+  const userExistsQuery = 'SELECT COUNT(*) as count FROM users WHERE id = ?'
+  const userExistsResult = await env.DB.prepare(userExistsQuery).bind(userId).first()
+  if (!userExistsResult || userExistsResult.count === 0) {
+    throw new Error('User ID does not exist in the Users table')
+  }
+
+  // Validate that there is no existing record with the same user_id for the given owner_id
+  const existingContactQuery = 'SELECT COUNT(*) as count FROM contacts WHERE user_id = ? AND owner_id = ?'
+  const existingContactResult = await env.DB.prepare(existingContactQuery).bind(userId, ownerId).first()
+  if (existingContactResult && existingContactResult.count > 0) {
+    throw new Error('A contact with this user_id already exists for the given owner_id')
+  }
+
   const id = newId()
   const insertQuery = `
     INSERT INTO contacts (id, client_id, user_id, phone_number, user_name, first_name, last_name, avatar_url, owner_id)

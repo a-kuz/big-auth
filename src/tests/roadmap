@@ -1,0 +1,49 @@
+# Test Roadmap
+
+## Authentication Tests
+- Test for successful login with valid credentials.
+- Test for failed login with invalid credentials.
+- Test for token refresh functionality.
+
+## User Profile Tests
+- Test for retrieving user profile.
+- Test for updating user profile.
+- Test for handling unauthorized access to profile.
+
+## Message Handling Tests
+- Test for sending a new message.
+- Test for retrieving messages in a chat.
+- Test for marking messages as read.
+- Test for marking messages as delivered.
+
+## Chat Management Tests
+- Test for creating a new chat.
+- Test for retrieving chat details.
+- Test for retrieving chat list.
+
+## Contact Management Tests
+- Test for adding a new contact.
+- Test for updating a contact.
+- Test for deleting a contact.
+- Test for retrieving contact list.
+
+## WebSocket Tests
+- Test for establishing WebSocket connection.
+- Test for sending and receiving messages via WebSocket.
+- Test for handling WebSocket disconnections.
+
+## Push Notification Tests
+- Test for storing device token.
+- Test for sending push notifications.
+
+## File Handling Tests
+- Test for uploading a file.
+- Test for retrieving a file.
+
+## Error Handling Tests
+- Test for handling 404 errors.
+- Test for handling 500 errors.
+
+## Durable Object Tests
+- Test for creating and interacting with Durable Objects.
+- Test for handling Durable Object alarms.

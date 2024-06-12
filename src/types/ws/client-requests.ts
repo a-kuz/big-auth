@@ -32,6 +32,11 @@ export interface ClientEvent<Type extends ClientEventType = ClientEventType> {
   payload: Type extends typing ? TypingClientEvent : never
 }
 
+export interface ClientAccept {
+  type: 'ack'
+  id: number
+}
+
 export interface NewMessageRequest {
   chatId: string
   message: string

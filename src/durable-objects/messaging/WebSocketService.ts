@@ -1,6 +1,6 @@
 import { Env } from '~/types/Env'
 import { ClientRequestType, ServerEventType } from '~/types/ws'
-import { ClientEvent, ClientRequest } from '~/types/ws/client-requests'
+import { ClientAccept, ClientEvent, ClientRequest } from '~/types/ws/client-requests'
 import { ClientRequestPayload, ServerEventPayload } from '~/types/ws/payload-types'
 import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
 import { UserMessagingDO } from './MessagingDO'
@@ -8,6 +8,7 @@ import { OnlineStatusService } from './OnlineStatusService'
 import { ServerEvent } from '~/types/ws/server-events'
 import { errorResponse } from '~/utils/error-response'
 import { serializeError } from 'serialize-error'
+import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
@@ -16,9 +17,10 @@ export class WebSocketGod {
 
   private server: WebSocket | null = null
   private client: WebSocket | null = null
-
-  private lastPing: number = 0
-
+  #eventBuffer: ServerEvent[] = []
+  #eventCounter: number = 0
+  #lastPing: number = 0
+  #clientRequestsIds: string[] = []
   constructor(
     private state: DurableObjectState,
     private env: Env,
@@ -51,14 +53,13 @@ export class WebSocketGod {
     message: string | ArrayBuffer,
     doo: UserMessagingDO,
   ): Promise<void> {
-    console.error(JSON.stringify(message))
     if (this.ping(message)) {
-      ws.send(`{"event": "pong"}`)
+      ws.send(`{"event":"pong"}`)
       return
     }
 
     try {
-      const packet = JSON.parse(message as string) as ClientEvent | ClientRequest
+      const packet = JSON.parse(message as string) as ClientEvent | ClientRequest | ClientAccept
       const type = packet.type
       switch (type) {
         case 'event':
@@ -85,6 +86,8 @@ export class WebSocketGod {
             ...(responsePayload ? { payload: responsePayload } : {}),
           }
           ws.send(JSON.stringify(response))
+        case 'ack':
+          delete this.#eventBuffer[packet.id as number]
       }
     } catch (e) {
       console.error(serializeError(e))
@@ -98,7 +101,7 @@ export class WebSocketGod {
     }
   }
 
-  ping(message: string | ArrayBuffer): boolean {
+  private ping(message: string | ArrayBuffer): boolean {
     this.refreshPing()
     return (
       message === PING ||
@@ -121,12 +124,6 @@ export class WebSocketGod {
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
     console.error(serializeError(error))
 
-    // try {
-    //   await this.onlineService.offline()
-    // } catch (e) {
-
-    //   return
-    // }
     try {
       ws.close(2004, 'handled error')
     } catch (e) {
@@ -136,20 +133,34 @@ export class WebSocketGod {
   }
 
   private refreshPing() {
-    this.lastPing = Date.now()
+    this.#lastPing = Date.now()
   }
 
-  async sendEvent(eventType: ServerEventType, event: ServerEventPayload, id?: number) {
+  private newBufferIndex() {
+    return ++this.#eventCounter
+  }
+
+  async toBuffer(eventType: ServerEventType, event: ServerEventPayload) {
+    const id = this.newBufferIndex()
+    const packet: ServerEvent = {
+      eventType,
+      payload: event,
+      timestamp: Date.now(),
+      type: 'event',
+      id,
+    }
+    this.#eventBuffer[id] = packet
+    const alarm = await this.state.storage.getAlarm()
+    if (!alarm || alarm > Date.now() + 100)
+      await this.state.storage.setAlarm(Date.now() + 100, {
+        allowConcurrency: true,
+        allowUnconfirmed: true,
+      })
+  }
+  sendPacket(packet: ServerEvent) {
     let wasSent = false
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {
-      const packet: ServerEvent = {
-        eventType,
-        payload: event,
-        timestamp: Date.now(),
-        type: 'event',
-        ...(!id ? {} : { id }),
-      }
       ws.send(JSON.stringify(packet))
       wasSent = true
     }
@@ -157,38 +168,45 @@ export class WebSocketGod {
     return wasSent
   }
 
+  sendBuffer() {
+    for (const event of this.#eventBuffer.filter(e => !!e)) {
+      this.sendPacket(event)
+    }
+  }
   async alarm(): Promise<void> {
-    console.log('USER ALARM')
+    await this.checkStatus()
+    const sockets = this.state.getWebSockets()
+    if (sockets.length) this.sendBuffer()
+
+    await this.state.storage.setAlarm(Date.now() + 5000, {
+      allowConcurrency: true,
+      allowUnconfirmed: true,
+    })
+  }
+
+  async checkStatus(): Promise<void> {
     const sockets = this.state.getWebSockets()
     if (sockets.length > 1) {
       console.log('sockets.length = ' + sockets.length.toString())
     }
     for (const socket of sockets) {
-      console.log(
-        JSON.stringify({ userId: this.onlineService.userId, readystate: socket.readyState }),
-      )
-      if (this.lastPing) {
-        if (Date.now() - this.lastPing > 20000) {
+      if (this.#lastPing) {
+        if (Date.now() - this.#lastPing > 20000) {
           try {
-            if (socket.readyState != WebSocket.CLOSING) {
-              await socket.close(1011, `last ping: ${this.lastPing}, now: ${Date.now()}`)
-              this.lastPing = 0
+            if (socket.readyState !== WebSocket.CLOSING) {
+              socket.close(1011, `last ping: ${this.#lastPing}, now: ${Date.now()}`)
+              this.#lastPing = 0
             }
             return
           } catch (e) {
             console.error(serializeError(e))
           }
-        } else if (Date.now() - this.lastPing > 10000) {
+        } else if (Date.now() - this.#lastPing > 10000) {
           if (socket.readyState === WebSocket.OPEN) {
-            socket.send(`{"event": "pong"}`)
+            socket.send(`{"event":"pong"}`)
           }
         }
-        await this.state.storage.setAlarm(Date.now() + 5000, {
-          allowConcurrency: true,
-          allowUnconfirmed: true,
-        })
       }
     }
   }
-  #clientRequestsIds: string[] = []
 }

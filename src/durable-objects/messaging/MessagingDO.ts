@@ -206,7 +206,7 @@ export class UserMessagingDO implements DurableObject {
     this.#chatList.unshift(chat)
     this.save()
     if (this.onlineService.isOnline()) {
-      await this.wsService.sendEvent('chats', this.#chatList)
+      await this.wsService.toBuffer('chats', this.#chatList)
     }
 
     return new Response()
@@ -235,7 +235,7 @@ export class UserMessagingDO implements DurableObject {
         ...eventData,
         chatId,
       }
-      await this.wsService.sendEvent('dlvrd', event)
+      await this.wsService.toBuffer('dlvrd', event)
     }
     return new Response()
   }
@@ -264,7 +264,7 @@ export class UserMessagingDO implements DurableObject {
         ...eventData,
         chatId,
       }
-      await this.wsService.sendEvent('read', event)
+      await this.wsService.toBuffer('read', event)
     }
     return new Response()
   }
@@ -322,9 +322,9 @@ export class UserMessagingDO implements DurableObject {
     let dlvrd = false
     if (this.onlineService.isOnline()) {
       if (isNew) {
-        await this.wsService.sendEvent('chats', this.#chatList)
+        await this.wsService.toBuffer('chats', this.#chatList)
       }
-      await this.wsService.sendEvent('new', {
+      await this.wsService.toBuffer('new', {
         ...eventData,
         sender: eventData.sender ?? eventData.chatId,
       })
@@ -445,22 +445,20 @@ export class UserMessagingDO implements DurableObject {
 
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
-
-    return new Response(
-      (await this.wsService.sendEvent('online', { userId: eventData.userId })) ? 'online' : '',
-    )
+    await this.wsService.toBuffer('online', { userId: eventData.userId })
+    return new Response(this.onlineService.isOnline() ? 'online' : '')
   }
 
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
-    this.wsService.sendEvent('offline', { userId: eventData.userId })
+    this.wsService.toBuffer('offline', { userId: eventData.userId })
     return new Response()
   }
 
   async friendTyping(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
     const event: TypingServerEvent = { chatId: eventData.userId }
-    this.wsService.sendEvent('typing', event)
+    this.wsService.toBuffer('typing', event)
     return new Response()
   }
 

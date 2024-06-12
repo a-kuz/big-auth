@@ -42,11 +42,11 @@ export class OnlineStatusService {
 
         if (chatStatus === 'online') {
           const event: OnlineEvent = { userId: chat.id }
-          this.ws.sendEvent('online', event)
+          this.ws.toBuffer('online', event)
         }
       }
       if (chat.type !== 'ai') {
-        if (chat.missed) {
+        if (chat.lastMessageStatus === 'undelivered' && !chat.isMine) {
           const storage = chatStorage(this.env, chat.id, this.userId)
           promises.push(storage.dlvrd(this.userId, { chatId: chat.id }, timestamp))
         }

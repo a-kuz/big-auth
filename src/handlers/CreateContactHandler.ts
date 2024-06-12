@@ -3,12 +3,14 @@ import { Env } from '../types/Env'
 import { createContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
 import { fromSnakeToCamel } from '~/utils/name-сases'
+import { newId } from '~/utils/new-id'
+import { z } from 'zod'
 
 export class CreateContactHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     tags: ['contacts'],
     summary: 'Create a new contact',
-    requestBody: {
+    requestBody: z.object({
       clientId: new Str({ required: false }),
       userId: new Str({ required: false }),
       phoneNumber: new Str({ required: false }),
@@ -16,7 +18,7 @@ export class CreateContactHandler extends OpenAPIRoute {
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
       avatarUrl: new Str({ required: false }),
-    },
+    }),
     responses: {
       '200': {
         description: 'Contact created successfully',
@@ -31,16 +33,30 @@ export class CreateContactHandler extends OpenAPIRoute {
         description: 'Internal Server Error',
       },
     },
-  },
-  security: [{ BearerAuth: [] }],
+    security: [{ BearerAuth: [] }],
+  }
 
-  async handle(request: Request, env: Env, _ctx: any, data: DataOf<typeof CreateContactHandler.schema>) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: any,
+    data: DataOf<typeof CreateContactHandler.schema>,
+  ) {
     try {
       const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = data.body
       const id = newId()
-      const ownerId = env.user.id;
-      const contact = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, ownerId };
-      const newContact = await createContact(env, contact);
+      const ownerId = env.user.id
+      const contact = {
+        clientId,
+        userId,
+        phoneNumber,
+        userName,
+        firstName,
+        lastName,
+        avatarUrl,
+        ownerId,
+      }
+      const newContact = await createContact(env, contact)
       return new Response(JSON.stringify(fromSnakeToCamel(newContact)), { status: 200 })
     } catch (error) {
       console.error(error)

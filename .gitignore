@@ -8,8 +8,6 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-
-
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Runtime data
@@ -179,3 +177,4 @@ site
 nfs
 smol-specs
 .aider*
+log.txt

@@ -19,11 +19,18 @@ export interface Chat<T extends ChatType> {
   verified?: boolean
   isMine?: boolean
   attachmentType?: AttachmentType
-  meta: T extends 'dialog' ? DialogMeta : T extends 'group' ? GroupMeta : never
+  meta: T extends 'dialog'
+    ? DialogMeta
+    : T extends 'group'
+      ? GroupMeta
+      : T extends 'ai'
+        ? AiMeta
+        : never
 }
 
 export interface Dialog extends Chat<'dialog'> {}
 export interface Group extends Chat<'group'> {}
+export interface DialogAI extends Chat<'ai'> {}
 
 export type GroupChat = {
   id: string
@@ -43,6 +50,12 @@ export interface DialogMeta {
   username?: string
   phoneNumber?: string
 }
+export interface AiMeta {
+  firstName?: string
+  lastName?: string
+  username?: string
+  phoneNumber?: string
+}
 
 export interface GroupMeta {
   name: string
@@ -51,16 +64,16 @@ export interface GroupMeta {
   createdAt: number
 }
 
-export interface DialogAI {
-  chatId: string
-  lastMessageId: number
-  photoUrl: string
-  type: string
-  missed: number
-  lastMessageText: string | undefined
-  lastMessageTime: number
-  lastMessageAuthor: string
-  lastMessageStatus: string
-  isMine: boolean
-  name: string
-}
+// export interface DialogAI {
+//   chatId: string
+//   lastMessageId: number
+//   photoUrl: string
+//   type: string
+//   missed: number
+//   lastMessageText: string | undefined
+//   lastMessageTime: number
+//   lastMessageAuthor: string
+//   lastMessageStatus: string
+//   isMine: boolean
+//   name: string
+// }

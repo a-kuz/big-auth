@@ -33,6 +33,6 @@ export const chatStorage = (env: Env, chatId: string, userId: string) => {
       : dialogStorage(env, [chatId, userId].sort((a, b) => (a > b ? 1 : -1)).join(':'))
 }
 
-export const isGroup = (id: string): boolean => {
-  return id !== 'AI' && id.length > 21
-}
+export const chatType = (id: string) => (id === 'AI' ? 'ai' : id.length > 21 ? 'group' : 'dialog')
+
+export const isGroup = (id: string): boolean => chatType(id) === 'group'

@@ -173,6 +173,7 @@ export class ChatGptDO extends DurableObject {
       lastMessageStatus: lastMessage?.read ? 'read' : lastMessage?.dlvrd ? 'unread' : 'undelivered',
       isMine: userId === lastMessage?.sender,
       name: 'ask AI',
+      meta: { firstName: 'AI' },
     }
 
     return chat as DialogAI
@@ -336,7 +337,7 @@ export class ChatGptDO extends DurableObject {
     }
     if (this.#messages.length) {
       const lastMessage = this.#messages.slice(-1)[0]
-      if (lastMessage.sender === 'AI' && !lastMessage.read) {
+      if (lastMessage.sender === 'ai' && !lastMessage.read) {
         this.#lastRead.set(this.#id, lastMessage.messageId - 1)
       } else {
         this.#lastRead.set(this.#id, lastMessage.messageId)

@@ -39,7 +39,7 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { chatStorage, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
+import { chatStorage, chatType, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -108,8 +108,7 @@ export class UserMessagingDO implements DurableObject {
     console.log({ from, type, action })
 
     switch (from) {
-
-			case 'client':
+      case 'client':
         switch (type) {
           case 'connect':
             return this.handleWebsocket(request)
@@ -306,7 +305,7 @@ export class UserMessagingDO implements DurableObject {
         lastMessageText: chatData.lastMessageText,
         lastMessageTime: chatData.lastMessageTime,
         name: chatData.name,
-        type: isGroup(chatId) ? 'group' : 'dialog',
+        type: chatType(chatId),
         verified: false,
         lastMessageAuthor: chatData.lastMessageAuthor,
         photoUrl: chatData.photoUrl,
@@ -409,7 +408,7 @@ export class UserMessagingDO implements DurableObject {
           .filter((e, i) => this.#chatList.findIndex(chat => chat.id == e.id) === i)
           .map(e => ({
             ...e,
-            type: e.type === 'ai' ? 'dialog' : e.type,
+            type: chatType(e.id),
             lastMessageId: (e.lastMessageId ?? 0) >= 0 ? e.lastMessageId : 0,
             missed: (e.missed ?? 0) >= 0 ? e.missed : 0,
             lastMessageAuthor: e.lastMessageAuthor ?? this.#userId,
@@ -569,7 +568,7 @@ export class UserMessagingDO implements DurableObject {
       lastMessageTime: timestamp,
       missed: 0,
       name: dialog.name,
-      type: isGroup(chatId) ? 'group' : 'dialog',
+      type: chatType(chatId),
       verified: false,
       lastMessageAuthor: '',
       photoUrl: dialog.photoUrl,

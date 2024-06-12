@@ -76,12 +76,6 @@ router.original.get('/', (request: Request) => Response.redirect(`${request.url}
 
 router.post('/send-code', SendCodeHandler)
 
-router.post('/contacts/whoIsThere', FindContactsHandler)
-router.get('/contacts', GetContactsHandler)
-router.get('/contacts/:id', GetContactHandler)
-router.post('/contacts', CreateContactHandler)
-router.post('/contacts/:id', UpdateContactHandler)
-router.delete('/contacts/:id', DeleteContactHandler)
 router.post('/verify-code', VerifyCodeHandler)
 
 router.get('/public/:id/', RetrieveFileHandler)
@@ -96,6 +90,12 @@ router.original.get('/deviceTokens/:userId', GetDeviceTokensHandler) // tmp, onl
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
 router.all('/*', authenticateUser)
+router.post('/contacts/whoIsThere', FindContactsHandler)
+router.get('/contacts', GetContactsHandler)
+router.get('/contacts/:id', GetContactHandler)
+router.post('/contacts', CreateContactHandler)
+router.post('/contacts/:id', UpdateContactHandler)
+router.delete('/contacts/:id', DeleteContactHandler)
 router.get('/profile/:id', GetProfileHandler)
 
 router.get('/profile', GetOwnProfileHandler)

@@ -28,9 +28,8 @@ export class DeleteContactHandler extends OpenAPIRoute {
         description: 'Internal Server Error',
       },
     },
-  },
-  security: [{ BearerAuth: [] }],
-
+    security: [{ BearerAuth: [] }],
+  }
   async handle(
     request: Request,
     env: Env,

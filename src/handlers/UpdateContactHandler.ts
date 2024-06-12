@@ -41,8 +41,8 @@ export class UpdateContactHandler extends OpenAPIRoute {
         description: 'Internal Server Error',
       },
     },
-  },
-  security: [{ BearerAuth: [] }],
+    security: [{ BearerAuth: [] }],
+  }
 
   async handle(
     request: Request,

@@ -31,7 +31,7 @@ describe('WebSocket Messaging Test', async () => {
 
   beforeAll(async () => {
     // Generate tokens for each test user
-    tokens = await Promise.all(users.map(async u => await generateAccessToken(u, 'secret')))
+    tokens = await Promise.all(users.map(async u => await generateAccessToken({ id: u.id, phoneNumber: '' }, 'secret')))
   })
 
   afterAll(() => {

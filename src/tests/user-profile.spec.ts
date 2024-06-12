@@ -35,7 +35,7 @@ describe('User Profile Tests', () => {
   it('should handle unauthorized access to profile', async () => {
     try {
       await axios.get(`${baseUrl}/profile`)
-    } catch (error) {
+    } catch (error: any) {
       expect(error.response.status).toBe(401)
     }
   })

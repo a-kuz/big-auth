@@ -19,7 +19,7 @@ describe('Authentication Tests', () => {
         phoneNumber: '+99901234567',
         code: 'wrongcode',
       })
-    } catch (error) {
+    } catch (error: any) {
       expect(error.response.status).toBe(400)
     }
   })

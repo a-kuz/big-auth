@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import axios from 'axios'
-import FormData from 'form-data'
+import * as FormData from 'form-data'
 import fs from 'fs'
 
 const baseUrl = 'https://dev.iambig.ai'

@@ -7,7 +7,7 @@ describe('Error Handling Tests', () => {
   it('should handle 404 errors', async () => {
     try {
       await axios.get(`${baseUrl}/non-existent-endpoint`)
-    } catch (error) {
+    } catch (error: any) {
       expect(error.response.status).toBe(404)
     }
   })
@@ -15,7 +15,7 @@ describe('Error Handling Tests', () => {
   it('should handle 500 errors', async () => {
     try {
       await axios.get(`${baseUrl}/trigger-500-error`)
-    } catch (error) {
+    } catch (error: any) {
       expect(error.response.status).toBe(500)
     }
   })

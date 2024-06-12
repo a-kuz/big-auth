@@ -22,14 +22,14 @@ afterAll(() => {
 })
 
 describe('WebSocket Tests', () => {
-  it('should establish WebSocket connection', (done) => {
+  it('should establish WebSocket connection', (done: any) => {
     ws.on('open', () => {
       expect(ws.readyState).toBe(WebSocket.OPEN)
       done()
     })
   })
 
-  it('should send and receive messages via WebSocket', (done) => {
+  it('should send and receive messages via WebSocket', (done: any) => {
     ws.on('message', (data) => {
       const message = JSON.parse(data.toString())
       expect(message).toHaveProperty('type')
@@ -51,7 +51,7 @@ describe('WebSocket Tests', () => {
     )
   })
 
-  it('should handle WebSocket disconnections', (done) => {
+  it('should handle WebSocket disconnections', (done: any) => {
     ws.on('close', () => {
       expect(ws.readyState).toBe(WebSocket.CLOSED)
       done()

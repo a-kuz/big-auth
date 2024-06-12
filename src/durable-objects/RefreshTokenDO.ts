@@ -57,7 +57,7 @@ export class RefreshTokenDO implements DurableObject {
   async refresh(refreshToken: string, userId: string, phoneNumber: string): Promise<Response> {
     const storedToken = await this.get()
     if (storedToken && storedToken.refreshToken === refreshToken) {
-      if (Date.now() - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) {
+      if (Date.now() / 1000 - storedToken.createdAt < 30 * 24 * 60 * 60 * 1000) {
         // Valid for 30 days
         const user = new User(userId, phoneNumber) // Construct user
 

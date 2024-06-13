@@ -39,4 +39,12 @@ describe('User Profile Tests', () => {
       expect(error.response.status).toBe(401)
     }
   })
+
+  it('should prevent SQL injection in profile retrieval', async () => {
+    try {
+      await axios.get(`${baseUrl}/profile?id=' OR '1'='1`)
+    } catch (error: any) {
+      expect(error.response.status).toBe(400)
+    }
+  })
 })

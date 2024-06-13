@@ -48,4 +48,12 @@ describe('Contact Management Tests', () => {
     expect(response.status).toBe(200)
     expect(response.data).toHaveProperty('contacts')
   })
+
+  it('should prevent SQL injection in contact retrieval', async () => {
+    try {
+      await axios.get(`${baseUrl}/contacts?id=' OR '1'='1`)
+    } catch (error: any) {
+      expect(error.response.status).toBe(400)
+    }
+  })
 })

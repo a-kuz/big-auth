@@ -48,4 +48,13 @@ describe('Message Handling Tests', () => {
     )
     expect(response.status).toBe(200)
   })
+
+  it('should prevent XSS in messages', async () => {
+    const response = await axios.post(
+      `${baseUrl}/messages`,
+      { chatId: 'chat123', message: '<script>alert("XSS")</script>' },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    expect(response.status).toBe(400)
+  })
 })

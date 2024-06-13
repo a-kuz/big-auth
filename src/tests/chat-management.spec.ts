@@ -38,4 +38,13 @@ describe('Chat Management Tests', () => {
     expect(response.status).toBe(200)
     expect(response.data).toHaveProperty('chats')
   })
+
+  it('should prevent XSS in chat creation', async () => {
+    const response = await axios.post(
+      `${baseUrl}/chats`,
+      { name: '<script>alert("XSS")</script>', participants: ['user1', 'user2'] },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    expect(response.status).toBe(400)
+  })
 })

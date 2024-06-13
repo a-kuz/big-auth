@@ -15,8 +15,6 @@ const PING = String.fromCharCode(0x9)
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
-  private server: WebSocket | null = null
-  private client: WebSocket | null = null
   #eventBuffer: ServerEvent[] = []
   #eventCounter: number = 0
   #lastPing: number = 0
@@ -38,8 +36,7 @@ export class WebSocketGod {
     const webSocketPair = new WebSocketPair()
 
     const [client, server] = Object.values(webSocketPair)
-    this.server = server
-    this.client = client
+
     this.state.acceptWebSocket(server, ['user'])
 
     this.refreshPing()

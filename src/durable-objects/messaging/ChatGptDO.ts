@@ -190,11 +190,19 @@ export class ChatGptDO extends DurableObject {
   }
   async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
-    const endIndex = payload.endId || this.#messages.length - 1
-    const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
-    const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
-    const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-    return { messages, authors: [] }
+    if (!payload.startId) {
+      const endIndex = payload.endId || this.#messages.length - 1
+      const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
+      const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
+      const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
+      return { messages, authors: [] }
+    } else {
+      const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
+      const startIndex = payload.startId
+      const endIndex = startIndex + portion - 1
+      const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
+      return { messages, authors: [] }
+    }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {

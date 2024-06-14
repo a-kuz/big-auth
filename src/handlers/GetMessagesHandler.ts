@@ -19,6 +19,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
         description: 'portion length',
       }),
       endId: Query(z.coerce.number().optional(), { description: 'to id' }),
+      startId: Query(z.coerce.number().optional(), { description: 'from id' }),
     },
     responses: {
       '200': {
@@ -48,7 +49,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
   ): Promise<Response> {
     try {
       const url = new URL(request.url)
-      const { chatId, count = undefined, endId = undefined } = data.query
+      const { chatId, count = undefined, endId = undefined, startId = undefined } = data.query
       if (!chatId) {
         return errorResponse('chatId parameter is required', 400)
       }
@@ -57,7 +58,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
       return userMessagingDO.fetch(
         new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
           method: 'POST',
-          body: JSON.stringify({ chatId, count, endId }),
+          body: JSON.stringify({ chatId, count, endId, startId }),
         }),
       )
     } catch (error) {

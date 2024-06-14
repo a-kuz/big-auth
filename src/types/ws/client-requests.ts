@@ -52,6 +52,7 @@ export interface GetChatsRequest {}
 export interface GetMessagesRequest {
   chatId: string
   endId?: number
+  startId?: number
   count?: number
 }
 

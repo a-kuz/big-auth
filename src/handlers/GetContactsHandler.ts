@@ -3,7 +3,7 @@ import { Env } from '../types/Env'
 import { getContacts } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
 
-export class GetContactsHandler extends OpenAPIRoute {
+export class 	GetContactsHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
     tags: ['contacts'],
     summary: 'Get all contacts',

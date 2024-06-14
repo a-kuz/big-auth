@@ -55,11 +55,7 @@ export class GetChatHandler extends OpenAPIRoute {
     try {
       try {
         // Authenticate the user
-        user = await getUserByToken(
-          env.DB,
-          request.headers.get('Authorization')!.split(' ')[1],
-          env.JWT_SECRET,
-        )
+        user = env.user
       } catch (error: Error | any) {
         console.error(error.message)
       }

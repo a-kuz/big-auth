@@ -55,14 +55,9 @@ export class CreateChatHandler extends OpenAPIRoute {
     { body }: { body: { name: string; imgUrl: string; participants: string[] } },
   ) {
     try {
-      const authToken = request.headers.get('Authorization')?.split(' ')[1]
-      if (!authToken) {
-        return errorResponse('Authorization token is missing', 401)
-      }
-
-      const user = await getUserByToken(env.DB, authToken, env.JWT_SECRET)
+      const user = env.user
       if (!user) {
-        return errorResponse('Invalid or expired token', 401)
+        return errorResponse('User not found in environment', 401)
       }
 
       const { name, imgUrl, participants } = body

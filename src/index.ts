@@ -69,19 +69,17 @@ router.registry.registerComponent('securitySchemes', 'BearerAuth', {
   scheme: 'bearer',
 })
 
-router.options('*', CORS) // TODO: add security CORS
+router.original.options('*', CORS) // TODO: add security CORS
 
 // Redirect root request to the /docs page
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
 
 router.post('/send-code', SendCodeHandler)
-
 router.post('/verify-code', VerifyCodeHandler)
 
 router.get('/public/:id/', RetrieveFileHandler)
 router.get('/avatar/:userId', GetAvatarHandler)
 router.post('/public/upload', UploadFileHandler)
-router.get('/websocket', WebsocketHandler)
 
 router.post('/auth/refresh', RefreshTokenHandler)
 router.get('/network', NetworkInfoHandler)
@@ -90,6 +88,7 @@ router.original.get('/deviceTokens/:userId', GetDeviceTokensHandler) // tmp, onl
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
 router.all('/*', authenticateUser)
+router.get('/websocket', WebsocketHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
 router.get('/contacts', GetContactsHandler)
 router.get('/contacts/:id', GetContactHandler)

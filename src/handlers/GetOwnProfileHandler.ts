@@ -6,7 +6,8 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { getUserByToken } from '../services/get-user-by-token'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
-import { CustomError } from "~/errors/CustomError"
+import { CustomError } from '~/errors/CustomError'
+import { serializeError } from 'serialize-error'
 
 export class GetOwnProfileHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -35,15 +36,19 @@ export class GetOwnProfileHandler extends OpenAPIRoute {
 
   async handle(request: Request, env: Env, context: any, data: { id: string }) {
     const user = env.user
-      if (!user) {
-        return errorResponse('Unauthorized', 401)
-      }
-
-      return new Response(JSON.stringify(user.profile()), {
-        status: 200,
-      })
-    } catch (e) {
-      console.error(e)
-      return errorResponse((e as Error).message ?? 'Something went wrong', (e as CustomError).httpCode || 500)
+    if (!user) {
+      return errorResponse('Unauthorized', 401)
     }
+
+    return new Response(JSON.stringify(user.profile()), {
+      status: 200,
+    })
   }
+  catch(e: Error) {
+    console.error(serializeError(e))
+    return errorResponse(
+      (e as Error).message ?? 'Something went wrong',
+      (e as CustomError).httpCode || 500,
+    )
+  }
+}

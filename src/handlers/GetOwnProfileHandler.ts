@@ -44,7 +44,6 @@ export class GetOwnProfileHandler extends OpenAPIRoute {
       })
     } catch (e) {
       console.error(e)
-      errorResponse((e as Error).message ?? 'Something went wrong', (e as CustomError).httpCode || 500)
+      return errorResponse((e as Error).message ?? 'Something went wrong', (e as CustomError).httpCode || 500)
     }
   }
-}

@@ -48,7 +48,6 @@ export class WebsocketHandler extends OpenAPIRoute {
     } catch (error) {
       console.error('!!!!')
       console.error({ error })
-      return errorResponse('Something went worng')
+      return errorResponse('Something went wrong')
     }
   }
-}

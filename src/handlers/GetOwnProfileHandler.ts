@@ -34,15 +34,7 @@ export class GetOwnProfileHandler extends OpenAPIRoute {
   }
 
   async handle(request: Request, env: Env, context: any, data: { id: string }) {
-    const authorization = request.headers.get('Authorization')
-    const token = authorization?.split(' ')[1]
-
-    if (!token) {
-      return errorResponse('Authorization required', 401)
-    }
-
-    try {
-      const user = await getUserByToken(env.DB, token, env.JWT_SECRET)
+    const user = env.user
       if (!user) {
         return errorResponse('Unauthorized', 401)
       }

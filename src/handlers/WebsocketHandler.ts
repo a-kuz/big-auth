@@ -20,35 +20,10 @@ export class WebsocketHandler extends OpenAPIRoute {
 
   async execute(request: Request, env: Env, _context: any, data: Record<string, any>) {
     try {
-      let token = ''
-      const authorization = request.headers.get('Authorization')
-      token = authorization?.split(' ')[1] || ''
-      if (!token) {
-        try {
-          const protocol = request.headers.get('Sec-WebSocket-Protocol')
-          if (protocol) {
-            if (protocol.startsWith('protocol, e')) {
-              token = protocol.slice(10)
-              console.log(token)
-            }
-          }
-        } catch (e) {}
+      const user = env.user
+      if (!user) {
+        return errorResponse('User not found in environment', 401)
       }
-
-      if (!token) {
-        return errorResponse('Unauthorized', 401)
-      }
-
-      let user
-      try {
-        try {
-          user = await getUserByToken(env.DB, token, env.JWT_SECRET)
-        } catch (e) {
-          return errorResponse('invalid token', 401)
-        }
-        if (!user) {
-          return errorResponse('user not exist', 401)
-        }
 
         const mDO = userStorage(env, user.id)
 

@@ -1,6 +1,6 @@
 import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
-import { Env } from '../types/Env'
 import { getContacts } from '../services/contacts'
+import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 
 export class 	GetContactsHandler extends OpenAPIRoute {

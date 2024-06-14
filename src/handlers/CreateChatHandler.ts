@@ -1,11 +1,9 @@
 import { OpenAPIRoute, OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { getUserByToken } from '../services/get-user-by-token'
-import { newId } from '../utils/new-id'
-import { errorResponse } from '../utils/error-response'
-import { Env } from '../types/Env'
-import { GroupChatsDO } from '..'
 import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
+import { Env } from '../types/Env'
+import { errorResponse } from '../utils/error-response'
+import { newId } from '../utils/new-id'
 
 // Define the request schema using Zod
 const createChatSchema = z.object({

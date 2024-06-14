@@ -326,6 +326,7 @@ export class UserMessagingDO implements DurableObject {
       }
       await this.wsService.toBuffer('new', {
         ...eventData,
+        ...{ missed: chatData.missed },
         sender: eventData.sender ?? eventData.chatId,
       })
       dlvrd = true

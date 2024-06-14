@@ -1,19 +1,17 @@
 import {
+  Arr,
+  Bool,
+  Enumeration,
+  Num,
+  Obj,
   OpenAPIRoute,
   OpenAPIRouteSchema,
-  Arr,
-  Obj,
-  Str,
-  Enumeration,
-  Bool,
-  DateTime,
-  Num,
+  Str
 } from '@cloudflare/itty-router-openapi'
-import { getUserByToken } from '../services/get-user-by-token'
+import { serializeError } from 'serialize-error'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
-import { serializeError } from 'serialize-error'
 
 export class GetChatsHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {

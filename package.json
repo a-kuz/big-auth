@@ -27,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20240502.0",
+		"undici": "^5.26.5",
 		"@stylistic/eslint-plugin-ts": "^1.8.0",
 		"@types/service-worker-mock": "^2.0.4",
 		"@types/ws": "^8.5.10",

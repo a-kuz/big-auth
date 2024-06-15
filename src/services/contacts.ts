@@ -101,3 +101,15 @@ export async function deleteContact(env: Env, id: string, ownerId: string) {
   const result = await env.DB.prepare(deleteQuery).bind(id, ownerId).run()
   return result.success
 }
+
+export async function findUserByUsername(env: Env, username: string) {
+  const query = 'SELECT * FROM users WHERE username = ? AND deleted_at IS NULL'
+  const user = await env.DB.prepare(query).bind(username).first()
+  return user ? fromSnakeToCamel(user) : null
+}
+
+export async function findUserByPhoneNumber(env: Env, phoneNumber: string) {
+  const query = 'SELECT * FROM users WHERE phone_number = ? AND deleted_at IS NULL'
+  const user = await env.DB.prepare(query).bind(phoneNumber).first()
+  return user ? fromSnakeToCamel(user) : null
+}

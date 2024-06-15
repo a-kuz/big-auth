@@ -31,6 +31,8 @@ import { GetChatHandler } from './handlers/GetChatHandler'
 import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
+import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
+import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { authenticateUser } from './middleware/auth'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
@@ -98,6 +100,8 @@ router.delete('/contacts/:id', DeleteContactHandler)
 router.get('/profile/:id', GetProfileHandler)
 
 router.get('/profile', GetOwnProfileHandler)
+router.get('/contacts/findByUsername', FindUserByUsernameHandler)
+router.get('/contacts/findByPhoneNumber', FindUserByPhoneHandler)
 router.post('/profile', UpdateProfileHandler)
 
 router.post('/messages', SendMessageHandler)

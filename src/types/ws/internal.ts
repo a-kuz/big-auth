@@ -1,5 +1,6 @@
 import { Attachment } from '../Attachment'
-import { Chat } from '../Chat'
+import { Chat, Dialog, Group, GroupChat } from '../Chat'
+import { ChatListItem } from '../ChatList'
 import { chats, deleteChat, dlvrd, newChat, nw, read, typing } from './event-literals'
 
 export interface MarkDeliveredInternalEvent {
@@ -9,6 +10,7 @@ export interface MarkDeliveredInternalEvent {
   clientMessageId: string
   timestamp: number
 }
+export type UpdateChatInternalEvent = Dialog | Group
 export interface MarkReadInternalEvent {
   chatId: string
   userId?: string

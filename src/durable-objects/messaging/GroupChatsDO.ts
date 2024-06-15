@@ -558,4 +558,12 @@ export class GroupChatsDO extends DurableObject {
 
     await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
+
+  async updateProfile(profile: Profile) {
+    if (!this.#users) return
+    const index = this.#users.findIndex(user => user.id === profile.id)
+    if (index && index >= 0) {
+      this.#users[index] = profile
+    }
+  }
 }

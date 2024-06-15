@@ -1,4 +1,4 @@
-import { Profile, User } from '~/db/models/User'
+import { Profile, User, UserDB } from '~/db/models/User'
 import { Env } from '~/types/Env'
 import { fromSnakeToCamel } from '~/utils/name-сases'
 import { newId } from '~/utils/new-id'
@@ -54,9 +54,12 @@ export async function createContact(env: Env, contact: any) {
   }
 
   // Validate that there is no existing record with the same user_id for the given owner_id
-  const existingContactQuery = 'SELECT COUNT(*) as count FROM contacts WHERE user_id = ? AND owner_id = ?'
-  const existingContactResult = await env.DB.prepare(existingContactQuery).bind(userId, ownerId).first()
-  if (existingContactResult && existingContactResult.count > 0) {
+  const existingContactQuery =
+    'SELECT COUNT(*) as count FROM contacts WHERE user_id = ? AND owner_id = ?'
+  const existingContactResult = await env.DB.prepare(existingContactQuery)
+    .bind(userId, ownerId)
+    .first()
+  if (existingContactResult) {
     throw new Error('A contact with this user_id already exists for the given owner_id')
   }
 
@@ -104,12 +107,13 @@ export async function deleteContact(env: Env, id: string, ownerId: string) {
 
 export async function findUserByUsername(env: Env, username: string) {
   const query = 'SELECT * FROM users WHERE username = ? AND deleted_at IS NULL'
-  const user = await env.DB.prepare(query).bind(username).first()
-  return user ? fromSnakeToCamel(user) : null
+  const userDb = await env.DB.prepare(query).bind(username).first<UserDB>()
+
+  return userDb ? User.fromDb(userDb).profile() : null
 }
 
 export async function findUserByPhoneNumber(env: Env, phoneNumber: string) {
   const query = 'SELECT * FROM users WHERE phone_number = ? AND deleted_at IS NULL'
-  const user = await env.DB.prepare(query).bind(phoneNumber).first()
-  return user ? fromSnakeToCamel(user) : null
+  const userDb = await env.DB.prepare(query).bind(phoneNumber).first<UserDB>()
+  return userDb ? User.fromDb(userDb).profile() : null
 }

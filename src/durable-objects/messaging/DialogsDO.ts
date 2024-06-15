@@ -11,12 +11,16 @@ import { NewMessageEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
 
 import { DurableObject } from 'cloudflare:workers'
-import { User } from '~/db/models/User'
+import { Profile, User } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
-import { MarkDeliveredInternalEvent, MarkReadInternalEvent } from '~/types/ws/internal'
+import {
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  UpdateChatInternalEvent,
+} from '~/types/ws/internal'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { serializeError } from 'serialize-error'
@@ -27,7 +31,7 @@ import { TM_DurableObject, Task, withTaskManager } from 'do-taskmanager'
 export class DialogsDO extends DurableObject implements TM_DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
-  #users?: [User, User]
+  #users?: [Profile, Profile]
   #id: string = ''
   #counter = 0
   #lastRead = new Map<string, number>()
@@ -44,54 +48,19 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
-  async alarm(): Promise<void> {
-    console.log('Dialog ALARM')
-    try {
-      if (!this.#users?.length) {
-        return
-      }
-      try {
-        this.#users[0] = await getUserById(this.env.DB, this.#users[0].id)
-      } catch (e) {
-        console.error(serializeError(e))
-      }
-
-      try {
-        this.#users[1] = await getUserById(this.env.DB, this.#users[1].id)
-      } catch (e) {
-        console.error(serializeError(e))
-      }
-
-      await this.ctx.storage.put('users', this.#users, {
-        allowConcurrency: true,
-        allowUnconfirmed: true,
-      }),
-        await this.ctx.storage.setAlarm(Date.now() + 1000 * 10 * 60, {
-          allowConcurrency: true,
-          allowUnconfirmed: true,
-        })
-    } catch (e) {
-      console.error(serializeError(e))
-    }
-  }
-
   async create(owner: string, secondUser: string): Promise<Dialog> {
     if (this.#users?.length) return this.chat(owner)
     // if (this.#messages.length) throw new Error('DO dialog: "messages" is not empty')
     const [user1Id, user2Id] = [owner, secondUser].sort((a, b) => (a > b ? 1 : -1))
     this.#id = `${user1Id}:${user2Id}`
 
-    const user1 = await getUserById(
-      this.env.DB,
-      user1Id,
-      new NotFoundError(`user ${user2Id} is not exists`),
-    )
+    const user1 = (
+      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user2Id} is not exists`))
+    ).profile()
 
-    const user2 = await getUserById(
-      this.env.DB,
-      user2Id,
-      new NotFoundError(`user ${user2Id} is not exists`),
-    )
+    const user2 = (
+      await getUserById(this.env.DB, user2Id, new NotFoundError(`user ${user2Id} is not exists`))
+    ).profile()
 
     this.#users = [user1, user2]
 
@@ -439,7 +408,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
         }
       }
     }
-    let except
     if (this.#messages.length) {
       const lastMessage = this.#messages.slice(-1)[0]
       this.#lastRead.set(lastMessage!.sender, lastMessage!.messageId)
@@ -452,9 +420,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
         ),
       )
     }
-
-    if (!(await this.ctx.storage.getAlarm()))
-      await this.ctx.storage.setAlarm(Date.now() + 1000 * 60 * 5)
   }
 
   private timestamp() {
@@ -465,5 +430,26 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
   async fetch(request: Request<unknown, CfProperties<unknown>>): Promise<Response> {
     return new Response()
+  }
+
+  async updateProfile(profile: Profile) {
+    if (!this.#users) return
+    const index = this.#users.findIndex(user => user.id === profile.id)
+    if (index && index >= 0) {
+      this.#users[index] = profile
+    }
+    const index2 = (index - 1) * -1
+    const receiverId = this.#users[index2].id
+    const receiverDO = userStorage(this.env, receiverId)
+    const event: UpdateChatInternalEvent = this.chat(receiverId)
+
+    const reqBody = JSON.stringify(event)
+
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/updateChat`, {
+        method: 'POST',
+        body: reqBody,
+      }),
+    )
   }
 }

@@ -1,15 +1,22 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Query, Str } from '@cloudflare/itty-router-openapi'
+import {
+  DataOf,
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Query,
+  Str,
+} from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { findUserByUsername } from '../services/contacts'
+import { z } from 'zod'
 
 export class FindUserByUsernameHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     tags: ['contacts'],
     summary: 'Find user by username',
-    parameters: {
-      username: Query(Str, { description: 'The username to search for' }),
-    },
+    requestBody: z.object({
+      username: new Str({ example: 'akuz', required: true }),
+    }),
     responses: {
       '200': {
         description: 'User found',
@@ -32,9 +39,14 @@ export class FindUserByUsernameHandler extends OpenAPIRoute {
     security: [{ BearerAuth: [] }],
   }
 
-  async handle(request: Request, env: Env, _ctx: any, data: { query: { username: string } }) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: any,
+    data: DataOf<typeof FindUserByUsernameHandler.schema>,
+  ) {
     try {
-      const user = await findUserByUsername(env, data.query.username)
+      const user = await findUserByUsername(env, data.body.username)
       if (!user) {
         return errorResponse('User not found', 404)
       }

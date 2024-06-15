@@ -34,12 +34,15 @@ import {
   NewChatEvent,
   NewGroupMessageEvent,
   TypingInternalEvent,
+  UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
+import { ProfileService } from './ProfileService'
+import { Profile } from '~/db/models/User'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -50,12 +53,14 @@ export class UserMessagingDO implements DurableObject {
   #chatListTimer: NodeJS.Timeout | undefined
   private readonly wsService: WebSocketGod
   private readonly onlineService: OnlineStatusService
+  private readonly profileService: ProfileService
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
   ) {
     this.wsService = new WebSocketGod(state, env)
     this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService)
+    this.profileService = new ProfileService(this.state, this.env)
     this.wsService.onlineService = this.onlineService
     this.state.blockConcurrencyWhile(async () => {
       this.#chatList = (await this.state.storage.get<ChatList>('chatList')) || []
@@ -88,7 +93,7 @@ export class UserMessagingDO implements DurableObject {
 
     const [userId, from, type, action] = paths as [
       string,
-      'dialog' | 'client' | 'group' | 'messaging',
+      'dialog' | 'client' | 'group' | 'messaging' | 'profile',
       'event' | 'request' | 'connect',
       (
         | ClientEventType
@@ -97,6 +102,8 @@ export class UserMessagingDO implements DurableObject {
         | ClientRequestType
         | 'websocket'
         | 'setDeviceToken'
+        | 'updateProfile'
+        | 'updateChat'
       ),
     ]
     if (!this.#userId) {
@@ -139,6 +146,8 @@ export class UserMessagingDO implements DurableObject {
             return this.readEventHandler(request)
           case 'dlvrd':
             return this.dlvrdEventHandler(request)
+          case 'updateChat':
+            return this.updateChatEventHandler(request)
         }
       }
       case 'dialog': {
@@ -149,6 +158,14 @@ export class UserMessagingDO implements DurableObject {
             return this.dlvrdEventHandler(request)
           case 'read':
             return this.readEventHandler(request)
+          case 'updateChat':
+            return this.updateChatEventHandler(request)
+        }
+      }
+      case 'profile': {
+        switch (action) {
+          case 'updateProfile':
+            return this.updateProfileHandler(request)
         }
       }
       case 'messaging': {
@@ -208,6 +225,17 @@ export class UserMessagingDO implements DurableObject {
     if (this.onlineService.isOnline()) {
       await this.wsService.toBuffer('chats', this.#chatList)
     }
+
+    return new Response()
+  }
+  async updateChatEventHandler(request: Request) {
+    const eventData = await request.json<UpdateChatInternalEvent>()
+    const { chatId, name, meta, photoUrl } = eventData
+    const index = this.#chatList.findIndex(chat => chat.id === eventData.chatId)
+    this.#chatList[index].name = name
+    this.#chatList[index].photoUrl = photoUrl
+    await this.wsService.toBuffer('chats', this.#chatList)
+    this.save()
 
     return new Response()
   }
@@ -296,7 +324,6 @@ export class UserMessagingDO implements DurableObject {
     const chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
     const chatIndex = this.#chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-    const counter = await this.chatStorage(chatId).counter()
 
     if (isNew || this.#chatList[chatIndex].lastMessageId != chatData.lastMessageId) {
       const chatChanges: Partial<ChatListItem> = {
@@ -335,6 +362,11 @@ export class UserMessagingDO implements DurableObject {
     return { success: true, dlvrd }
   }
 
+  private async updateProfileHandler(request: Request) {
+    const profile = await request.json<Profile>()
+    await this.profileService.broadcastProfile(profile)
+    return new Response()
+  }
   private async setDeviceTokenHandler(request: Request) {
     const data = await request.json<{ fingerprint: string; deviceToken: string }>()
     this.setFingerprint(data.fingerprint)

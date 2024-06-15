@@ -1,32 +1,30 @@
 import { DialogMessage } from '~/types/ChatMessage'
-import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import {
-  GetMessagesRequest,
-  GetMessagesResponse,
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
+	GetMessagesRequest,
+	GetMessagesResponse,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
 } from '~/types/ws/client-requests'
+import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
 
 import { DurableObject } from 'cloudflare:workers'
-import { Profile, User } from '~/db/models/User'
+import { TM_DurableObject, Task } from 'do-taskmanager'
+import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import {
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  UpdateChatInternalEvent,
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	UpdateChatInternalEvent,
 } from '~/types/ws/internal'
+import { splitArray } from '~/utils/split-array'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { serializeError } from 'serialize-error'
-import { boolean } from 'zod'
-import { splitArray } from '~/utils/split-array'
-import { TM_DurableObject, Task, withTaskManager } from 'do-taskmanager'
 
 export class DialogsDO extends DurableObject implements TM_DurableObject {
   #timestamp = Date.now()

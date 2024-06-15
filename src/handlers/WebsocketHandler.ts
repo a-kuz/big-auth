@@ -6,7 +6,7 @@ import {
 } from '@cloudflare/itty-router-openapi'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
+import { errorResponse, unauthorized } from '../utils/error-response'
 import { pushStorage, userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export const WebsocketHandler = async (
@@ -17,9 +17,6 @@ export const WebsocketHandler = async (
 ) => {
   try {
     const user = env.user
-    if (!user) {
-      return errorResponse('Autho', 401)
-    }
 
     const mDO = userStorage(env, user.id)
 

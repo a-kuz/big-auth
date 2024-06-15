@@ -13,7 +13,7 @@ import {
 } from '@cloudflare/itty-router-openapi'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
+import { errorResponse, unauthorized } from '../utils/error-response'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { z } from 'zod'
 import {
@@ -22,6 +22,7 @@ import {
   GroupMetaSchema,
   GroupSchema,
 } from '~/types/openapi-schemas/Chat'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export class GetChatHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -51,20 +52,11 @@ export class GetChatHandler extends OpenAPIRoute {
     _ctx: ExecutionContext,
     data: DataOf<typeof GetChatHandler.schema>,
   ): Promise<Response> {
-    let user
+    const user = env.user
     try {
-      try {
-        // Authenticate the user
-        user = env.user
-      } catch (error: Error | any) {
-        console.error(error.message)
-      }
-      if (!user) {
-        return errorResponse('Unauthorized', 401)
-      }
-
-      const { query } = data
-      const { chatId } = query
+      const {
+        query: { chatId },
+      } = data
 
       const userMessagingDO = userStorage(env, user.id)
 
@@ -76,9 +68,9 @@ export class GetChatHandler extends OpenAPIRoute {
       )
     } catch (error) {
       // Handle any errors
-      console.error('Failed to retrieve chats:', (error as Error).message)
+      writeErrorLog(error)
 
-      return errorResponse(JSON.stringify((error as Error).message), 500)
+      return errorResponse('Something went wrong', 500)
     }
   }
 }

@@ -15,13 +15,13 @@ export class OnlineStatusService {
     return this.#isOnline
   }
 
-  async online() {
+  async online(): Promise<ChatList> {
     this.#isOnline = true
-    const chatList = await this.state.storage.get<ChatList>('chatList')
+    const chatList = await this.state.storage.get<ChatList>('chatList')!
     const timestamp = Date.now()
     const promises: Promise<never>[] = []
     if (!chatList) {
-      return
+      return []
     }
 
     for (const chat of chatList) {
@@ -48,11 +48,14 @@ export class OnlineStatusService {
       if (chat.type !== 'ai') {
         if (chat.lastMessageStatus === 'undelivered' && !chat.isMine) {
           const storage = chatStorage(this.env, chat.id, this.userId)
+          chat.lastMessageStatus = 'unread'
           promises.push(storage.dlvrd(this.userId, { chatId: chat.id }, timestamp))
         }
       }
     }
+    await this.state.storage.put('chatList', chatList)
     this.state.waitUntil(Promise.all(promises))
+    return chatList
   }
 
   async offline() {

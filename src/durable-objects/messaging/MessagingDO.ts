@@ -272,6 +272,8 @@ export class UserMessagingDO implements DurableObject {
     const eventData = await request.json<MarkReadInternalEvent>()
 
     const chatId = eventData.chatId
+    console.log({ chatId })
+    console.log({ eventData })
 
     const counter = await this.chatStorage(chatId).counter()
 
@@ -500,8 +502,14 @@ export class UserMessagingDO implements DurableObject {
 
   private async handleWebsocket(request: Request): Promise<Response> {
     console.log('CONNECT!')
+    this.wsService.clearBuffer()
     const response = await this.wsService.acceptWebSocket(request)
-    this.state.waitUntil(this.onlineService.online())
+    this.state.waitUntil(
+      (async () => {
+        this.#chatList = await this.onlineService.online()
+        return
+      })(),
+    )
     return response
   }
   ////////////////////////////////////////////////////////////////////////////////////

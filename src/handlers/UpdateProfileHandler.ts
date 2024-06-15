@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { updateUser } from '../db/services/update-user'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { serializeError } from 'serialize-error'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export class UpdateProfileHandler extends OpenAPIRoute {
@@ -83,7 +83,7 @@ export class UpdateProfileHandler extends OpenAPIRoute {
         status: 200,
       })
     } catch (error) {
-      console.error(serializeError(error))
+      await writeErrorLog(error)
       return errorResponse('Failed to update profile')
     }
   }

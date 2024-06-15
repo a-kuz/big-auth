@@ -90,7 +90,7 @@ router.original.get('/deviceTokens/:userId', GetDeviceTokensHandler) // tmp, onl
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
 router.all('/*', authenticateUser)
-router.get('/websocket', WebsocketHandler)
+router.original.get('/websocket', WebsocketHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
 router.post('/contacts/findByUsername', FindUserByUsernameHandler)
 router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)

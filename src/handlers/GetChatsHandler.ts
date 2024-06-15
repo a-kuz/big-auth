@@ -6,10 +6,10 @@ import {
   Obj,
   OpenAPIRoute,
   OpenAPIRouteSchema,
-  Str
+  Str,
 } from '@cloudflare/itty-router-openapi'
-import { serializeError } from 'serialize-error'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 
@@ -76,7 +76,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       )
     } catch (error: unknown) {
       // Handle any errors
-      console.error('Failed to retrieve chats:', serializeError(error))
+      writeErrorLog(error)
 
       return errorResponse(JSON.stringify((error as Error).message), 500)
     }

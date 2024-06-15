@@ -7,7 +7,7 @@ import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { ServerEvent } from '~/types/ws/server-events'
 import { errorResponse } from '~/utils/error-response'
-import { serializeError } from 'serialize-error'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
@@ -15,7 +15,7 @@ const PING = String.fromCharCode(0x9)
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
-  #eventBuffer: ServerEvent[] = []
+  #eventBuffer = new Map<number, ServerEvent>()
   #eventCounter: number = 0
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
@@ -84,16 +84,16 @@ export class WebSocketGod {
           }
           ws.send(JSON.stringify(response))
         case 'ack':
-          delete this.#eventBuffer[packet.id as number]
+          this.#eventBuffer.delete(packet.id as number)
       }
     } catch (e) {
-      console.error(serializeError(e))
+      await writeErrorLog(e)
       try {
         ws.send(
           JSON.stringify({ error: { incomingMessage: message, exception: (e as Error).message } }),
         )
       } catch (e) {
-        console.error(serializeError(e))
+        await writeErrorLog(e)
       }
     }
   }
@@ -119,12 +119,12 @@ export class WebSocketGod {
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error(serializeError(error))
+    await writeErrorLog(error)
 
     try {
       ws.close(2004, 'handled error')
     } catch (e) {
-      console.error(serializeError(e))
+      await writeErrorLog(e)
       return
     }
   }
@@ -134,7 +134,10 @@ export class WebSocketGod {
   }
 
   private newBufferIndex() {
-    return ++this.#eventCounter
+    return this.#eventBuffer.size
+  }
+  clearBuffer() {
+    this.#eventBuffer = new Map()
   }
 
   async toBuffer(eventType: ServerEventType, event: ServerEventPayload) {
@@ -146,7 +149,7 @@ export class WebSocketGod {
       type: 'event',
       id,
     }
-    this.#eventBuffer[id] = packet
+    this.#eventBuffer.set(id, packet)
     const alarm = await this.state.storage.getAlarm()
     if (!alarm || alarm > Date.now() + 100)
       await this.state.storage.setAlarm(Date.now() + 100, {
@@ -166,7 +169,7 @@ export class WebSocketGod {
   }
 
   sendBuffer() {
-    for (const event of this.#eventBuffer.filter(e => !!e)) {
+    for (const event of this.#eventBuffer.values()) {
       this.sendPacket(event)
     }
   }
@@ -196,7 +199,7 @@ export class WebSocketGod {
             }
             return
           } catch (e) {
-            console.error(serializeError(e))
+            await writeErrorLog(e)
           }
         } else if (Date.now() - this.#lastPing > 10000) {
           if (socket.readyState === WebSocket.OPEN) {

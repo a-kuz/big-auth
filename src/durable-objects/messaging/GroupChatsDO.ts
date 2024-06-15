@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
-import { serializeError } from 'serialize-error'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { Profile, User } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { Group } from '~/types/Chat'
@@ -144,12 +144,12 @@ export class GroupChatsDO extends DurableObject {
                 resp
                   .text()
                   .then(text => console.error(text))
-                  .catch(error => console.error(serializeError(error)))
+                  .catch(async (error) => await writeErrorLog(error))
               }
             })
-            .catch(e => console.error(serializeError(e)))
+            .catch(async (error) => await writeErrorLog(error))
         } catch (e) {
-          console.error(serializeError(e))
+          await writeErrorLog(e)
         }
       }
 
@@ -163,7 +163,7 @@ export class GroupChatsDO extends DurableObject {
       ]
       this.#runningEvents = this.#runningEvents.filter(e => e.timestamp >= Date.now() - 3000)
     } catch (e) {
-      console.error(serializeError(e))
+      await writeErrorLog(e)
     }
   }
 

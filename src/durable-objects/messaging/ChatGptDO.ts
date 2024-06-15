@@ -21,8 +21,9 @@ import { GPTmessage, askGPT } from '~/services/ask-gpt'
 import { newId } from '~/utils/new-id'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { ChatListItem } from '~/types/ChatList'
-import { serializeError } from 'serialize-error'
+
 import { splitArray } from '~/utils/split-array'
+import { serializeError, writeErrorLog } from '~/utils/serialize-error'
 
 export class ChatGptDO extends DurableObject {
   #timestamp = Date.now()
@@ -81,7 +82,7 @@ export class ChatGptDO extends DurableObject {
         await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
       }
     } catch (e) {
-      console.error(serializeError(e))
+      await writeErrorLog(e)
     }
   }
 

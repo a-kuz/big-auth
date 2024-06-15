@@ -4,7 +4,7 @@ import { errorResponse } from '../utils/error-response'
 import { z } from 'zod'
 import { pushStorage } from '~/durable-objects/messaging/utils/mdo'
 import { getUserByToken } from '~/services/get-user-by-token'
-import { serializeError } from 'serialize-error'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export class StoreDeviceTokenHandler extends OpenAPIRoute {
   static schema = {
@@ -45,7 +45,7 @@ export class StoreDeviceTokenHandler extends OpenAPIRoute {
         return errorResponse('user not exist', 401)
       }
     } catch (error) {
-      console.error(serializeError(error))
+      await writeErrorLog(error)
       return errorResponse('Failed to fetch profile', 401)
     }
     const userId = user.id
@@ -58,7 +58,7 @@ export class StoreDeviceTokenHandler extends OpenAPIRoute {
         status: 200,
       })
     } catch (error) {
-      console.error(serializeError(error))
+      await writeErrorLog(error)
       return errorResponse('Failed to store device token', 500)
     }
   }
@@ -70,7 +70,7 @@ export class StoreDeviceTokenHandler extends OpenAPIRoute {
         status: 200,
       })
     } catch (error) {
-      console.error(serializeError(error))
+      await writeErrorLog(error)
       return errorResponse('Failed to store device token', 500)
     }
   }

@@ -43,8 +43,12 @@ export class User {
   }
 
   profile() {
-    return instanceToPlain(this, {})
+    return instanceToPlain(this, {}) as Profile
   }
 }
 
-export type UserDB = ObjectCamelToSnakeCase<User>
+export type UserDB = Omit<ObjectCamelToSnakeCase<User>, 'profile'>
+export type Profile = Pick<
+  User,
+  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl'
+>

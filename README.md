@@ -1,57 +1,111 @@
-# Big Project
+# BIG Auth - Cloudflare Workers Implementation
 
-This project provides a comprehensive authentication, user profile management, messaging, and file handling solution for applications. Built on Cloudflare Workers, it includes features such as sending OTP for verification, refreshing tokens, finding contacts, managing user profiles, sending messages, uploading and retrieving files, and providing network info.
+<small>text was written by GPT</small>
+
+This repository hosts the Cloudflare Workers implementation of the BIG Auth application, designed to support authentication and messaging for the BIG Messenger app. Utilizing Cloudflare Workers, Durable Objects, and WebSockets, it provides a scalable and efficient serverless infrastructure instead of relying on Node.js.
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Features](#features)
+  - [Durable Objects](#durable-objects)
+  - [WebSockets](#websockets)
+  - [JWT Authentication](#jwt-authentication)
+- [Architecture Overview](#architecture-overview)
+  - [Geographical Distribution](#geographical-distribution)
+  - [Data Management](#data-management)
+  - [WebSocket Connections](#websocket-connections)
+- [API Documentation](#api-documentation)
+- [Useful Resources](#useful-resources)
+
+## Introduction
+
+BIG Auth provides authentication and messaging capabilities for BIG Messenger. The backend is entirely built on Cloudflare's serverless stack, including Cloudflare Workers, Durable Objects, and KV storage. This architecture ensures low latency and high availability for global users without traditional server infrastructure.
 
 ## Features
 
-- **Authentication:** Send OTP and verify it. Refresh access tokens.
-- **User Profile Management:** Find contacts by phone numbers, get and update user profiles.
-- **Messaging:** Send, receive, and manage messages. Retrieve chat lists.
-- **File Handling:** Upload and retrieve files.
-- **Network Information:** Provide information about the network request.
+### Durable Objects
 
-## How It Works
+Durable Objects maintain state and provide coordination across different components. They offer single-threaded, consistent views of data, essential for chat applications.
 
-- **Authentication:** Utilizes Twilio for OTP verification and JWT for token management.
-- **User Profiles:** Stores user data in a Cloudflare D1 database. Allows updating user profiles.
-- **Messaging:** Implements a Durable Object for each user to handle messaging logic.
-- **File Handling:** Files are uploaded to and retrieved from Cloudflare R2 storage.
-- **Network Information:** Offers insights into the request's network information like country, region, and more.
+Some key Durable Objects used include:
 
-## Technologies Used
+- **ChatGptDO:** Manages individual chat sessions with AI. It handles user messages, interacts with the GPT service, and stores chat history.
+- **GroupChatsDO:** Coordinates messages and states in group chats. It manages participants, message delivery statuses, and chat history.
+- **DialogsDO:** Handles peer-to-peer chat dialogs. It manages direct message exchanges between users, tracking delivery and read receipts.
+- **PushDO:** Manages device tokens for push notifications. It stores and retrieves device tokens, ensuring users receive notifications across devices.
+- **RefreshTokenDO:** Safely manages refresh tokens for users. It validates, stores, and refreshes tokens for continued user sessions.
 
-- Cloudflare Workers for serverless function execution.
-- Cloudflare D1 for database storage.
-- Cloudflare R2 for file storage.
-- JWT for token generation and verification.
-- Twilio for sending OTPs.
+### WebSockets
 
-## Getting Started
+WebSockets are essential for real-time communication in chat applications. This project uses WebSockets to implement the chat functionality, enabling real-time message delivery and status updates. The `WebSocketGod` class provides the foundation for managing WebSocket connections and events.
 
-1. **Setup Cloudflare Worker:**
-   - Clone the repository.
-   - Set up Wrangler CLI and authenticate with Cloudflare.
-   - Configure `wrangler.toml` with your Cloudflare account details.
+### JWT Authentication
 
-2. **Configure Environment Variables:**
-   - Twilio account SID, auth token, and service SID.
-   - JWT secret for token encryption.
+JSON Web Tokens (JWT) are used for securing the endpoints and verifying user identities. Here are the key aspects:
 
-3. **Deploy:**
-   - Run `wrangler publish` to deploy the worker.
+- Access tokens are generated when a user logs in and must be provided in subsequent requests for authentication.
+- Refresh tokens are used to obtain new access tokens without requiring the user to log in again.
+- Token management is handled by the `RefreshTokenDO` Durable Object.
 
-## Structure
+## Architecture Overview
 
-- **`./src/index.ts`:** Main entry point.
-- **`./handlers/`:** Request handlers for different features.
-- **`./durable-objects/`:** Durable Objects for stateful logic.
-- **`./db/`:** Database models and services.
-- **`./utils/`:** Utility functions.
+### Geographical Distribution
 
-## Documentation
+#### Worldwide users
 
-Access the API documentation by navigating to `/docs` endpoint after deployment.
+Assume we have three users:
 
-## License
+- Alice in India
+- Bob in Germany
+- Alexandr in France
 
-This project is licensed under the MIT License.
+The distribution of Durable Objects and their geographic locations significantly impact the system's latency and efficiency.
+
+### Data Management
+
+1. **User Data & Profiles:**
+   - **Location:** Central D1 Database
+   - **Details:** User profiles and related metadata are stored in a D1 relational database, ensuring consistency and accessibility.
+
+2. **Messages and Chats:**
+   - **Location:** Durable Objects
+   - **Details:**
+     - Alice, Bob, and Alexandr's individual chat logs are managed by their respective `DialogsDO` instances.
+     - The group chat they all participate in is managed by `GroupChatsDO`.
+
+3. **Group Chat Example:**
+   - If a group chat Durable Object instance (`GroupChatsDO`) is created, Cloudflare may allocate this instance in one of the data centers close to one of the participants to optimize performance (e.g., Paris for Alexandr).
+
+### WebSocket Connections
+
+WebSockets are established to the nearest Cloudflare data center for each user to reduce latency:
+
+- **Alice (India):** Connects to the nearest data center, possibly in Mumbai.
+- **Bob (Germany):** Connects to a Frankfurt data center.
+- **Alexandr (France):** Connects locally within France, likely Paris.
+
+Each user's interaction with their WebSocket connection is then routed through Cloudflare's network to the data center managing the Durable Object, ensuring each message update or query is efficiently handled.
+
+### Example Interaction
+
+**Scenario:** Alice sends a message to the group chat.
+
+1. **Message Handling:**
+   - Alice's message is sent to the Paris data center (where the `GroupChatsDO` instance resides).
+   - The message is processed, updating the state and sending responses back through the WebSocket connections.
+
+2. **Notifications and Updates:**
+   - Bob and Alexandr receive updates via their nearest data centers (Frankfurt and Paris, respectively), while the actual state is managed in Paris.
+
+## API Documentation
+
+- [Documentation](https://docs.iambig.ai)
+
+## Useful Resources
+
+- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
+- [Durable Objects Documentation](https://developers.cloudflare.com/workers/learning/using-durable-objects/)
+- [JSON Web Tokens](https://jwt.io/)
+- [Wrangler CLI Tool](https://developers.cloudflare.com/workers/cli-wrangler)
+- [itty-router-openapi](https://github.com/cloudflare/itty-router-openapi)

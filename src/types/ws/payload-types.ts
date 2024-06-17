@@ -1,10 +1,18 @@
-import { NewMessageResponse, EditMessageResponse, DeleteMessageResponse } from '.'
+import {
+  NewMessageResponse,
+  EditMessageResponse,
+  DeleteMessageResponse,
+  MarkReadResponse,
+  MarkDlvrdResponse,
+} from './responses'
+import { ChatList } from '../ChatList'
 import {
   NewMessageRequest,
   EditMessageRequest,
   DeleteMessageRequest,
   MarkDeliveredRequest,
   MarkReadRequest,
+  TypingClientEvent,
 } from './client-requests'
 import {
   NewMessageEvent,
@@ -12,7 +20,7 @@ import {
   DeleteMessageEvent,
   OnlineEvent,
   OfflineEvent,
-  TypingEvent,
+  TypingServerEvent,
   MarkDeliveredEvent,
   MarkReadEvent,
 } from './server-events'
@@ -23,13 +31,20 @@ export type ClientRequestPayload =
   | DeleteMessageRequest
   | MarkDeliveredRequest
   | MarkReadRequest
-export type ServerResponsePayload = NewMessageResponse | EditMessageResponse | DeleteMessageResponse
+export type ServerResponsePayload =
+  | NewMessageResponse
+  | EditMessageResponse
+  | DeleteMessageResponse
+  | MarkReadResponse
+  | MarkDlvrdResponse
 export type ServerEventPayload =
   | NewMessageEvent
   | EditMessageEvent
   | DeleteMessageEvent
   | OnlineEvent
   | OfflineEvent
-  | TypingEvent
+  | TypingServerEvent
   | MarkDeliveredEvent
   | MarkReadEvent
+  | ChatList
+export type ClientEventPayload = TypingClientEvent | OfflineEvent

@@ -12,6 +12,8 @@ import {
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { serializeError } from 'serialize-error'
 
 export class GetChatsHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -24,7 +26,7 @@ export class GetChatsHandler extends OpenAPIRoute {
           chats: new Arr(
             new Obj({
               type: new Enumeration({
-                values: ['dialog', 'group', 'channel'],
+                values: ['dialog', 'group', 'channel', 'favorites'],
                 example: 'dialog',
               }),
               id: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
@@ -63,35 +65,22 @@ export class GetChatsHandler extends OpenAPIRoute {
   }
 
   async handle(request: Request, env: Env): Promise<Response> {
-    let user
     try {
-      try {
-        // Authenticate the user
-        user = await getUserByToken(
-          env.DB,
-          request.headers.get('Authorization')!.split(' ')[1],
-          env.JWT_SECRET,
-        )
-      } catch (error) {}
-      if (!user) {
-        return errorResponse('Unauthorized', 401)
-      }
-
-      const userMessagingDO = env.USER_MESSAGING_DO.get(env.USER_MESSAGING_DO.idFromName(user.id))
+      const userMessagingDO = userStorage(env, env.user.id)
 
       const url = new URL(request.url)
 
       return userMessagingDO.fetch(
-        new Request(`${url.origin}/${user.id}/chats`, {
+        new Request(`${url.origin}/${env.user.id}/client/request/chats`, {
           method: 'POST',
           body: '{}',
         }),
       )
-    } catch (error) {
+    } catch (error: unknown) {
       // Handle any errors
-      console.error('Failed to retrieve chats:', error)
+      console.error('Failed to retrieve chats:', serializeError(error))
 
-      return errorResponse(JSON.stringify(error.message), 500)
+      return errorResponse(JSON.stringify((error as Error).message), 500)
     }
   }
 }

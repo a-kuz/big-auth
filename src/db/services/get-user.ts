@@ -2,7 +2,8 @@ import { User, UserDB } from '../models/User'
 import { newId } from '../../utils/new-id'
 import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
-import { CustomError } from '~/errors/UnauthorizedError'
+import { UnauthorizedError } from '~/errors/UnauthorizedError'
+import { CustomError } from '~/errors/CustomError'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -14,8 +15,8 @@ export const getOrCreateUserByPhone = async (
 
     if (!existingUser) {
       const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
-      const id = newId()
-      const createdAt = Math.floor(Date.now()/1000)
+      const id = phoneNumber.startsWith('+9999') ? phoneNumber + newId(2) : newId()
+      const createdAt = Math.floor(Date.now() / 1000)
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
       return new User(id, phoneNumber)
     } else {
@@ -27,20 +28,24 @@ export const getOrCreateUserByPhone = async (
     throw new Error('Failed to retrieve or insert user by phone number')
   }
 }
-export const getUserById = async (d1: D1Database, id: string, errorClass: typeof CustomError = CustomError): Promise<User> => {
+export const getUserById = async (
+  d1: D1Database,
+  id: string,
+  error: CustomError = new UnauthorizedError(`User not found ${{ id }}`),
+): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()
 
     if (!existingUser) {
-      throw new errorClass(`User not found ${{ id }}`)
+      throw error
     } else {
       return User.fromDb(existingUser)
     }
   } catch (error) {
     // Handle error
     console.error(error)
-    throw new errorClass('Failed to retrieve user by id')
+    throw error
   }
 }
 
@@ -54,20 +59,25 @@ export const getUserByPhoneNumbers = async (
     10,
   )
   const result: User[] = []
+  const promises: Promise<User[]>[] = []
   for (const phoneNumbers of chunks) {
-    const placeholders = phoneNumbers.map(() => '?').join(',')
-    const query = `SELECT * FROM users WHERE phone_number IN (${placeholders}) and deleted_at is null`
+    promises.push(
+      new Promise(async resolve => {
+        const placeholders = phoneNumbers.map(() => '?').join(',')
+        const query = `SELECT * FROM users WHERE phone_number IN (${placeholders}) and deleted_at is null`
 
-    try {
-      const users = await d1
-        .prepare(query)
-        .bind(...phoneNumbers)
-        .all<UserDB>()
-      result.push(...users.results.map(User.fromDb))
-    } catch (error) {
-      console.error('Failed to retrieve users by phone numbers:', error)
-      throw new Error('Failed to retrieve users by phone numbers')
-    }
+        try {
+          const users = await d1
+            .prepare(query)
+            .bind(...phoneNumbers)
+            .all<UserDB>()
+          resolve(users.results.map(User.fromDb))
+        } catch (error) {
+          console.error('Failed to retrieve users by phone numbers:', error)
+          throw new Error('Failed to retrieve users by phone numbers')
+        }
+      }),
+    )
   }
-  return result
+  return (await Promise.all(promises)).flat()
 }

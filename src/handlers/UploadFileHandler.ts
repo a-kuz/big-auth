@@ -13,9 +13,8 @@ export class UploadFileHandler extends OpenAPIRoute {
     return { data: await request.formData() };
   }
   static schema: OpenAPIRouteSchema = {
-    summary: "Upload a file to R2",
+    summary: "Upload a file",
     tags: ["files"],
-    requestBody: new Str({ format: "formData" }),
     responses: {
       "200": {
         description: "File uploaded successfully",

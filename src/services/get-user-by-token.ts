@@ -38,7 +38,7 @@ export const getUserByToken = async (
 
   // Retrieve user details from the database by user ID
   try {
-    return await getUserById(d1, userId)
+    return getUserById(d1, userId)
   } catch (e) {
     console.error(e)
 

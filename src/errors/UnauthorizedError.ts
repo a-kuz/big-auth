@@ -1,14 +1,11 @@
-export class CustomError extends Error {
-	httpCode: number = 500
-}
+import { CustomError } from "./CustomError"
+
 export class UnauthorizedError extends CustomError {
-
-	constructor(message = 'Unauthorized') {
-		super(message);
-		this.name = 'UnauthorizedError';
-		this.message = 'Unauthorized';
-		this.httpCode = 401
-	}
+  constructor(
+    readonly message = 'Unauthorized',
+    readonly httpCode = 401,
+  ) {
+    super(message)
+  }
 }
-
 

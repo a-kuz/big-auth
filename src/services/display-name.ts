@@ -1,10 +1,13 @@
-import {User} from '~/db/models/User'
+import { DialogMeta as Profile } from '~/types/Chat'
 
-export function displayName(user: User): string {
-  if (user.firstName || user.lastName) {
-    return `${user.lastName} ${user.firstName}`.trim();
-  } else {
-    return `@${user.username || user.phoneNumber}`;
+export function displayName(u: Profile): string {
+  const { firstName = '', lastName = '', phoneNumber = '', username = '' } = u
+  if (firstName || lastName) {
+    return `${firstName} ${lastName}`.trim()
+  } else if (username) {
+    return `@${username}`
+  } else if (phoneNumber) {
+    return `${phoneNumber}`
   }
+  return '????'
 }
-

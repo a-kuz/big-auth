@@ -1,9 +1,12 @@
 import { ClientEventType, ClientRequestType } from '.'
 import { dlt, edit, dlvrd, read, nw, typing } from './event-literals'
 
-import { Attachment } from './attachments'
+import { Attachment } from '../Attachment'
+import { UserId } from './internal'
+import { ChatMessage } from '../ChatMessage'
+import { Profile, User } from '~/db/models/User'
 
-export interface WebsocketClientRequest<Type extends ClientRequestType = ClientRequestType> {
+export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
   timestamp: number
   id: string
@@ -21,31 +24,44 @@ export interface WebsocketClientRequest<Type extends ClientRequestType = ClientR
             : never
 }
 
-export interface WebsocketClientEvent<Type extends ClientEventType = ClientEventType> {
+export interface ClientEvent<Type extends ClientEventType = ClientEventType> {
   type: 'event'
   timestamp: number
   id: string
   payloadType: Type
-  payload: Type extends typing ? TypingEvent : never
+  payload: Type extends typing ? TypingClientEvent : never
+}
+
+export interface ClientAccept {
+  type: 'ack'
+  id: number
 }
 
 export interface NewMessageRequest {
   chatId: string
   message: string
   attachments?: Attachment[]
+  clientMessageId: string
 }
-export interface getChatRequest {
+export interface GetChatRequest {
   chatId: string
 }
-export interface getChatsRequest {}
 
-export interface getMessagesRequest {
+export interface GetChatsRequest {}
+
+export interface GetMessagesRequest {
   chatId: string
   endId?: number
+  startId?: number
   count?: number
 }
 
-export interface TypingEvent {
+export type GetMessagesResponse = {
+  messages: ChatMessage[]
+  authors: Profile[]
+}
+
+export interface TypingClientEvent {
   chatId: string
 }
 
@@ -63,10 +79,17 @@ export interface DeleteMessageRequest {
 
 export interface MarkReadRequest {
   chatId: string
-  messageId: number
+  messageId?: number
+  userId?: UserId
 }
 
 export interface MarkDeliveredRequest {
   chatId: string
-  messageId: number
+  messageId?: number
+}
+
+export interface CreateChatRequest {
+  name: string
+  imgUrl: string
+  participants: string[]
 }

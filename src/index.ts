@@ -34,6 +34,7 @@ import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Im
 import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { authenticateUser } from './middleware/auth'
+import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { PushDO } from './durable-objects/PushDO'
@@ -91,6 +92,7 @@ router.post('/deviceToken', StoreDeviceTokenHandler)
 
 router.all('/*', authenticateUser)
 router.original.get('/websocket', WebsocketHandler)
+router.get('/contacts/merged', GetMergedContactsHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
 router.post('/contacts/findByUsername', FindUserByUsernameHandler)
 router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)

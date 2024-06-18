@@ -29,6 +29,7 @@
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20240502.0",
 		"@stylistic/eslint-plugin-ts": "^1.8.0",
+		"@types/node": "^20.14.2",
 		"@types/service-worker-mock": "^2.0.4",
 		"@types/ws": "^8.5.10",
 		"@typescript-eslint/parser": "^5.62.0",

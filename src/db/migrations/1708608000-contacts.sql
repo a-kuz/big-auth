@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     client_id TEXT,
     user_id TEXT,
     phone_number TEXT,
-    user_name TEXT,
+    username TEXT,
     first_name TEXT,
     last_name TEXT,
     avatar_url TEXT,

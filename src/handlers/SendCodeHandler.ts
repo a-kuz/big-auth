@@ -54,10 +54,12 @@ export class SendCodeHandler extends OpenAPIRoute {
         }),
       })
 
-      // Return Twilio's response as a JSON object with the appropriate status code
-      return new Response(JSON.stringify(await response.json()), {
-        status: response.status,
-      })
+      if (response.status % 200 === 0) {
+        // If the request was successful, return a success response
+        return new Response('', { status: 200 })
+      } else {
+        return errorResponse(await response.text(), response.status)
+      }
     } catch (error) {
       // In case of an error, return a standardized error response
       return errorResponse('Failed to send OTP')

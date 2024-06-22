@@ -1,10 +1,10 @@
 import { DialogMessage } from '~/types/ChatMessage'
 import {
-	GetMessagesRequest,
-	GetMessagesResponse,
-	MarkDeliveredRequest,
-	MarkReadRequest,
-	NewMessageRequest,
+  GetMessagesRequest,
+  GetMessagesResponse,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
 } from '~/types/ws/client-requests'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { NewMessageEvent } from '~/types/ws/server-events'
@@ -18,9 +18,9 @@ import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import {
-	MarkDeliveredInternalEvent,
-	MarkReadInternalEvent,
-	UpdateChatInternalEvent,
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { splitArray } from '~/utils/split-array'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
@@ -431,15 +431,18 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   }
 
   async updateProfile(profile: Profile) {
+    console.log({ users: this.#users, profile })
     if (!this.#users) return
     const index = this.#users.findIndex(user => user.id === profile.id)
-    if (index && index >= 0) {
+    if (index !== -1) {
       this.#users[index] = profile
     }
+    await this.ctx.storage.put('users', this.#users)
     const index2 = (index - 1) * -1
     const receiverId = this.#users[index2].id
     const receiverDO = userStorage(this.env, receiverId)
     const event: UpdateChatInternalEvent = this.chat(receiverId)
+    event.photoUrl = profile.avatarUrl
 
     const reqBody = JSON.stringify(event)
 

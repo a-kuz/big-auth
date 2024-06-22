@@ -27,6 +27,7 @@ import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { displayName } from '~/services/display-name'
+import { NotFoundError } from '~/errors/NotFoundError'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -44,7 +45,8 @@ export class GroupChatsDO extends DurableObject {
   #id: string = ''
   #counter = 0
   #users: Profile[] = []
-  #lastFetchUsers = 0
+
+  #storage!: DurableObjectStorage
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
   #runningEvents: OutgoingEvent[] = []
@@ -53,19 +55,14 @@ export class GroupChatsDO extends DurableObject {
     public env: Env,
   ) {
     super(ctx, env)
+    this.#storage = ctx.storage
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
   async alarm(): Promise<void> {
-    console.log('GROUp ALARM')
-    if (this.#lastFetchUsers < Date.now() - 1000 * 10 * 5) {
-      if (await this.fetchUsers()) {
-        this.ctx.storage.setAlarm(Date.now() + 300)
-        return
-      }
-    }
+    console.log('Goup ALARM')
+
     try {
-      const completed: number[] = []
       this.#outgoingEvets = this.#outgoingEvets
         .sort((a, b) => b.timestamp - a.timestamp)
         .filter(
@@ -144,17 +141,17 @@ export class GroupChatsDO extends DurableObject {
                 resp
                   .text()
                   .then(text => console.error(text))
-                  .catch(async (error) => await writeErrorLog(error))
+                  .catch(async error => await writeErrorLog(error))
               }
             })
-            .catch(async (error) => await writeErrorLog(error))
+            .catch(async error => await writeErrorLog(error))
         } catch (e) {
           await writeErrorLog(e)
         }
       }
 
       if (this.#outgoingEvets.length > 0 || this.#runningEvents.length > 0) {
-        await this.ctx.storage.setAlarm(Date.now() + 50, { allowConcurrency: false })
+        await this.#storage.setAlarm(Date.now() + 50, { allowConcurrency: false })
       }
 
       this.#outgoingEvets = [
@@ -171,10 +168,15 @@ export class GroupChatsDO extends DurableObject {
     if (!this.group?.meta?.participants) {
       return false
     }
-    this.#lastFetchUsers = Date.now()
+
     for (const u of this.group.meta.participants) {
-      const user = await getUserById(this.env.DB, u as string)
-      const row = this.#users.findIndex(u => u.id === user.id)
+      const userId: string = (u as Profile).id ?? u
+      const user = await getUserById(
+        this.env.DB,
+        userId,
+        new NotFoundError(`User not found ${JSON.stringify({ userId })}`),
+      )
+      const row = this.#users.findIndex(u => userId === user.id)
       if (!(row === -1)) {
         this.#users.splice(row, 1)
       }
@@ -191,29 +193,30 @@ export class GroupChatsDO extends DurableObject {
   // Initialize storage for group chats
   async initialize() {
     const start = performance.now()
-    const meta = await this.ctx.storage.get<Group>('meta')
-    this.#users = (await this.ctx.storage.get<Profile[]>('users')) || []
+    const meta = await this.#storage.get<Group>('meta')
+    this.#users = (await this.#storage.get<Profile[]>('users')) || []
     console.log(meta)
     if (!meta) {
       return
     }
     this.#id = meta.chatId
     this.group = meta
-    this.#counter = (await this.ctx.storage.get<number>('counter')) || 0
+    this.#counter = ((await this.#storage.get<number>('counter')) || 1000) + 1000
 
     this.#messages = []
-    let arr = []
-    this.ctx.storage.list({ prefix: 'message-', reverse: true, limit: MESSAGES_LOAD_CHUNK_SIZE })
+
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
+    this.#counter = -1
     const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
 
     for (const chunk of keyChunks) {
-      const messagesChunk = await this.ctx.storage.get<GroupChatMessage>(chunk)
+      const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
       for (const key of messagesChunk.keys()) {
         const i = keys.indexOf(key)
         const message = messagesChunk.get(key)
         if (message) {
           this.#messages[i] = message
+          this.#counter = Math.max(this.#counter, i + 1)
         }
       }
     }
@@ -241,8 +244,7 @@ export class GroupChatsDO extends DurableObject {
     console.log('init group', `${Math.round((end - start) / 100) / 10}s`)
   }
   private async newId() {
-    this.#counter++
-    await this.ctx.storage.put('counter', this.#counter - 1)
+    await this.#storage.put('counter', ++this.#counter)
     return this.#counter - 1
   }
   private timestamp() {
@@ -325,7 +327,7 @@ export class GroupChatsDO extends DurableObject {
       delivering: [],
     }
     this.#messages[messageId] = message
-    await this.ctx.storage.put<GroupChatMessage>(`message-${messageId}`, message)
+    await this.#storage.put<GroupChatMessage>(`message-${messageId}`, message)
 
     for (const receiver of (this.group.meta.participants as string[]).filter(m => m !== sender)) {
       const event: NewGroupMessageEvent = {
@@ -357,7 +359,7 @@ export class GroupChatsDO extends DurableObject {
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
     }
-    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
+    await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
@@ -391,7 +393,7 @@ export class GroupChatsDO extends DurableObject {
       }
       d.dlvrd = timestamp
 
-      await this.ctx.storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
         allowConcurrency: false,
       })
     }
@@ -454,7 +456,7 @@ export class GroupChatsDO extends DurableObject {
       }
       d.read = timestamp
       if (!d.dlvrd) d.dlvrd = timestamp
-      await this.ctx.storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
         allowConcurrency: false,
       })
     }
@@ -512,8 +514,8 @@ export class GroupChatsDO extends DurableObject {
     this.group = newChat
     this.#id = id
     await this.fetchUsers()
-    await this.ctx.storage.put('users', this.#users)
-    await this.ctx.storage.put<Group>(`meta`, newChat)
+    await this.#storage.put('users', this.#users)
+    await this.#storage.put<Group>(`meta`, newChat)
     await this.initialize()
 
     await this.broadcastEvent('newChat', { ...newChat }, owner)
@@ -527,7 +529,7 @@ export class GroupChatsDO extends DurableObject {
     sender: UserId,
     exclude?: UserId,
   ) {
-    await this.ctx.storage.deleteAlarm()
+    await this.#storage.deleteAlarm()
     for (const receiver of this.group!.meta.participants as string[]) {
       if (exclude === receiver) continue
       this.#outgoingEvets.push({
@@ -538,8 +540,8 @@ export class GroupChatsDO extends DurableObject {
         timestamp: this.timestamp(),
       })
     }
-    this.ctx.storage.deleteAlarm()
-    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
+    this.#storage.deleteAlarm()
+    await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
 
   private async broadcastEventTo(
@@ -556,14 +558,15 @@ export class GroupChatsDO extends DurableObject {
       timestamp: this.timestamp(),
     })
 
-    await this.ctx.storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
+    await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
 
   async updateProfile(profile: Profile) {
     if (!this.#users) return
     const index = this.#users.findIndex(user => user.id === profile.id)
-    if (index && index >= 0) {
+    if (index !== -1) {
       this.#users[index] = profile
     }
+    await this.#storage.put('users', this.#users)
   }
 }

@@ -59,8 +59,12 @@ export class RetrieveFileHandler extends OpenAPIRoute {
       return new Response(fileResponse.value, {
         headers: {
           id,
-          'file-name': fileResponse.metadata!.fileName,
-          'Content-Type': fileResponse.metadata!.type,
+          ...(fileResponse.metadata?.fileName
+            ? {
+                'file-name': fileResponse.metadata?.fileName,
+                'Content-Type': fileResponse.metadata!.type,
+              }
+            : {}),
           Etag: id,
         },
       })

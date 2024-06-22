@@ -51,10 +51,14 @@ export class FindContactsHandler extends OpenAPIRoute {
       phoneNumbers = phoneNumbers
         .filter((phoneNumber, i) => phoneNumbers.indexOf(phoneNumber) === i)
         .filter(u => u !== env.user.phoneNumber)
+        .toSorted((a, b) => a.localeCompare(b))
 
       const hash = await digest(JSON.stringify(phoneNumbers))
-      const cache = await caches.open(hash)
-      const resp = await cache.match(request.url + '/' + hash)
+      const cache = await caches.default
+      const cacheKey = new Request(request.url + '/' + hash, {
+        headers: { 'Cache-Control': 'max-age=20' },
+      })
+      const resp = await cache.match(cacheKey)
       if (resp) return resp
 
       const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
@@ -69,8 +73,13 @@ export class FindContactsHandler extends OpenAPIRoute {
         },
       })
 
-      await cache.put(request.url + '/' + hash, new Response(responseBody))
-      context.waitUntil(putContacts(env.user, phoneNumbers, contacts, env))
+      context.waitUntil(
+        Promise.all([
+          putContacts(env.user, phoneNumbers, contacts, env),
+          cache.put(cacheKey, response),
+        ]),
+      )
+
       return response
     } catch (error) {
       console.error(error)

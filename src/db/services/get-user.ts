@@ -31,7 +31,7 @@ export const getOrCreateUserByPhone = async (
 export const getUserById = async (
   d1: D1Database,
   id: string,
-  error: CustomError = new UnauthorizedError(`User not found ${{ id }}`),
+  error: CustomError = new UnauthorizedError(`User not found ${JSON.stringify({ id })}`),
 ): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {

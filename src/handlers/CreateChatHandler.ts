@@ -4,6 +4,8 @@ import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '../utils/new-id'
+import { writeErrorLog } from '~/utils/serialize-error'
+import { CustomError } from '~/errors/CustomError'
 
 // Define the request schema using Zod
 const createChatSchema = z.object({
@@ -66,12 +68,16 @@ export class CreateChatHandler extends OpenAPIRoute {
 
       const groupId = newId(24)
       const groupChatDO = groupStorage(env, groupId)
-
-      return new Response(
-        JSON.stringify(
-          await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id),
-        ),
-      )
+      try {
+        const chat = await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id)
+        return new Response(JSON.stringify(chat))
+      } catch (error) {
+        await writeErrorLog(error)
+        return errorResponse(
+          `Error creating group chat: ${(error as Error).message}`,
+          (error as CustomError).httpCode ?? 500,
+        )
+      }
     } catch (error) {
       console.error('Error creating group chat:', error)
       return errorResponse('Internal server error', 500)

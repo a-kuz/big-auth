@@ -117,7 +117,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     return this.#counter
   }
 
-  async newId() {
+  private async newId() {
     await this.#storage.put('counter', ++this.#counter)
     return this.#counter - 1
   }
@@ -462,6 +462,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     if (index && index >= 0) {
       this.#users[index] = profile
     }
+		await this.ctx.storage.put('users', this.#users)
     const index2 = (index - 1) * -1
     const receiverId = this.#users[index2].id
     const receiverDO = userStorage(this.env, receiverId)

@@ -93,7 +93,7 @@ export class UserMessagingDO implements DurableObject {
 
     const [userId, from, type, action] = paths as [
       string,
-      'dialog' | 'client' | 'group' | 'messaging' | 'profile',
+      'dialog' | 'client' | 'group' | 'messaging' ,
       'event' | 'request' | 'connect',
       (
         | ClientEventType
@@ -131,6 +131,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.newHandler(request)
               case 'setDeviceToken':
                 return this.setDeviceTokenHandler(request)
+              case 'updateProfile':
+                return this.updateProfileHandler(request)
             }
         }
 
@@ -162,12 +164,7 @@ export class UserMessagingDO implements DurableObject {
             return this.updateChatEventHandler(request)
         }
       }
-      case 'profile': {
-        switch (action) {
-          case 'updateProfile':
-            return this.updateProfileHandler(request)
-        }
-      }
+
       case 'messaging': {
         switch (type) {
           case 'event':

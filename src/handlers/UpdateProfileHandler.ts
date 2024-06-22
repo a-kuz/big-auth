@@ -6,6 +6,9 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { UserId } from '~/types/ws/internal'
+import { ClientRequest } from 'http'
+import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
 
 export class UpdateProfileHandler extends OpenAPIRoute {
   static schema = {
@@ -66,10 +69,15 @@ export class UpdateProfileHandler extends OpenAPIRoute {
         (!user.firstName && !user.lastName && !lastName && !firstName) ||
         (lastName === '' && firstName === '')
       ) {
-        return errorResponse('Please, define firstName or lastName', 400)
+        return errorResponse('firstName or lastName must be defined', 400)
       }
 
-      const updatedUser = await updateUser(env.DB, user.id, data.body)
+      const updatedUser = await updateUser(env.DB, user.id, {
+        firstName,
+        lastName,
+        username,
+        avatarUrl,
+      })
 
       const storage = await userStorage(env, user.id)
       await storage.fetch(
@@ -78,6 +86,7 @@ export class UpdateProfileHandler extends OpenAPIRoute {
           body: JSON.stringify(updatedUser.profile()),
         }),
       )
+			await userStorageRpcRequest(env, user.id, 'updateProfile', updatedUser.profile())
 
       return new Response(JSON.stringify(updatedUser.profile()), {
         status: 200,
@@ -87,4 +96,25 @@ export class UpdateProfileHandler extends OpenAPIRoute {
       return errorResponse('Failed to update profile')
     }
   }
+}
+
+export const userStorageRpcRequest = async <
+  Resp extends ServerResponsePayload,
+  Req extends ClientRequestPayload | Object,
+>(
+  env: Env,
+  userId: string,
+  method: string,
+  requestBody: Req,
+  from = 'client',
+  type = 'reqest',
+): Promise<Resp> => {
+  const storage = userStorage(env, userId as UserId)
+  const resp = await storage.fetch(
+    new Request(`${env.ORIGIN}/${userId}/${from}/${type}/${method}`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    }),
+  )
+  return resp.json<Resp>()
 }

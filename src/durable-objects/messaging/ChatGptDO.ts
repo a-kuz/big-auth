@@ -264,7 +264,7 @@ export class ChatGptDO extends DurableObject {
         throw new Error(`messageId is not exists`)
       }
     }
-    const messageId = this.#messages[endIndex].messageId
+    const { messageId, clientMessageId } = this.#messages[endIndex]
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
@@ -287,7 +287,7 @@ export class ChatGptDO extends DurableObject {
     }
     await this.sendReadEventToAuthor(this.#id, messageId, timestamp)
 
-    return { chatId: request.chatId, messageId, timestamp, missed: 0 }
+    return { chatId: request.chatId, messageId, timestamp, missed: 0, clientMessageId }
   }
 
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {

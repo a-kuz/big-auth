@@ -8,6 +8,7 @@ import {
 import { Env } from '../types/Env'
 import { updateContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { z } from 'zod'
 
 export class UpdateContactHandler extends OpenAPIRoute {
@@ -19,7 +20,7 @@ export class UpdateContactHandler extends OpenAPIRoute {
       clientId: new Str({ required: false }),
       userId: new Str({ required: false }),
       phoneNumber: new Str({ required: false }),
-      userName: new Str({ required: false }),
+      username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
       avatarUrl: new Str({ required: false }),
@@ -31,15 +32,7 @@ export class UpdateContactHandler extends OpenAPIRoute {
           id: new Str({ example: 'contactId' }),
         },
       },
-      '400': {
-        description: 'Bad Request',
-      },
-      '404': {
-        description: 'Contact not found',
-      },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -52,9 +45,9 @@ export class UpdateContactHandler extends OpenAPIRoute {
   ) {
     try {
       const { id } = data.params
-      const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = data.body
+      const { clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl } = data.body
       const ownerId = env.user.id
-      const updates = { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl }
+      const updates = { clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl }
       const updatedContact = await updateContact(env, id, updates, ownerId)
       if (!updatedContact) {
         return errorResponse('Contact not found', 404)

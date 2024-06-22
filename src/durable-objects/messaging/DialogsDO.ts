@@ -42,7 +42,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     super(ctx, env)
     console.log('Dialog constructor')
     this.storage = ctx.storage
-    this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
+    this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60)
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
@@ -218,15 +218,16 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
     const message = this.#messages[endIndex]
+    const { messageId, clientMessageId } = this.#messages[endIndex]
     if (message.read) {
       return {
         chatId: request.chatId,
         messageId: message.messageId,
         timestamp: message.read,
+        clientMessageId,
         missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
       }
     }
-    const messageId = this.#messages[endIndex].messageId
 
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
@@ -254,6 +255,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       chatId: request.chatId,
       messageId,
       timestamp,
+      clientMessageId,
       missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
     }
   }

@@ -12,6 +12,7 @@ import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 
 export class GetChatsHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -55,9 +56,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       '401': {
         description: 'Unauthorized',
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

@@ -3,6 +3,7 @@ import { getUserByPhoneNumbers } from '../db/services/get-user'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { z } from 'zod'
 import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
@@ -36,9 +37,7 @@ export class OnlinesHandler extends OpenAPIRoute {
       '400': {
         description: 'Bad Request',
       },
-      '500': {
-        description: 'Server Error',
-      },
+      ...errorResponses,
     },
     security: [{}],
   }

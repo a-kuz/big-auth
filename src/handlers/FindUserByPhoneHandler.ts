@@ -1,8 +1,8 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Query, Str } from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { findUserByPhoneNumber } from '~/services/contacts'
-
 
 export class FindUserByPhoneHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -26,9 +26,7 @@ export class FindUserByPhoneHandler extends OpenAPIRoute {
       '404': {
         description: 'User not found',
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

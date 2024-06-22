@@ -2,7 +2,7 @@ export function errorResponse(message: string, status = 500): Response {
   // Constructing the error object with additional details
   const errorDetails = {
     error: message,
-    timestamp: new Date().toISOString(),
+    timestamp: Date.now(),
     status,
   }
 

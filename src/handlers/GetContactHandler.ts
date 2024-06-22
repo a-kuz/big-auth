@@ -8,6 +8,7 @@ import {
 import { Env } from '../types/Env'
 import { getContactById } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 
 export class GetContactHandler extends OpenAPIRoute {
   static schema: OpenAPIRouteSchema = {
@@ -22,7 +23,7 @@ export class GetContactHandler extends OpenAPIRoute {
           clientId: new Str({ required: false }),
           userId: new Str({ required: false }),
           phoneNumber: new Str({ required: false }),
-          userName: new Str({ required: false }),
+          username: new Str({ required: false }),
           firstName: new Str({ required: false }),
           lastName: new Str({ required: false }),
           avatarUrl: new Str({ required: false }),
@@ -31,9 +32,7 @@ export class GetContactHandler extends OpenAPIRoute {
       '404': {
         description: 'Contact not found',
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

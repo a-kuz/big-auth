@@ -1,4 +1,3 @@
-import { OpenAPIRoute, OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
 import { Env } from '../types/Env'
@@ -7,16 +6,10 @@ import { newId } from '../utils/new-id'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { CustomError } from '~/errors/CustomError'
 import { Route } from '~/utils/route'
-import { errorResponses } from '../types/openapi-schemas/error-responses'
-
-// Define the request schema using Zod
-export const createChatSchema = z.object({
-  name: z.string(),
-  imgUrl: z.string().optional(),
-  participants: z.array(z.string()),
-})
+import { createChatSchema } from './CreateChatHandler'
 
 // Define the OpenAPI schema for this route
+
 export class CreateChatHandler extends Route {
   static schema = {
     tags: ['chats'],
@@ -35,7 +28,26 @@ export class CreateChatHandler extends Route {
         },
       },
 
-      ...errorResponses,
+      ...{
+        401: {
+          description: 'Unauthorized',
+          contentType: 'application/json',
+          schema: z.object({
+            error: z.string().default('Unauthorized'),
+            timestamp: z.number().describe('Miilisconds since UNIX epoch'),
+            status: z.number({ coerce: true }).default(401).describe('HTTP status code'),
+          }),
+        },
+        500: {
+          description: 'Internal server error',
+          contentType: 'application/json',
+          schema: z.object({
+            error: z.string().default('Something went wrong'),
+            timestamp: z.number().describe('Miilisconds since UNIX epoch'),
+            status: z.number({ coerce: true }).default(401).describe('HTTP status code'),
+          }),
+        },
+      },
     },
     security: [
       {

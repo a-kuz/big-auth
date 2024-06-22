@@ -2,13 +2,11 @@ import { Env } from '~/types/Env'
 import { ClientRequestType, ServerEventType } from '~/types/ws'
 import { ClientAccept, ClientEvent, ClientRequest } from '~/types/ws/client-requests'
 import { ClientRequestPayload, ServerEventPayload } from '~/types/ws/payload-types'
+import { ServerEvent } from '~/types/ws/server-events'
 import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
-import { ServerEvent } from '~/types/ws/server-events'
-import { errorResponse } from '~/utils/error-response'
-import { writeErrorLog } from '~/utils/serialize-error'
-import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
@@ -23,7 +21,7 @@ export class WebSocketGod {
     private state: DurableObjectState,
     private env: Env,
   ) {
-    this.state.setHibernatableWebSocketEventTimeout(SEVEN_DAYS)
+    this.state.setHibernatableWebSocketEventTimeout(1000 * 60)
   }
 
   async acceptWebSocket(request: Request): Promise<Response> {
@@ -176,12 +174,14 @@ export class WebSocketGod {
   async alarm(): Promise<void> {
     await this.checkStatus()
     const sockets = this.state.getWebSockets()
-    if (sockets.length) this.sendBuffer()
+    if (sockets.length) {
+      this.sendBuffer()
 
-    await this.state.storage.setAlarm(Date.now() + 5000, {
-      allowConcurrency: true,
-      allowUnconfirmed: true,
-    })
+      await this.state.storage.setAlarm(Date.now() + 5000, {
+        allowConcurrency: true,
+        allowUnconfirmed: true,
+      })
+    }
   }
 
   async checkStatus(): Promise<void> {

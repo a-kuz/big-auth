@@ -3,6 +3,7 @@ import { getUserByPhoneNumbers } from '../db/services/get-user'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { z } from 'zod'
 import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
@@ -29,12 +30,7 @@ export class FindContactsHandler extends OpenAPIRoute {
           }),
         },
       },
-      '400': {
-        description: 'Bad Request',
-      },
-      '500': {
-        description: 'Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -54,7 +50,7 @@ export class FindContactsHandler extends OpenAPIRoute {
         .toSorted((a, b) => a.localeCompare(b))
 
       const hash = await digest(JSON.stringify(phoneNumbers))
-      const cache = await caches.default
+      const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
         headers: { 'Cache-Control': 'max-age=20' },
       })
@@ -76,7 +72,15 @@ export class FindContactsHandler extends OpenAPIRoute {
       context.waitUntil(
         Promise.all([
           putContacts(env.user, phoneNumbers, contacts, env),
-          cache.put(cacheKey, response),
+          cache.put(
+            cacheKey,
+            new Response(responseBody, {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            }),
+          ),
         ]),
       )
 

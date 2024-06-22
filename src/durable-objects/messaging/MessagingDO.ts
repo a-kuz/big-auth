@@ -210,6 +210,7 @@ export class UserMessagingDO implements DurableObject {
     const { owner } = meta
     const chat = this.toTop(chatId, {
       id: chatId,
+      photoUrl: eventData.photoUrl,
       lastMessageStatus: 'undelivered',
       lastMessageText: 'chat created',
       lastMessageTime: this.timestamp(),

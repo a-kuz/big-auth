@@ -5,6 +5,7 @@ import { getOrCreateUserByPhone } from '../db/services/get-user'
 import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { infer, z } from 'zod'
 
 export interface VerifyOTPRequestBody {
@@ -22,7 +23,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
     tags: ['auth'],
     summary: 'Verify OTP',
     requestBody: z.object({
-      phoneNumber: z.string().startsWith("+").openapi({ example: '+99901234567' }),
+      phoneNumber: z.string().startsWith('+').openapi({ example: '+99901234567' }),
       code: z.string().openapi({ example: '000000' }),
     }),
     responses: {
@@ -38,10 +39,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
           }),
         },
       },
-      '400': {
-        description: 'incorrect code',
-        schema: { error: 'incorrect code' },
-      },
+      ...errorResponses,
     },
   }
 
@@ -62,7 +60,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       ) {
         const verificationResult = await this.verifyCodeWithTwilio(phoneNumber, code, env)
         if (verificationResult !== 'approved') {
-          return errorResponse('Incorrect code', 400)
+          return errorResponse('Incorrect code' as string, 400)
         }
       }
       // Get or create user by phone number

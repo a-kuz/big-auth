@@ -54,11 +54,11 @@ export class SendCodeHandler extends OpenAPIRoute {
         }),
       })
 
-      if (response.status % 200 === 0) {
+      if (response.status - 200 < 100) {
         // If the request was successful, return a success response
-        return new Response('', { status: 200 })
+        return new Response('{}', { status: 200 })
       } else {
-        return errorResponse(await response.text(), response.status)
+        return errorResponse(await response.text() as string, response.status)
       }
     } catch (error) {
       // In case of an error, return a standardized error response

@@ -250,12 +250,14 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
     const messageId: MessageId = request.messageId ?? this.#counter - 1
     const message = (await this.#message(messageId))!
+    const clientMessageId = message.clientMessageId
     let readIndex = this.#readMarks[sender].findIndex(e => e[0] >= messageId)
     const read = readIndex ? this.#readMarks[sender][readIndex][1] : 0
 
     const result = {
       chatId: request.chatId,
       messageId,
+      clientMessageId,
       timestamp: read || timestamp,
       missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
     }
@@ -462,7 +464,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     if (index && index >= 0) {
       this.#users[index] = profile
     }
-		await this.ctx.storage.put('users', this.#users)
+    await this.ctx.storage.put('users', this.#users)
     const index2 = (index - 1) * -1
     const receiverId = this.#users[index2].id
     const receiverDO = userStorage(this.env, receiverId)

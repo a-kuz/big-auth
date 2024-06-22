@@ -17,6 +17,7 @@ import {
   InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
+  NewChatEvent,
   NewGroupMessageEvent,
   Timestamp,
   UserId,
@@ -176,7 +177,7 @@ export class GroupChatsDO extends DurableObject {
         userId,
         new NotFoundError(`User not found ${JSON.stringify({ userId })}`),
       )
-      const row = this.#users.findIndex(u => userId === user.id)
+      const row = this.#users.findIndex(u => u.id === user.id)
       if (!(row === -1)) {
         this.#users.splice(row, 1)
       }
@@ -245,7 +246,7 @@ export class GroupChatsDO extends DurableObject {
   }
   private async newId() {
     await this.#storage.put('counter', ++this.#counter)
-    return this.#counter - 1
+    return this.#counter
   }
   private timestamp() {
     const current = performance.now()
@@ -339,7 +340,7 @@ export class GroupChatsDO extends DurableObject {
         clientMessageId: request.clientMessageId,
         messageId: message.messageId,
         timestamp,
-        missed: Math.max(this.#counter - (this.#lastRead.get(receiver) || 0) - 1, 0),
+        missed: Math.max(this.#counter - (this.#lastRead.get(receiver) || 0), 0),
       }
       this.#outgoingEvets.push({
         event,
@@ -432,7 +433,8 @@ export class GroupChatsDO extends DurableObject {
         throw new Error(`messageId is not exists`)
       }
     }
-    const messageId = this.#messages[endIndex].messageId
+    const { messageId, clientMessageId } = this.#messages[endIndex]
+
     const messageSender = this.#messages[endIndex].sender
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
@@ -472,6 +474,7 @@ export class GroupChatsDO extends DurableObject {
           messageId,
           timestamp,
           userId: sender,
+          clientMessageId,
         } as MarkReadInternalEvent,
         sender,
         messageSender,
@@ -481,7 +484,8 @@ export class GroupChatsDO extends DurableObject {
       chatId: request.chatId,
       messageId,
       timestamp,
-      missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+			clientMessageId,
+      missed: Math.max(this.#counter - (this.#lastRead.get(sender) || 0) - 1, 0),
     }
   }
 
@@ -511,6 +515,7 @@ export class GroupChatsDO extends DurableObject {
         owner,
       },
     }
+
     this.group = newChat
     this.#id = id
     await this.fetchUsers()

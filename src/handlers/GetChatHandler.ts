@@ -36,12 +36,7 @@ export class GetChatHandler extends OpenAPIRoute {
         description: 'Chat retrieved successfully',
         schema: z.union([GroupSchema, DialogSchema], {}),
       },
-      '401': {
-        description: 'Unauthorized',
-      },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

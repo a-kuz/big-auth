@@ -3,8 +3,22 @@ import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { digest } from '~/utils/digest'
-import { fromSnakeToCamel } from '~/utils/name-сases'
+import { ObjectSnakeToCamelCase, fromSnakeToCamel } from '~/utils/name-сases'
 import { newId } from '~/utils/new-id'
+import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
+
+export interface ContactDB {
+  id: string
+  client_id: string
+  user_id: string
+  first_name: string
+  last_name: string
+  phone_number: string
+  avatar_url: string
+  readonly username: string
+}
+
+export type Contact = ObjectSnakeToCamelCase<ContactDB>
 
 type pRow = {
   phone_number1: string
@@ -47,34 +61,59 @@ export async function putContacts(
 }
 
 export async function createContact(env: Env, contact: any) {
-  const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, ownerId } =
-    contact
+  let { clientId, phoneNumber, username, firstName, lastName, avatarUrl } = contact
+  const ownerId = env.user.id
+
   // Validate that user_id exists in the Users table
-  const userExistsQuery = 'SELECT COUNT(*) as count FROM users WHERE id = ?'
-  const userExistsResult = await env.DB.prepare(userExistsQuery).bind(userId).first()
-  if (!userExistsResult || userExistsResult.count === 0) {
-    throw new Error('User ID does not exist in the Users table')
-  }
-
+  const userExistsQuery = 'SELECT id FROM users WHERE phone_number = ?'
+  const userExistsResult = await env.DB.prepare(userExistsQuery)
+    .bind(phoneNumber)
+    .first<{ id: string }>()
+  const userId = userExistsResult?.id
   // Validate that there is no existing record with the same user_id for the given owner_id
-  const existingContactQuery =
-    'SELECT COUNT(*) as count FROM contacts WHERE user_id = ? AND owner_id = ?'
-  const existingContactResult = await env.DB.prepare(existingContactQuery)
-    .bind(userId, ownerId)
-    .first()
-  if (existingContactResult) {
-    throw new Error('A contact with this user_id already exists for the given owner_id')
+  if (!userId) {
+    throw new Error('user with this phone number is not registered', {
+      cause: 'USER_IS_NOT_REGISTERED',
+    })
   }
+  const existingContactQuery = 'SELECT * FROM contacts WHERE phone_number = ? AND owner_id = ?'
 
-  const id = newId()
+  const existingContact = await env.DB.prepare(existingContactQuery)
+    .bind(phoneNumber, ownerId)
+    .first<Contact>()
+  let id = existingContact?.id
+
+  if (id) {
+    clientId = existingContact?.clientId ?? clientId
+    firstName = existingContact?.firstName ?? firstName
+    lastName = existingContact?.lastName ?? lastName
+    avatarUrl = existingContact?.avatarUrl ?? avatarUrl
+
+    const dropQuery = `
+    DELETE FROM contacts WHERE id = ?
+  `
+    await env.DB.prepare(dropQuery).bind(id).run()
+  } else {
+    id = newId()
+  }
   const insertQuery = `
     INSERT INTO contacts (id, client_id, user_id, phone_number, username, first_name, last_name, avatar_url, owner_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?,?,  ?, ?, ?, ?, ?)
   `
   await env.DB.prepare(insertQuery)
-    .bind(id, clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, ownerId)
+    .bind(
+      id,
+      clientId ?? '',
+      userId ?? null,
+      phoneNumber,
+      username ?? '',
+      firstName ?? '',
+      lastName ?? '',
+      avatarUrl ?? '',
+      ownerId,
+    )
     .run()
-  return { id, ...contact }
+  return { id, clientId, userId, firstName, lastName, phoneNumber, avatarUrl, username }
 }
 
 export async function getContacts(env: Env, ownerId: string) {
@@ -168,14 +207,14 @@ export async function getContactById(env: Env, id: string, ownerId: string) {
 }
 
 export async function updateContact(env: Env, id: string, updates: any, ownerId: string) {
-  const { clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl } = updates
+  const { clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl } = updates
   const updateQuery = `
     UPDATE contacts
     SET client_id = ?, user_id = ?, phone_number = ?, username = ?, first_name = ?, last_name = ?, avatar_url = ?
     WHERE id = ? AND owner_id = ?
   `
   const result = await env.DB.prepare(updateQuery)
-    .bind(clientId, userId, phoneNumber, userName, firstName, lastName, avatarUrl, id, ownerId)
+    .bind(clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl, id, ownerId)
     .run()
   return result.success ? { id, ...updates } : null
 }

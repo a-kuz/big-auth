@@ -20,7 +20,7 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
-import { CreateChatHandler } from './handlers/CreateChatHandler'
+import { CreateChatHandler } from './handlers/CreateChatHandler.1'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'

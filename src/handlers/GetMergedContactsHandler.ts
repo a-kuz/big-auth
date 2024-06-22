@@ -18,7 +18,7 @@ export class GetMergedContactsHandler extends OpenAPIRoute {
           clientId: new Str({ required: false }),
           userId: new Str({ required: false }),
           phoneNumber: new Str({ required: false }),
-          userName: new Str({ required: false }),
+          username: new Str({ required: false }),
           firstName: new Str({ required: false }),
           lastName: new Str({ required: false }),
           avatarUrl: new Str({ required: false }),

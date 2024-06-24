@@ -35,6 +35,7 @@ import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { authenticateUser } from './middleware/auth'
 import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
+export { WorkerBigAuth } from './worker'
 import { OnlinesHandler } from './handlers/OnlinesHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
@@ -119,5 +120,11 @@ router.post('/chats', CreateChatHandler)
 router.all('*', () => new Response('Not Found.', { status: 404 }))
 
 export default {
-  fetch: router.handle,
+  fetch: router.handle
 }
+/*
+export default 
+    //@ts-ignore
+    fetch: router.handle,
+  }
+*/

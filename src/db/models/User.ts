@@ -22,7 +22,6 @@ export class User {
   @NullToUndefined
   avatarUrl?: string
 
-  @Exclude()
   @Type(() => Number)
   @NullToUndefined
   createdAt?: number

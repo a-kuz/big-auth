@@ -49,5 +49,5 @@ export class User {
 export type UserDB = Omit<ObjectCamelToSnakeCase<User>, 'profile'>
 export type Profile = Pick<
   User,
-  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl' | 'createdAt'
+  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl'
 >

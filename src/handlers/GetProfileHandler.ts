@@ -1,4 +1,5 @@
 import { getUserByToken } from '../services/get-user-by-token'
+import { Route } from '~/utils/route'
 import { errorResponse } from '../utils/error-response'
 import { Env } from '../types/Env'
 import {
@@ -12,7 +13,7 @@ import { instanceToPlain } from 'class-transformer'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 
-export class GetProfileHandler extends OpenAPIRoute {
+export class GetProfileHandler extends Route {
   static schema = {
     summary: 'Get user profile',
     operationId: 'user profule',

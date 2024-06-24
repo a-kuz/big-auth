@@ -9,7 +9,6 @@ import {
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
-
 import { DurableObject } from 'cloudflare:workers'
 import { TM_DurableObject, Task } from 'do-taskmanager'
 import { Profile } from '~/db/models/User'
@@ -280,6 +279,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     return {
       chatId: request.chatId,
       messageId,
+      clientMessageId,
       timestamp,
       missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
     }
@@ -365,9 +365,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       timestamp,
       missed: this.#counter - (this.#lastRead.get(receiverId) || 0) - 1,
     }
-
     const body = JSON.stringify(event)
-
     const resp = await receiverDO.fetch(
       new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/new`, {
         method: 'POST',
@@ -393,7 +391,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
   }
-
   private async initialize() {
     if (!this.#users || !this.#users.length) {
       this.#users = await this.#storage.get('users')
@@ -447,7 +444,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       )
     }
   }
-
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
@@ -457,7 +453,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   async fetch(request: Request<unknown, CfProperties<unknown>>): Promise<Response> {
     return new Response()
   }
-
   async updateProfile(profile: Profile) {
     if (!this.#users) return
     const index = this.#users.findIndex(user => user.id === profile.id)

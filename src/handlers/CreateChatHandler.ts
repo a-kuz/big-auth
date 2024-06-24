@@ -1,27 +1,24 @@
-import { OpenAPIRoute, OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
+import { CustomError } from '~/errors/CustomError'
+import { Route } from '~/utils/route'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '../utils/new-id'
-import { writeErrorLog } from '~/utils/serialize-error'
-import { CustomError } from '~/errors/CustomError'
-import { Route } from '~/utils/route'
-import { errorResponses } from '../types/openapi-schemas/error-responses'
-
-// Define the request schema using Zod
-export const createChatSchema = z.object({
-  name: z.string(),
-  imgUrl: z.string().optional(),
-  participants: z.array(z.string()),
-})
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 // Define the OpenAPI schema for this route
+
 export class CreateChatHandler extends Route {
   static schema = {
     tags: ['chats'],
     summary: 'Create a new chat group',
-    requestBody: createChatSchema,
+    requestBody: z.object({
+      name: z.string(),
+      imgUrl: z.string().optional(),
+      participants: z.array(z.string()),
+    }),
     responses: {
       200: {
         description: 'Group chat created successfully',
@@ -53,9 +50,6 @@ export class CreateChatHandler extends Route {
   ) {
     try {
       const user = env.user
-      if (!user) {
-        return errorResponse('User not found in environment', 401)
-      }
 
       const { name, imgUrl, participants } = body
 

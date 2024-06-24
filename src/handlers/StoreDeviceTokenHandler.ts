@@ -1,4 +1,5 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, DataOf } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { z } from 'zod'
@@ -6,7 +7,7 @@ import { pushStorage } from '~/durable-objects/messaging/utils/mdo'
 import { getUserByToken } from '~/services/get-user-by-token'
 import { writeErrorLog } from '~/utils/serialize-error'
 
-export class StoreDeviceTokenHandler extends OpenAPIRoute {
+export class StoreDeviceTokenHandler extends Route {
   static schema = {
     tags: ['device'],
     summary: 'Store Apple device token with fingerprint',

@@ -1,10 +1,11 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Query, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { findUserByPhoneNumber } from '~/services/contacts'
 
-export class FindUserByPhoneHandler extends OpenAPIRoute {
+export class FindUserByPhoneHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     tags: ['contacts'],
     summary: 'Find user by phone number',

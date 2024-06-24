@@ -20,7 +20,7 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
-import { CreateChatHandler } from './handlers/CreateChatHandler.1'
+import { CreateChatHandler } from './handlers/CreateChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
@@ -35,6 +35,7 @@ import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { authenticateUser } from './middleware/auth'
 import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
+import { OnlinesHandler } from './handlers/OnlinesHandler'
 
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { PushDO } from './durable-objects/PushDO'
@@ -95,6 +96,7 @@ router.original.get('/websocket', WebsocketHandler)
 router.get('/contacts/merged', GetMergedContactsHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
 router.post('/contacts/findByUsername', FindUserByUsernameHandler)
+router.post('/contacts/onlines', OnlinesHandler)
 router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)
 router.get('/contacts', GetContactsHandler)
 router.get('/contacts/:id', GetContactHandler)

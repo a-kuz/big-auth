@@ -1,33 +1,34 @@
-import { OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { normalizePhoneNumber } from '../utils/normalize-phone-number'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { z } from 'zod'
 
-interface Message {
-  phoneNumber: string
-}
-
-interface Req {
-  body: Message
-}
-
-export class SendCodeHandler extends OpenAPIRoute {
+export class SendCodeHandler extends Route {
   static schema = {
     tags: ['auth'],
     summary: 'Send OTP',
-    requestBody: {
+    requestBody: z.object({
       phoneNumber: new Str({ example: '+99999999999' }),
-    },
+    }),
     responses: {
       '200': {
         description: 'Message sent successfully',
         schema: {},
       },
+      ...errorResponses,
     },
   }
 
-  async handle(_request: Request, env: Env, _ctx: any, { body }: Req) {
+  async handle(
+    _request: Request,
+    env: Env,
+    _ctx: any,
+    { body }: DataOf<typeof SendCodeHandler.schema>,
+  ) {
     // Normalize the phone number to ensure consistency
     const phoneNumber = normalizePhoneNumber(body.phoneNumber)
 
@@ -58,7 +59,7 @@ export class SendCodeHandler extends OpenAPIRoute {
         // If the request was successful, return a success response
         return new Response('{}', { status: 200 })
       } else {
-        return errorResponse(await response.text() as string, response.status)
+        return errorResponse((await response.text()) as string, response.status)
       }
     } catch (error) {
       // In case of an error, return a standardized error response

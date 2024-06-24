@@ -1,4 +1,5 @@
 import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { getUserByPhoneNumbers } from '../db/services/get-user'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
@@ -9,7 +10,7 @@ import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
 import { putContacts } from '~/services/contacts'
 
-export class FindContactsHandler extends OpenAPIRoute {
+export class FindContactsHandler extends Route {
   static schema = {
     summary: 'Find contacts by phone numbers',
     tags: ['contacts'],

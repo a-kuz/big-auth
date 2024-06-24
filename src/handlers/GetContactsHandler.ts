@@ -1,9 +1,10 @@
 import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { getContacts } from '../services/contacts'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 
-export class GetContactsHandler extends OpenAPIRoute {
+export class GetContactsHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     tags: ['contacts'],
     summary: 'Get all contacts',

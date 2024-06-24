@@ -1,17 +1,12 @@
-import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
-  DataOf,
-  Path,
-} from '@cloudflare/itty-router-openapi'
-import { Env } from '../types/Env'
-import { updateContact } from '../services/contacts'
-import { errorResponse } from '../utils/error-response'
-import { errorResponses } from '../types/openapi-schemas/error-responses'
+import { DataOf, Path, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
+import { Route } from '~/utils/route'
+import { updateContact } from '../services/contacts'
+import { Env } from '../types/Env'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
+import { errorResponse } from '../utils/error-response'
 
-export class UpdateContactHandler extends OpenAPIRoute {
+export class UpdateContactHandler extends Route {
   static schema = {
     tags: ['contacts'],
     summary: 'Update a contact',
@@ -19,7 +14,7 @@ export class UpdateContactHandler extends OpenAPIRoute {
     requestBody: z.object({
       clientId: new Str({ required: false }),
       userId: new Str({ required: false }),
-      phoneNumber: new Str({ required: false }),
+      phoneNumber: new Str({ required: false, example: '+999' }),
       username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
@@ -38,7 +33,7 @@ export class UpdateContactHandler extends OpenAPIRoute {
   }
 
   async handle(
-    request: Request,
+    _request: Request,
     env: Env,
     _ctx: any,
     data: DataOf<typeof UpdateContactHandler.schema>,

@@ -1,14 +1,14 @@
 // File: /src/handlers/GetMessagesHandler.ts
-import { DataOf, OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
+import { DataOf, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { GetMessagesRequest } from '~/types/ws/client-requests'
-import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
-import { getUserByToken } from '../services/get-user-by-token'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/messages'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
-export class GetMessagesHandler extends OpenAPIRoute {
+export class GetMessagesHandler extends Route {
   static schema = {
     summary: 'Retrieve messages for a chat',
     tags: ['messages'],
@@ -28,15 +28,7 @@ export class GetMessagesHandler extends OpenAPIRoute {
           description: 'Dialog or groupchat messages',
         }),
       },
-      '400': {
-        description: 'Bad Request',
-      },
-      '401': {
-        description: 'Unauthorized',
-      },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

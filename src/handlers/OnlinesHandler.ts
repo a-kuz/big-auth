@@ -1,5 +1,6 @@
 import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
-import { getUserByPhoneNumbers } from '../db/services/get-user'
+import { Route } from '~/utils/route'
+import { getContacts, getMergedContacts } from '../services/contacts'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
@@ -11,15 +12,11 @@ import { putContacts } from '~/services/contacts'
 import { UserMessagingDO } from '..'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
-export class OnlinesHandler extends OpenAPIRoute {
+export class OnlinesHandler extends Route {
   static schema = {
-    summary: 'Find contacts by phone numbers',
+    summary: 'who is online',
     tags: ['contacts'],
-    requestBody: z.object({
-      phoneNumbers: z
-        .array(z.string().startsWith('+').openapi({ example: '+99990123443' }))
-        .optional(),
-    }),
+    requestBody: z.object({}),
     responses: {
       '200': {
         description: 'Ok',
@@ -39,7 +36,7 @@ export class OnlinesHandler extends OpenAPIRoute {
       },
       ...errorResponses,
     },
-    security: [{}],
+    security: [{ BearerAuth: [] }],
   }
 
   async handle(
@@ -47,22 +44,39 @@ export class OnlinesHandler extends OpenAPIRoute {
     env: Env,
     context: ExecutionContext,
     { body }: DataOf<typeof OnlinesHandler.schema>,
-  ) {
+  ): Promise<Response> {
     try {
-      // const t =userStorage(env).lis
-      // const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
-      //   u => u.id !== env.user.id,
-      // )
-      // const responseBody = JSON.stringify({ contacts })
+      const ownerId = env.user.id
+      const contacts = await getMergedContacts(env)
 
-      const response = new Response('', {
+      const onlineContacts = []
+
+      for (const contact of contacts) {
+        const contactStorage = userStorage(env, contact.id as string)
+        const response = await contactStorage.fetch(
+          new Request(`${env.ORIGIN}/${contact.id}/messaging/event/online`, {
+            method: 'POST',
+            body: JSON.stringify({
+              userId: ownerId,
+            }),
+          }),
+        )
+
+        if (response.ok) {
+          const resp = await response.text()
+          console.log(`${contact.id} : ${resp}`)
+          if (resp === 'online') {
+            onlineContacts.push(contact)
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ onlineContacts }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
         },
       })
-
-      return response
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find contacts')

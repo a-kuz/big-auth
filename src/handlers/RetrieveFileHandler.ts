@@ -1,9 +1,11 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 // RetrieveFileHandler class is designed to handle file retrieval requests.
-export class RetrieveFileHandler extends OpenAPIRoute {
+export class RetrieveFileHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'retrieve a file by id',
     tags: ['files'],
@@ -14,22 +16,11 @@ export class RetrieveFileHandler extends OpenAPIRoute {
         description: 'File retrieved successfully',
         schema: new Str(),
       },
-      '400': {
-        description: 'Bad Request',
-        schema: {
-          error: new Str({ example: 'id is required' }),
-        },
-      },
+      ...errorResponses,
       '404': {
         description: 'File not found',
         schema: {
           error: new Str({ example: 'File not found' }),
-        },
-      },
-      '500': {
-        description: 'Server Error',
-        schema: {
-          error: new Str({ example: 'Failed to retrieve file' }),
         },
       },
     },

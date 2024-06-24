@@ -7,10 +7,11 @@ import {
   Uuid,
   inferData,
 } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { Schema, z } from 'zod'
 import { NewMessageRequest } from '~/types/ws/client-requests'
-import { AttachmentSchema } from '~/types/openapi-schemas/Attachments'
+import { AttachmentSchema } from '~/types/openapi-schemas/attachments'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '~/utils/new-id'
@@ -22,7 +23,7 @@ const requestBody = {
   message: new Str({ example: 'Hello, how are you?', required: false }),
   clientMessageId: new Str({ example: 'ldjkedlkedlk', required: false }),
 }
-export class SendMessageHandler extends OpenAPIRoute {
+export class SendMessageHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     tags: ['messages'],
     summary: 'Send a chat message ',

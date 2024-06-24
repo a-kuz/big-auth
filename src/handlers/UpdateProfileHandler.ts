@@ -9,8 +9,10 @@ import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { UserId } from '~/types/ws/internal'
 import { ClientRequest } from 'http'
 import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
+import { Route } from '~/utils/route'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
-export class UpdateProfileHandler extends OpenAPIRoute {
+export class UpdateProfileHandler extends Route {
   static schema = {
     summary: 'Update own profile',
     tags: ['profile'],
@@ -35,15 +37,7 @@ export class UpdateProfileHandler extends OpenAPIRoute {
           }),
         },
       },
-      '400': {
-        description: 'Bad Request',
-      },
-      '401': {
-        description: 'Unauthorized',
-      },
-      '500': {
-        description: 'Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -72,21 +66,15 @@ export class UpdateProfileHandler extends OpenAPIRoute {
         return errorResponse('firstName or lastName must be defined', 400)
       }
 
-      const updatedUser = await updateUser(env.DB, user.id, {
-        firstName,
-        lastName,
-        username,
-        avatarUrl,
-      })
+      const updatedUser = await updateUser(env.DB, user.id, data.body)
 
       const storage = await userStorage(env, user.id)
       await storage.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/profile/request/updateProfile`, {
+        new Request(`${env.ORIGIN}/${user.id}/client/request/updateProfile`, {
           method: 'POST',
           body: JSON.stringify(updatedUser.profile()),
         }),
       )
-			await userStorageRpcRequest(env, user.id, 'updateProfile', updatedUser.profile())
 
       return new Response(JSON.stringify(updatedUser.profile()), {
         status: 200,

@@ -1,30 +1,14 @@
-import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Arr,
-  Obj,
-  Str,
-  Enumeration,
-  Bool,
-  DateTime,
-  Num,
-  Query,
-  DataOf,
-} from '@cloudflare/itty-router-openapi'
-import { getUserByToken } from '../services/get-user-by-token'
-import { Env } from '../types/Env'
-import { errorResponse, unauthorized } from '../utils/error-response'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { DataOf, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import {
-  ChatSchema,
-  DialogSchema,
-  GroupMetaSchema,
-  GroupSchema,
-} from '~/types/openapi-schemas/Chat'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { DialogSchema, GroupSchema } from '~/types/openapi-schemas/chat'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { Route } from '~/utils/route'
 import { writeErrorLog } from '~/utils/serialize-error'
+import { Env } from '../types/Env'
+import { errorResponse } from '../utils/error-response'
 
-export class GetChatHandler extends OpenAPIRoute {
+export class GetChatHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Retrieve chat info',
     tags: ['chats'],

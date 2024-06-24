@@ -1,10 +1,11 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { getUserById } from '../db/services/get-user'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 
-export class RefreshTokenHandler extends OpenAPIRoute {
+export class RefreshTokenHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Refresh tokens',
     tags: ['auth'],

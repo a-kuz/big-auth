@@ -4,6 +4,7 @@ import {
   GetChatRequest,
   GetChatsRequest,
   GetMessagesRequest,
+  GetMessagesResponse,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
@@ -93,7 +94,7 @@ export class UserMessagingDO implements DurableObject {
 
     const [userId, from, type, action] = paths as [
       string,
-      'dialog' | 'client' | 'group' | 'messaging' ,
+      'dialog' | 'client' | 'group' | 'messaging',
       'event' | 'request' | 'connect',
       (
         | ClientEventType
@@ -237,7 +238,6 @@ export class UserMessagingDO implements DurableObject {
 
     return new Response()
   }
-
   async dlvrdEventHandler(request: Request) {
     const eventData = await request.json<MarkDeliveredInternalEvent>()
 
@@ -265,7 +265,6 @@ export class UserMessagingDO implements DurableObject {
     }
     return new Response()
   }
-
   async readEventHandler(request: Request) {
     const eventData = await request.json<MarkReadInternalEvent>()
 
@@ -296,7 +295,6 @@ export class UserMessagingDO implements DurableObject {
     }
     return new Response()
   }
-
   async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.#userId
     const chat = this.toTop(chatId, {
@@ -318,7 +316,6 @@ export class UserMessagingDO implements DurableObject {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
   async receiveMessage(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
     const chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
@@ -361,7 +358,6 @@ export class UserMessagingDO implements DurableObject {
     this.toQ(eventData, chatData, dlvrd)
     return { success: true, dlvrd }
   }
-
   private async updateProfileHandler(request: Request) {
     const profile = await request.json<Profile>()
     await this.profileService.broadcastProfile(profile)
@@ -400,7 +396,6 @@ export class UserMessagingDO implements DurableObject {
       }
     }
   }
-
   private async toQ(
     eventData: NewGroupMessageEvent | NewMessageEvent,
     chat: Group | Dialog | DialogAI,
@@ -422,7 +417,6 @@ export class UserMessagingDO implements DurableObject {
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }
-
   async chatsHandler(request: Request) {
     const ai = this.#chatList.find(chat => chat.id === 'AI')
     const gpt = gptStorage(this.env, this.#userId)
@@ -464,30 +458,26 @@ export class UserMessagingDO implements DurableObject {
   }
   async messagesHandler(request: Request) {
     const data = await request.json<GetMessagesRequest>()
-    const dialog = this.chatStorage(data.chatId)
-    const messages = await dialog.getMessages(data)
+
+    const messages = await this.getMessagesRequest(data)
 
     return new Response(JSON.stringify(messages), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
   }
-
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
     await this.wsService.toBuffer('online', { userId: eventData.userId })
     return new Response(this.onlineService.isOnline() ? 'online' : '')
   }
-
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
     this.wsService.toBuffer('offline', { userId: eventData.userId })
     return new Response()
   }
-
   async friendTyping(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
     const event: TypingServerEvent = { chatId: eventData.userId }
@@ -573,8 +563,14 @@ export class UserMessagingDO implements DurableObject {
     return this.#chatList.filter(chat => chat.id !== this.#userId)
   }
 
-  async getMessagesRequest(payload: GetMessagesRequest): Promise<ChatMessage[]> {
-    return this.chatStorage(payload.chatId).getMessages(payload)
+  async getMessagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(payload)
+    resp.messages = resp.messages.filter(
+      m =>
+        resp.messages.findIndex(m2 => m2.clientMessageId === m.clientMessageId) ===
+        resp.messages.findLastIndex(m2 => m2.clientMessageId === m.clientMessageId),
+    )
+    return resp
   }
 
   async newRequest(payload: NewMessageRequest) {

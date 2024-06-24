@@ -1,9 +1,10 @@
 import { Num, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { z } from 'zod'
 import { getMergedContacts } from '../services/contacts'
 import { Env } from '../types/Env'
 
-export class GetMergedContactsHandler extends OpenAPIRoute {
+export class GetMergedContactsHandler extends Route {
   static schema = {
     tags: ['contacts'],
     summary: 'Get Merged Contacts',

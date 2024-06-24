@@ -8,13 +8,14 @@ import {
   OpenAPIRouteSchema,
   Str,
 } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 
-export class GetChatsHandler extends OpenAPIRoute {
+export class GetChatsHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Retrieve chat messages',
     tags: ['chats'],

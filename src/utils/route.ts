@@ -1,11 +1,14 @@
-import { OpenAPIRoute, jsonResp } from '@cloudflare/itty-router-openapi'
-import { z } from 'zod'
+import { OpenAPIRoute, OpenAPIRouteSchema, jsonResp } from '@cloudflare/itty-router-openapi'
+import { ZodError, z } from 'zod'
 
 export class Route extends OpenAPIRoute {
+  getSchema(): OpenAPIRouteSchema {
+    return {}
+  }
   handleValidationError(errors: z.ZodIssue[]): Response {
     return jsonResp(
       {
-        error: JSON.stringify(errors),
+        error: new ZodError(errors).message,
         timestamp: Date.now(),
         status: 400,
       },

@@ -1,9 +1,10 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { getUserById } from '../db/services/get-user' // import function to fetch user details from DB
 import { errorResponse } from '../utils/error-response'
 
-export class GetAvatarHandler extends OpenAPIRoute {
+export class GetAvatarHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Get user avatar by userId',
     tags: ['user'],

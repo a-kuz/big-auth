@@ -1,28 +1,23 @@
 import { OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { CustomError } from '~/errors/CustomError'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
 
-export class GetOwnProfileHandler extends OpenAPIRoute {
+
+export class GetOwnProfileHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Get own profile',
     tags: ['profile'],
     operationId: 'own profile',
     responses: {
+      ...errorResponses,
       '200': {
         description: 'Profile fetched successfully',
-        schema: {
-          id: new Str({ example: 'weEEwwecw_wdx2' }),
-          phoneNumber: new Str({ example: '+79333333333' }),
-          username: new Str({ required: false, example: '@ask_uznetsov' }),
-          firstName: new Str({ required: false, example: 'Aleksandr' }),
-          lastName: new Str({ required: false, example: 'Ivanov' }),
-          avatarUrl: new Str({
-            required: false,
-            example: 'https://pics.png/png.png',
-          }),
-        },
+        schema: ProfileSchema,
       },
     },
 

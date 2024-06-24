@@ -1,43 +1,41 @@
-import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-} from "@cloudflare/itty-router-openapi";
-import { Env } from "../types/Env";
+import { OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
+import { Env } from '../types/Env'
 
-export class NetworkInfoHandler extends OpenAPIRoute {
+export class NetworkInfoHandler extends Route {
   static schema: OpenAPIRouteSchema = {
-    summary: "Network info",
-    tags: ["debug"],
+    summary: 'Network info',
+    tags: ['debug'],
     responses: {
-      "200": {
-        description: "network info",
+      '200': {
+        description: 'network info',
         schema: {},
       },
     },
     security: [],
-  };
+  }
 
   async handle(request: Request, env: Env, context: any) {
     // Extracting Cloudflare's request properties
     const {
-      country = "world",
+      country = 'world',
       colo,
-      region = "NO_REGION",
+      region = 'NO_REGION',
       httpProtocol,
-      city = "NO_CITY",
-    } = request.cf as CfProperties;
+      city = 'NO_CITY',
+    } = request.cf as CfProperties
 
     // Human-readable information about the request
     const humanizedInfo = `Your request from ${country} -> ${region} -> ${city} was processed by ${colo} cloudflare data center.
 ${httpProtocol} protocol was used.
-More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IATA_airport_code`;
+More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IATA_airport_code`
 
     // Determining the response format based on the Accept header
-    const headers = request.headers;
-    const acceptHeader = headers.get("accept");
-    const cloudflareRequestInfo = request.cf;
+    const headers = request.headers
+    const acceptHeader = headers.get('accept')
+    const cloudflareRequestInfo = request.cf
 
-    if (acceptHeader === "application/json") {
+    if (acceptHeader === 'application/json') {
       // JSON response
       const response = JSON.stringify(
         {
@@ -47,10 +45,10 @@ More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IAT
         },
         undefined,
         2,
-      );
+      )
       return new Response(response, {
-        headers: { "Content-Type": "application/json" },
-      });
+        headers: { 'Content-Type': 'application/json' },
+      })
     } else {
       // HTML response
       return new Response(
@@ -62,8 +60,8 @@ More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IAT
           colo as string,
           cloudflareRequestInfo as Record<string, string>,
         ),
-        { headers: { "Content-Type": "text/html" } },
-      );
+        { headers: { 'Content-Type': 'text/html' } },
+      )
     }
   }
 }
@@ -156,5 +154,5 @@ const html = (
     </div>
 </body>
 </html>
-`;
-};
+`
+}

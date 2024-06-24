@@ -1,4 +1,5 @@
 import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { instanceToPlain } from 'class-transformer'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { getOrCreateUserByPhone } from '../db/services/get-user'
@@ -18,7 +19,7 @@ export interface OTPResponse {
   message?: string
 }
 
-export class VerifyCodeHandler extends OpenAPIRoute {
+export class VerifyCodeHandler extends Route {
   static schema = {
     tags: ['auth'],
     summary: 'Verify OTP',

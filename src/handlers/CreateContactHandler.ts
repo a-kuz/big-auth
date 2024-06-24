@@ -1,4 +1,11 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Str, DataOf } from '@cloudflare/itty-router-openapi'
+import {
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+  DataOf,
+  Bool,
+} from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { createContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
@@ -10,8 +17,11 @@ import { serializeError } from 'serialize-error'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { normalize } from 'path'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
+import { profile } from 'console'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { getUserById } from '~/db/services/get-user'
 
-export class CreateContactHandler extends OpenAPIRoute {
+export class CreateContactHandler extends Route {
   static schema = {
     tags: ['contacts'],
     summary: 'Create a new contact',
@@ -27,7 +37,8 @@ export class CreateContactHandler extends OpenAPIRoute {
       '200': {
         description: 'Contact created successfully',
         schema: {
-          id: new Str({ example: 'contactId' }),
+          result: new Bool({ required: true }).default(true),
+          profile: ProfileSchema,
         },
       },
       '400': {
@@ -57,8 +68,13 @@ export class CreateContactHandler extends OpenAPIRoute {
         avatarUrl,
         ownerId,
       }
-      const newContact = await createContact(env, contact)
-      return new Response(JSON.stringify(fromSnakeToCamel(newContact)), { status: 200 })
+      const newContact = fromSnakeToCamel(await createContact(env, contact))
+      return new Response(
+        JSON.stringify({ result: true, profile: await getUserById(env.DB, newContact.userId) }),
+        {
+          status: 200,
+        },
+      )
     } catch (error) {
       await writeErrorLog(error)
       return errorResponse((error as Error).message, 400)

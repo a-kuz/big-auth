@@ -5,12 +5,13 @@ import {
   Query,
   Str,
 } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { findUserByUsername } from '../services/contacts'
 import { z } from 'zod'
 
-export class FindUserByUsernameHandler extends OpenAPIRoute {
+export class FindUserByUsernameHandler extends Route {
   static schema = {
     tags: ['contacts'],
     summary: 'Find user by username',

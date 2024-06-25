@@ -17,7 +17,11 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const user = (await getUserByToken(this.env.DB, token, this.env.JWT_SECRET));
     return {
       id: user.id,
-      uid: await this.generateUid(user)
+      uid: await this.generateUid(user),
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl
     };
   }
   async fetch(request: Request<unknown, CfProperties<unknown>>) {
@@ -28,7 +32,11 @@ export class WorkerBigAuth extends WorkerEntrypoint {
       id:string,
       participants:{
         id: string,
-        uid: number
+        uid: number,
+        username?: string
+        firstName?: string
+        lastName?: string
+        avatarUrl?: string
       }[]
     } = {
       id:'',
@@ -41,7 +49,11 @@ export class WorkerBigAuth extends WorkerEntrypoint {
         participant = await getUserById(this.env.DB, participant.id);
         return {
           id: participant.id,
-          uid: await this.generateUid(participant)
+          uid: await this.generateUid(participant),
+          username: participant.username,
+          firstName: participant.firstName,
+          lastName: participant.lastName,
+          avatarUrl: participant.avatarUrl
         }
       }));
     } else {
@@ -51,11 +63,19 @@ export class WorkerBigAuth extends WorkerEntrypoint {
         returnObf.participants = [
           {
             id: user.id,
-            uid: await this.generateUid(user)
+            uid: await this.generateUid(user),
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatarUrl: user.avatarUrl
           },
           {
             id: companion.id,
-            uid: await this.generateUid(companion)
+            uid: await this.generateUid(companion),
+            username: companion.username,
+            firstName: companion.firstName,
+            lastName: companion.lastName,
+            avatarUrl: companion.avatarUrl
           },
         ]
         const [user1Id, user2Id] = [userId, chatId].sort((a, b) => (a > b ? 1 : -1))
@@ -82,7 +102,11 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const user = (await getUserById(this.env.DB, userId));
     return {
       id: user.id,
-      uid: await this.generateUid(user)
+      uid: await this.generateUid(user),
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl
     };
   }
   async generateUid({ id, createdAt }: { id: string, createdAt?: number }) {

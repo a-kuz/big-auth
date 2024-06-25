@@ -2,12 +2,7 @@ import { pushStorage, userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 
-export const WebsocketHandler = async (
-  request: Request,
-  env: Env,
-  _context: any,
-  data: Record<string, any>,
-) => {
+export const WebsocketHandler = async (request: Request, env: Env, ..._args: any[]) => {
   try {
     const user = env.user
 

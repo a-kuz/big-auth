@@ -27,7 +27,7 @@ import {
 import { splitArray } from '~/utils/split-array'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { Mark, Marks } from '../../types/Marks'
+import { Mark, Marks, MarkPointer } from '../../types/Marks'
 
 export class DialogsDO extends DurableObject implements TM_DurableObject {
   #timestamp = Date.now()
@@ -37,6 +37,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   #counter = 0
   #lastRead = new Map<string, number>()
   #readMarks: Marks = {}
+  #lastReadMark = new Map<string, MarkPointer>()
   #dlvrdMarks: Marks = {}
   #storage!: DurableObjectStorage
   #lastMessage?: DialogMessage
@@ -175,7 +176,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
     const timestamp = this.timestamp()
     const messageId = await this.newId()
-    console.log(messageId)
     const message: DialogMessage = {
       createdAt: timestamp,
       messageId,
@@ -250,17 +250,16 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     const messageId: MessageId = request.messageId ?? this.#counter - 1
     const message = (await this.#message(messageId))!
     const clientMessageId = message.clientMessageId
-    let readIndex = this.#readMarks[sender].findIndex(e => e[0] >= messageId)
-    const read = readIndex ? this.#readMarks[sender][readIndex][1] : 0
+    const read = this.readTimestamp(sender, messageId)
 
     const result = {
       chatId: request.chatId,
       messageId,
       clientMessageId,
       timestamp: read || timestamp,
-      missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+      missed: this.#counter - (this.#lastReadMark.get(sender)?.messageId || 0) - 1,
     }
-    const lastRead = this.#lastRead.get(sender)
+    const lastRead = this.#lastReadMark.get(sender)?.messageId
     if (lastRead && lastRead >= messageId) {
       return result
     }
@@ -271,6 +270,9 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
     this.#lastRead.set(sender, messageId)
     const mark: Mark = [messageId, timestamp]
+    const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
+    this.#lastReadMark.set(sender, markPointer)
+    await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
     this.#readMarks[sender].push(mark)
     await this.#storage.put<Mark>(`read-${sender}-${this.#readMarks[sender].length - 1}`, mark)
 
@@ -283,6 +285,19 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       timestamp,
       missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
     }
+  }
+
+  private readTimestamp(sender: string, messageId: number) {
+    const last = this.#lastReadMark.get(sender)
+    if (!last) return 0
+
+    if (last.messageId < messageId) {
+      return 0
+    }
+    const readMarks = this.#readMarks[sender]
+
+    const readIndex = readMarks.findIndex(e => e[0] >= messageId)
+    return readIndex ? this.#readMarks[sender][readIndex][1] : 0
   }
 
   private async sendDlvrdEventToAuthor(

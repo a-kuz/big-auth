@@ -4,3 +4,9 @@ export type Mark = [MessageId, Timestamp]
 export type Marks = {
   [key: UserId]: Mark[]
 }
+
+export type MarkPointer = {
+	index: number
+	messageId: number
+	timestamp: number
+}

@@ -7,6 +7,7 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '../utils/new-id'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { GROUP_ID_LENGTH } from '~/durable-objects/messaging/constants'
 
 // Define the OpenAPI schema for this route
 
@@ -57,7 +58,7 @@ export class CreateChatHandler extends Route {
         participants.push(user.id)
       }
 
-      const groupId = newId(24)
+      const groupId = newId(GROUP_ID_LENGTH)
       const groupChatDO = groupStorage(env, groupId)
       try {
         const chat = await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id)

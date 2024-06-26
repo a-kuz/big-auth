@@ -56,12 +56,11 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
   async create(owner: string, secondUser: string): Promise<Dialog> {
     if (this.#users?.length) return this.chat(owner)
-    // if (this.#messages.length) throw new Error('DO dialog: "messages" is not empty')
     const [user1Id, user2Id] = [owner, secondUser].sort((a, b) => (a > b ? 1 : -1))
     this.#id = `${user1Id}:${user2Id}`
 
     const user1 = (
-      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user2Id} is not exists`))
+      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user1Id} is not exists`))
     ).profile()
 
     const user2 = (
@@ -82,13 +81,16 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     })
   }
 
-  chat(userId: string): Dialog {
+  async chat(userId: string): Promise<Dialog> {
     if (!this.#users) {
       console.error("DO dialog: 'users' is not initialized")
       throw new Error("DO dialog: 'users' is not initialized")
     }
     const user2 = this.#users[0].id === userId ? this.#users[1] : this.#users[0]
     const isMine = this.#lastMessage?.sender === userId
+    const lastMessageStatus = this.#lastMessage
+      ? await this.messageStatus(this.#lastMessage.messageId, userId)
+      : 'undelivered'
 
     const chat: Dialog = {
       chatId: user2.id,
@@ -101,11 +103,11 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
         phoneNumber: user2.phoneNumber,
         username: user2.username,
       },
-      missed: this.#counter - (this.#lastReadMark.get(userId)?.messageId || 0) - 1,
+      missed: this.missedFor(userId),
       lastMessageText: this.#lastMessage?.message,
       lastMessageTime: this.#lastMessage?.createdAt,
       lastMessageAuthor: this.#lastMessage?.sender,
-      lastMessageStatus: lastMessage?.read ? 'read' : lastMessage?.dlvrd ? 'unread' : 'undelivered',
+      lastMessageStatus,
       isMine,
       name: '',
     }
@@ -197,7 +199,12 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
 
-    this.#lastRead.set(sender, messageId)
+    const mark: Mark = [messageId, timestamp]
+    const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
+    this.#lastReadMark.set(sender, markPointer)
+    await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
+    this.#readMarks[sender].push(mark)
+    await this.#storage.put<Mark>(`read-${sender}-${this.#readMarks[sender].length - 1}`, mark)
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
@@ -259,7 +266,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       messageId,
       clientMessageId,
       timestamp: read || timestamp,
-      missed: this.#counter - (this.#lastReadMark.get(sender)?.messageId || 0) - 1,
+      missed: this.missedFor(sender),
     }
     const lastRead = this.#lastReadMark.get(sender)?.messageId
     if (lastRead && lastRead >= messageId) {
@@ -270,7 +277,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       return result
     }
 
-    this.#lastRead.set(sender, messageId)
     const mark: Mark = [messageId, timestamp]
     const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
     this.#lastReadMark.set(sender, markPointer)
@@ -285,7 +291,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       messageId,
       clientMessageId,
       timestamp,
-      missed: this.#counter - (this.#lastRead.get(sender) || 0) - 1,
+      missed: this.missedFor(sender),
     }
   }
 
@@ -334,7 +340,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
     // Create an event object with message details and timestamp
     const event: MarkDeliveredInternalEvent = {
-      chatId: this.chat(receiverId).chatId,
+      chatId: this.chatIdFor(receiverId),
       messageId: message.messageId,
       clientMessageId: message.clientMessageId,
       timestamp,
@@ -355,13 +361,17 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     }
   }
 
+  private chatIdFor(userId: string): string {
+    return this.#id.replace(userId, '').replace(':', '')
+  }
+
   private async sendReadEventToAuthor(
     receiverId: string,
     message: DialogMessage,
     timestamp: number,
   ) {
     const receiverDO = userStorage(this.env, receiverId)
-    const senderId = this.#id.replace(receiverId, '').replace(':', '')
+    const senderId = this.chatIdFor(receiverId)
     // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
       chatId: senderId,
@@ -391,7 +401,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     timestamp: number,
   ) {
     const receiverDO = userStorage(this.env, receiverId)
-    const senderId = this.#id.replace(receiverId, '').replace(':', '')
+    const senderId = this.chatIdFor(receiverId)
 
     const event: NewMessageEvent = {
       messageId: message.messageId,
@@ -401,7 +411,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       attachments: message.attachments,
       clientMessageId: message.clientMessageId,
       timestamp,
-      missed: this.#counter - (this.#lastRead.get(receiverId) || 0) - 1,
+      missed: this.missedFor(receiverId),
     }
     const body = JSON.stringify(event)
     const resp = await receiverDO.fetch(
@@ -429,6 +439,10 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
   }
+  private missedFor(userId: string): number {
+    return this.#counter - (this.#lastRead.get(userId) || 0) - 1
+  }
+
   private async initialize() {
     if (!this.#users || !this.#users.length) {
       this.#users = await this.#storage.get('users')
@@ -471,36 +485,27 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       )
     }
   }
-  async messageStatus(messageId: number): Promise<'read' | 'unread' | 'undelivered'> {
-    const isRead = await this.isMarked(messageId, 'read')
+  async messageStatus(
+    messageId: number,
+    userId: string,
+  ): Promise<'read' | 'unread' | 'undelivered'> {
+    const isRead = await this.isMarked(messageId, userId, 'read')
     if (isRead) return 'read'
 
-    const isDelivered = await this.isMarked(messageId, 'dlvrd')
+    const isDelivered = await this.isMarked(messageId, userId, 'dlvrd')
     if (isDelivered) return 'unread'
 
     return 'undelivered'
   }
 
-  private async isMarked(messageId: number, markType: 'read' | 'dlvrd'): Promise<boolean> {
-    const marks = markType === 'read' ? this.#readMarks : this.#dlvrdMarks
-    const lastMark = markType === 'read' ? this.#lastReadMark : this.#lastDlvrdMark
-
-    for (const userId of Object.keys(marks)) {
-      const userMarks = marks[userId] || []
-      if (userMarks.some(mark => mark[0] === messageId)) {
-        return true
-      }
-
-      const last = lastMark.get(userId)
-      if (last && last.messageId >= messageId) {
-        const mark = await this.#storage.get<Mark>(`${markType}-${userId}-${last.index}`)
-        if (mark && mark[0] === messageId) {
-          marks[userId][last.index] = mark
-          return true
-        }
-      }
-    }
-    return false
+  private async isMarked(
+    messageId: number,
+    userId: string,
+    markType: 'read' | 'dlvrd',
+  ): Promise<boolean> {
+    const lastMark = (markType === 'read' ? this.#lastReadMark : this.#lastDlvrdMark).get(userId)
+    if (!lastMark) return false
+    return lastMark.messageId >= messageId
   }
 
   private timestamp() {
@@ -522,7 +527,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     const index2 = (index - 1) * -1
     const receiverId = this.#users[index2].id
     const receiverDO = userStorage(this.env, receiverId)
-    const event: UpdateChatInternalEvent = this.chat(receiverId)
+    const event: UpdateChatInternalEvent = await this.chat(receiverId)
 
     const reqBody = JSON.stringify(event)
 

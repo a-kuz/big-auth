@@ -44,6 +44,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
       const chat = chatStorage(this.env, chatId, userId);
       //@ts-ignore
       returnObf.participants = await Promise.all((await chat.chat(userId)).meta?.participants.map(async participant => {
+        participant = await getUserById(this.env.DB, participant.id);
         return {
           id: participant.id,
           username: participant.username,

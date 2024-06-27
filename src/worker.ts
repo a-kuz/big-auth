@@ -17,7 +17,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const user = (await getUserByToken(this.env.DB, token, this.env.JWT_SECRET));
     return {
       id: user.id,
-      uid: await this.generateUid(user),
       username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -32,7 +31,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
       id:string,
       participants:{
         id: string,
-        uid: number,
         username?: string
         firstName?: string
         lastName?: string
@@ -49,7 +47,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
         participant = await getUserById(this.env.DB, participant.id);
         return {
           id: participant.id,
-          uid: await this.generateUid(participant),
           username: participant.username,
           firstName: participant.firstName,
           lastName: participant.lastName,
@@ -63,7 +60,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
         returnObf.participants = [
           {
             id: user.id,
-            uid: await this.generateUid(user),
             username: user.username,
             firstName: user.firstName,
             lastName: user.lastName,
@@ -71,7 +67,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
           },
           {
             id: companion.id,
-            uid: await this.generateUid(companion),
             username: companion.username,
             firstName: companion.firstName,
             lastName: companion.lastName,
@@ -102,7 +97,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const user = (await getUserById(this.env.DB, userId));
     return {
       id: user.id,
-      uid: await this.generateUid(user),
       username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,

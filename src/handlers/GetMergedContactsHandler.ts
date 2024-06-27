@@ -3,6 +3,8 @@ import { Route } from '~/utils/route'
 import { z } from 'zod'
 import { getMergedContacts } from '../services/contacts'
 import { Env } from '../types/Env'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 export class GetMergedContactsHandler extends Route {
   static schema = {
@@ -13,31 +15,18 @@ export class GetMergedContactsHandler extends Route {
     responses: {
       '200': {
         description: 'Contact retrieved successfully',
-        schema: {
-          id: new Str(),
-          numericId: new Num(),
-          clientId: new Str({ required: false }),
-          userId: new Str({ required: false }),
-          phoneNumber: new Str({ required: false }),
-          username: new Str({ required: false }),
-          firstName: new Str({ required: false }),
-          lastName: new Str({ required: false }),
-          avatarUrl: new Str({ required: false }),
-        },
+        schema: z.object({
+          contacts: ProfileSchema,
+        }),
       },
-      '404': {
-        description: 'Contact not found',
-      },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
   }
 
   async handle(request: Request, env: Env) {
     try {
       const mergedContacts = await getMergedContacts(env)
-      return new Response(JSON.stringify(mergedContacts), {
+      return new Response(JSON.stringify({ contacts: mergedContacts }), {
         headers: { 'Content-Type': 'application/json' },
       })
     } catch (error) {

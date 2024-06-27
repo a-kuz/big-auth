@@ -104,7 +104,7 @@ export async function createContact(env: Env, contact: any) {
     .bind(
       id,
       clientId ?? '',
-      userId ?? null,
+      userId ?? undefined,
       phoneNumber,
       username ?? '',
       firstName ?? '',
@@ -123,22 +123,31 @@ export async function getContacts(env: Env, ownerId: string) {
 }
 
 export async function getMergedContacts(env: Env) {
-  const contactsQuery = `
-    SELECT u.id, u.first_name, u.last_name, u.phone_number, u.created_at
+  const query = `
+    SELECT u.id,
+           CASE WHEN COALESCE(c.first_name, '') = '' THEN u.first_name ELSE c.first_name END AS first_name,
+           CASE WHEN COALESCE(c.last_name, '') = '' THEN u.last_name ELSE c.last_name END AS last_name,
+           CASE WHEN COALESCE(c.avatar_url, '') = '' THEN u.avatar_url ELSE c.avatar_url END AS avatar_url,
+           u.phone_number,
+           u.username,
+           u.created_at
     FROM contacts c
     JOIN users u ON u.id = c.user_id
     WHERE c.owner_id = ?
-  `
-  const contacts = await env.DB.prepare(contactsQuery).bind(env.user.id).all<Required<UserDB>>()
-
-  const phoneNumbersQuery = `
-    SELECT u.*
+    UNION
+    SELECT u.id,
+           u.first_name,
+           u.last_name,
+           u.avatar_url,
+           u.phone_number,
+           u.username,
+           u.created_at
     FROM phone_numbers pn
     JOIN users u ON pn.phone_number2 = u.phone_number
     WHERE pn.phone_number1 = ?
   `
-  const phoneNumbers = await env.DB.prepare(phoneNumbersQuery)
-    .bind(env.user.phoneNumber)
+  const contacts = await env.DB.prepare(query)
+    .bind(env.user.id, env.user.phoneNumber)
     .all<Required<UserDB>>()
 
   const userMessagingDO = userStorage(env, env.user.id)
@@ -168,7 +177,7 @@ export async function getMergedContacts(env: Env) {
     }
   }
 
-  const combinedResults = [...contacts.results, ...phoneNumbers.results, ...chatListUsers.results]
+  const combinedResults = [...contacts.results, ...chatListUsers.results]
 
   const uniqueResults = combinedResults.reduce<Required<UserDB>[]>((acc, current) => {
     const x = acc.find(item => item.id === current.id)
@@ -179,25 +188,17 @@ export async function getMergedContacts(env: Env) {
   }, [])
 
   const results = uniqueResults.map(contact => {
-    const user = phoneNumbers.results.find(pn => pn.id === contact.id) || contact
-    const chat = chatListUsers.results.find(user => user.id === contact.id)
     return {
-      ...fromSnakeToCamel(contact),
-      firstName: contact.first_name || user.first_name || chat?.first_name,
-      lastName: contact.last_name || user.last_name || chat?.last_name,
-      chatId: chat ? chat.id : null,
-      phoneNumber: contact.phone_number || user.phone_number || chat?.phone_number,
+      id: contact.id,
+      phoneNumber: contact.phone_number,
+      firstName: contact.first_name || undefined,
+      lastName: contact.last_name || undefined,
+      username: contact.username || undefined,
+      avatarUrl: contact.avatar_url || undefined,
     }
   })
 
-  return Promise.all(
-    results.map(async e => {
-      const d = await digest(e.id)
-      const twoBytes = parseInt(d.slice(0, 4), 16).toString(10)
-      const numericId = parseInt(e.createdAt.toString(10) + twoBytes, 10)
-      return { numericId, ...e }
-    }),
-  )
+  return results.filter(u => u.firstName || u.lastName || u.username)
 }
 
 export async function getContactById(env: Env, id: string, ownerId: string) {

@@ -1,3 +1,4 @@
+
 import { DialogMessage } from '~/types/ChatMessage'
 import {
   GetMessagesRequest,
@@ -35,11 +36,10 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   #users?: [Profile, Profile]
   #id: string = ''
   #counter = 0
-  #lastRead = new Map<string, number>()
   #readMarks: Marks = {}
+  #dlvrdMarks: Marks = {}
   #lastReadMark = new Map<string, MarkPointer>()
   #lastDlvrdMark = new Map<string, MarkPointer>()
-  #dlvrdMarks: Marks = {}
   #storage!: DurableObjectStorage
   #lastMessage?: DialogMessage
 
@@ -141,6 +141,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       return { messages, authors: [] }
     }
   }
+
   async loadMessages(startId: number, endId: number) {
     const missedIds = []
     for (let i = startId; i <= endId; i++) {
@@ -161,7 +162,14 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
         }
       }
     }
-    return this.#messages.slice(startId, endId).filter(m => !!m)
+
+    const messages = this.#messages.slice(startId, endId).filter(m => !!m)
+    for (const message of messages) {
+      message.read = await this.findMark(message.sender, message.messageId, 'read')?.[1] || 0
+      message.dlvrd = await this.findMark(message.sender, message.messageId, 'dlvrd')?.[1] || 0
+    }
+
+    return messages
   }
 
   async #message(messageId: number) {

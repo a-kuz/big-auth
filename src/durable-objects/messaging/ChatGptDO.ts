@@ -189,7 +189,7 @@ export class ChatGptDO extends DurableObject {
     await this.ctx.storage.put('counter', this.#counter)
     return this.#counter - 1
   }
-  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+  async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length - 1

@@ -564,7 +564,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async getMessagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
-    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(payload)
+    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(payload, this.#userId)
     resp.messages = resp.messages.filter(
       m =>
         resp.messages.findIndex(m2 => m2.clientMessageId === m.clientMessageId) ===

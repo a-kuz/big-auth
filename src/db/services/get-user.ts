@@ -4,6 +4,7 @@ import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
 import { CustomError } from '~/errors/CustomError'
+import { serializeError } from 'serialize-error'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -73,7 +74,7 @@ export const getUserByPhoneNumbers = async (
             .all<UserDB>()
           resolve(users.results.map(User.fromDb))
         } catch (error) {
-          console.error('Failed to retrieve users by phone numbers:', error)
+          console.error('Failed to retrieve users by phone numbers:', serializeError(error))
           throw new Error('Failed to retrieve users by phone numbers')
         }
       }),

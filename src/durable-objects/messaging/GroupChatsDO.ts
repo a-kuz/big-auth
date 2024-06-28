@@ -293,7 +293,7 @@ export class GroupChatsDO extends DurableObject {
     return this.#messages.length
   }
 
-  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+  async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
 
     let messages = []

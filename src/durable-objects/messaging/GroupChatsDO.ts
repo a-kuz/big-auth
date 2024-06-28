@@ -29,7 +29,6 @@ import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { displayName } from '~/services/display-name'
 import { NotFoundError } from '~/errors/NotFoundError'
-import { MarkPointer, Marks } from '~/types/Marks'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -49,10 +48,7 @@ export class GroupChatsDO extends DurableObject {
   #users: Profile[] = []
 
   #storage!: DurableObjectStorage
-  #lastReadMark = new Map<string, MarkPointer>()
-  #lastDlvrdMark = new Map<string, MarkPointer>()
-  #readMarks: Marks = {}
-  #dlvrdMarks: Marks = {}
+  #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
   #runningEvents: OutgoingEvent[] = []
   constructor(
@@ -226,26 +222,23 @@ export class GroupChatsDO extends DurableObject {
       }
     }
 
-    for (const user of this.group.meta.participants as string[]) {
-      this.#readMarks[user] = []
-      this.#dlvrdMarks[user] = []
-
-      const lastReadMark = await this.#storage.get<MarkPointer>(`lastRead-${user}`)
-      if (lastReadMark) {
-        this.#lastReadMark.set(user, lastReadMark)
-        this.#readMarks[user][lastReadMark.index] = [
-          lastReadMark.messageId,
-          lastReadMark.timestamp,
-        ]
+    const participants = Array.from(this.group.meta.participants as string[])
+    for (let i = this.#counter - 1; i >= 0; i--) {
+      const m = this.#messages[i]
+      if (!m) continue
+      if (m.delivering?.length) {
+        for (const d of m.delivering) {
+          if (d.read) {
+            const j = participants.findIndex(e => e === d.userId)
+            if (j >= 0) {
+              this.#lastRead.set(d.userId, m.messageId)
+              participants.splice(j, 1)
+            }
+          }
+        }
       }
-
-      const lastDlvrdMark = await this.#storage.get<MarkPointer>(`lastDlvrd-${user}`)
-      if (lastDlvrdMark) {
-        this.#lastDlvrdMark.set(user, lastDlvrdMark)
-        this.#dlvrdMarks[user][lastDlvrdMark.index] = [
-          lastDlvrdMark.messageId,
-          lastDlvrdMark.timestamp,
-        ]
+      if (!participants.length) {
+        break
       }
     }
     const end = performance.now()
@@ -305,141 +298,20 @@ export class GroupChatsDO extends DurableObject {
 
     let messages = []
     if (!payload.startId) {
-      const endIndex = payload.endId || this.#messages.length
+      const endIndex = payload.endId || this.#messages.length - 1
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
-      const startIndex = endIndex > portion ? endIndex - portion : 0
-      messages = await this.loadMessages(startIndex, endIndex, userId)
+      const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
+      messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
-      const endIndex = startIndex + portion
-      messages = await this.loadMessages(startIndex, endIndex, userId)
+      const endIndex = startIndex + portion - 1
+      messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
     }
     // Collect userIds from the senders of the returned messages
     const senderIds = new Set(messages.map(m => m.sender))
     const authors = this.#users.filter(u => senderIds.has(u.id))
     return { messages, authors }
-  }
-
-  async loadMessages(startId: number, endId: number, userId: string) {
-    const missedIds = []
-    for (let i = startId; i <= endId; i++) {
-      if (!this.#messages[i]) {
-        missedIds.push(i)
-      }
-    }
-    const keys = missedIds.map(i => `message-${i}`)
-    const keyChunks = splitArray(keys, 128)
-
-    for (const chunk of keyChunks) {
-      const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
-      for (const key of messagesChunk.keys()) {
-        const i = keys.indexOf(key)
-        const message = messagesChunk.get(key)
-        if (message) {
-          this.#messages[i] = message
-        }
-      }
-    }
-    const messages = this.#messages.slice(startId, endId).filter(m => !!m)
-
-    if (messages.length === 0) {
-      return messages
-    }
-
-    const { readMarks, dlvrdMarks } = await this.loadMarks(startId, endId, userId)
-    let readMark = readMarks.length ? readMarks[0] : undefined
-    let dlvrdMark = dlvrdMarks.length ? dlvrdMarks[0] : undefined
-
-    for (const message of messages) {
-      if (message.sender !== userId) continue
-      if (readMark) {
-        if (readMark[0] < message.messageId) {
-          readMark = readMarks[readMarks.indexOf(readMark) + 1] ?? undefined
-        }
-      }
-      if (dlvrdMark) {
-        if (dlvrdMark[0] < message.messageId) {
-          dlvrdMark = dlvrdMarks[dlvrdMarks.indexOf(dlvrdMark) + 1] ?? undefined
-        }
-      }
-
-      message.delivering = message.delivering || []
-      const delivering = message.delivering.find(d => d.userId === userId)
-      if (delivering) {
-        delivering.read = readMark ? readMark[1] : undefined
-        delivering.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
-      } else {
-        message.delivering.push({
-          userId,
-          read: readMark ? readMark[1] : undefined,
-          dlvrd: dlvrdMark ? dlvrdMark[1] : undefined,
-        })
-      }
-    }
-    return messages
-  }
-
-  async loadMarks(
-    startIndex: number,
-    endIndex: number,
-    userId: string,
-  ): Promise<{ readMarks: Mark[]; dlvrdMarks: Mark[] }> {
-    const readKeys = []
-    const dlvrdKeys = []
-    for (let i = startIndex; i <= endIndex; i++) {
-      readKeys.push(`read-${userId}-${i}`)
-      dlvrdKeys.push(`dlvrd-${userId}-${i}`)
-    }
-
-    const readMarks = new Map<string, Mark>()
-    const dlvrdMarks = new Map<string, Mark>()
-
-    const readKeyChunks = splitArray(readKeys, 128)
-    const dlvrdKeyChunks = splitArray(dlvrdKeys, 128)
-
-    for (const chunk of readKeyChunks) {
-      const marksChunk = await this.#storage.get<Mark>(chunk)
-      for (const [key, value] of marksChunk.entries()) {
-        readMarks.set(key, value)
-      }
-    }
-
-    for (const chunk of dlvrdKeyChunks) {
-      const marksChunk = await this.#storage.get<Mark>(chunk)
-      for (const [key, value] of marksChunk.entries()) {
-        dlvrdMarks.set(key, value)
-      }
-    }
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const readMark = readMarks.get(`read-${userId}-${i}`)
-      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
-      if (readMark) {
-        this.#readMarks[userId][i] = readMark
-      }
-      if (dlvrdMark) {
-        this.#dlvrdMarks[userId][i] = dlvrdMark
-      }
-    }
-
-    const readMarksArray: Mark[] = []
-    const dlvrdMarksArray: Mark[] = []
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const readMark = readMarks.get(`read-${userId}-${i}`)
-      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
-      if (readMark) {
-        this.#readMarks[userId][i] = readMark
-        readMarksArray.push(readMark)
-      }
-      if (dlvrdMark) {
-        this.#dlvrdMarks[userId][i] = dlvrdMark
-        dlvrdMarksArray.push(dlvrdMark)
-      }
-    }
-
-    return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
@@ -484,12 +356,10 @@ export class GroupChatsDO extends DurableObject {
         await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       }
     }
-    const mark: Mark = [messageId, timestamp]
-    const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
-    this.#lastReadMark.set(sender, markPointer)
-    await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
-    this.#readMarks[sender].push(mark)
-    await this.#storage.put<Mark>(`read-${sender}-${this.#readMarks[sender].length - 1}`, mark)
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
@@ -510,12 +380,24 @@ export class GroupChatsDO extends DurableObject {
     }
     const messageId = this.#messages[endIndex].messageId
 
-    const mark: Mark = [messageId, timestamp]
-    const markPointer = { index: this.#dlvrdMarks[sender].length, messageId, timestamp }
-    this.#lastDlvrdMark.set(sender, markPointer)
-    await this.#storage.put<MarkPointer>(`lastDlvrd-${sender}`, markPointer)
-    this.#dlvrdMarks[sender].push(mark)
-    await this.#storage.put<Mark>(`dlvrd-${sender}-${this.#dlvrdMarks[sender].length - 1}`, mark)
+    for (let i = endIndex; i >= 0; i--) {
+      const message = this.#messages[i]
+      if (!message) continue
+      if (message.sender === sender) {
+        continue
+      }
+      let d = message.delivering?.find(d => d.userId === sender)
+      if (!d) {
+        d = message.delivering![message.delivering!.push({ userId: sender, dlvrd: timestamp })]
+      } else if (d.dlvrd) {
+        break
+      }
+      d.dlvrd = timestamp
+
+      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+        allowConcurrency: false,
+      })
+    }
     const lastMessage = this.#messages[endIndex]
     const messageSender = lastMessage.sender
     if (lastMessage.delivering && lastMessage.delivering.length === 1)
@@ -558,12 +440,28 @@ export class GroupChatsDO extends DurableObject {
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
     }
-    const mark: Mark = [messageId, timestamp]
-    const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
-    this.#lastReadMark.set(sender, markPointer)
-    await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
-    this.#readMarks[sender].push(mark)
-    await this.#storage.put<Mark>(`read-${sender}-${this.#readMarks[sender].length - 1}`, mark)
+    let lastUnread = 0
+    for (let i = endIndex; i >= 0; i--) {
+      const message = this.#messages[i]
+      if (!message) continue
+      if (message.sender === sender) {
+        continue
+      }
+      let d = message.delivering?.find(d => d.userId === sender)
+      if (!d) {
+        d =
+          message.delivering![
+            message.delivering!.push({ userId: sender, read: timestamp, dlvrd: timestamp }) - 1
+          ]
+      } else if (d.read) {
+        break
+      }
+      d.read = timestamp
+      if (!d.dlvrd) d.dlvrd = timestamp
+      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+        allowConcurrency: false,
+      })
+    }
     const lastMessage = this.#messages[endIndex]
     if (
       lastMessage.delivering &&

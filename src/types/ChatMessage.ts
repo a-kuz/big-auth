@@ -1,6 +1,6 @@
 import { Attachment } from './Attachment'
 
-export interface Delivering {
+interface Delivering {
   userId: string
   dlvrd?: number
   read?: number

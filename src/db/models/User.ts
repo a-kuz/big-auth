@@ -22,6 +22,9 @@ export class User {
   @NullToUndefined
   avatarUrl?: string
 
+  @NullToUndefined
+  verified?: boolean
+
   @Type(() => Number)
   @NullToUndefined
   createdAt?: number
@@ -49,5 +52,5 @@ export class User {
 export type UserDB = Omit<ObjectCamelToSnakeCase<User>, 'profile'>
 export type Profile = Pick<
   User,
-  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl'
+  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl' | 'verified'
 >

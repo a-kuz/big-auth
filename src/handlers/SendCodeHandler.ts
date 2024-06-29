@@ -33,7 +33,12 @@ export class SendCodeHandler extends Route {
     const phoneNumber = normalizePhoneNumber(body.phoneNumber)
 
     if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+999')) {
-      return new Response('{}', { status: 200 })
+      return new Response('{}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     }
 
     // Construct the URL for Twilio's Verification API

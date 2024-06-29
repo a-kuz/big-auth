@@ -2,6 +2,7 @@ import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/it
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { pushStorage } from '~/durable-objects/messaging/utils/mdo'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export async function GetDeviceTokensHandler(
   request: Request,
@@ -30,7 +31,8 @@ export async function GetDeviceTokensHandler(
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Failed to retrieve device tokens:', error)
+    console.error('Failed to retrieve device tokens:')
+		await writeErrorLog(error)
     return errorResponse('Internal Server Error', 500)
   }
 }

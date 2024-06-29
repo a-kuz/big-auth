@@ -1,11 +1,13 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
+import { OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { CustomError } from '~/errors/CustomError'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { Route } from '~/utils/route'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { errorResponses } from '~/types/openapi-schemas/error-responses'
-import { ProfileSchema } from '~/types/openapi-schemas/profile'
+
+ProfileSchema.shape.verified = new Str({ required: false, example: 'true' })
 
 
 export class GetOwnProfileHandler extends Route {
@@ -30,6 +32,9 @@ export class GetOwnProfileHandler extends Route {
 
       return new Response(JSON.stringify(user.profile()), {
         status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
     } catch (e) {
       await writeErrorLog(e)

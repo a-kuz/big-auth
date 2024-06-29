@@ -1,16 +1,15 @@
-import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
-import { instanceToPlain } from 'class-transformer'
+import { DataOf, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { UserId } from '~/types/ws/internal'
+import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
+import { Route } from '~/utils/route'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { updateUser } from '../db/services/update-user'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { writeErrorLog } from '~/utils/serialize-error'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
-import { UserId } from '~/types/ws/internal'
-import { ClientRequest } from 'http'
-import { ClientRequestPayload, ServerResponsePayload } from '~/types/ws/payload-types'
-import { Route } from '~/utils/route'
-import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 export class UpdateProfileHandler extends Route {
   static schema = {
@@ -25,17 +24,7 @@ export class UpdateProfileHandler extends Route {
     responses: {
       '200': {
         description: 'Profile updated successfully',
-        schema: {
-          id: new Str({ example: 'weEEwwecw_wdx2' }),
-          phoneNumber: new Str({ example: '+79333333333' }),
-          username: new Str({ required: false, example: '@ask_uznetsov' }),
-          firstName: new Str({ required: false, example: 'Aleksandr' }),
-          lastName: new Str({ required: false, example: 'Ivanov' }),
-          avatarUrl: new Str({
-            required: false,
-            example: 'https://pics.png/png.png',
-          }),
-        },
+        schema: ProfileSchema,
       },
       ...errorResponses,
     },
@@ -76,8 +65,13 @@ export class UpdateProfileHandler extends Route {
         }),
       )
 
-      return new Response(JSON.stringify(updatedUser.profile()), {
+      const responseBody = updatedUser.profile()
+
+      return new Response(JSON.stringify(responseBody), {
         status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
     } catch (error) {
       await writeErrorLog(error)

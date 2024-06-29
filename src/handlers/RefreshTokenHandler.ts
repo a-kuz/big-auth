@@ -46,7 +46,10 @@ export class RefreshTokenHandler extends Route {
         new Request(`${url.origin}/refresh?${params.toString()}`, {
           method: 'POST',
         }),
-      )
+      ).then(response => {
+        response.headers.set('Content-Type', 'application/json')
+        return response
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Something went wrong')

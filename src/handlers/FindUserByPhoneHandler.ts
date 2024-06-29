@@ -38,7 +38,12 @@ export class FindUserByPhoneHandler extends Route {
       if (!user) {
         return errorResponse('User not found', 404)
       }
-      return new Response(JSON.stringify(user), { status: 200 })
+      return new Response(JSON.stringify(user), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find user', 500)

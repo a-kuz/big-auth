@@ -16,7 +16,6 @@ export interface Chat<T extends ChatType> {
   lastMessageAuthor?: string
   lastMessageStatus?: MessageStatus
   missed: number
-  verified?: boolean
   isMine?: boolean
   attachmentType?: AttachmentType
   meta: T extends 'dialog'

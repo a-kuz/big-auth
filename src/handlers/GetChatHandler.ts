@@ -44,7 +44,15 @@ export class GetChatHandler extends Route {
           method: 'POST',
           body: JSON.stringify({ chatId }),
         }),
-      )
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      ).then(response => {
+        response.headers.set('Content-Type', 'application/json')
+        return response
+      })
     } catch (error) {
       // Handle any errors
       writeErrorLog(error)

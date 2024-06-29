@@ -11,4 +11,5 @@ export const ProfileSchema = z.object({
 		required: false,
 		example: 'https://pics.png/png.png',
 	}),
+	verified: new Str({ required: false, example: 'true' }),
 })

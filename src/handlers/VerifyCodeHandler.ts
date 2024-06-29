@@ -95,7 +95,12 @@ export class VerifyCodeHandler extends Route {
           refreshToken,
           profile: user.profile(),
         }),
-        { status: 200 },
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
       )
     } catch (error) {
       console.error(error)

@@ -62,7 +62,11 @@ export class CreateChatHandler extends Route {
       const groupChatDO = groupStorage(env, groupId)
       try {
         const chat = await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id)
-        return new Response(JSON.stringify(chat))
+        return new Response(JSON.stringify(chat), {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
       } catch (error) {
         await writeErrorLog(error)
         return errorResponse(

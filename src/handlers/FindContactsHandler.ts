@@ -85,6 +85,7 @@ export class FindContactsHandler extends Route {
         ]),
       )
 
+      response.headers.set('Content-Type', 'application/json')
       return response
     } catch (error) {
       console.error(error)

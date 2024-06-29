@@ -47,7 +47,12 @@ export class UpdateContactHandler extends Route {
       if (!updatedContact) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify(updatedContact), { status: 200 })
+      return new Response(JSON.stringify(updatedContact), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to update contact', 500)

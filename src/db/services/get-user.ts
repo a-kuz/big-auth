@@ -15,10 +15,11 @@ export const getOrCreateUserByPhone = async (
     const existingUser = await d1.prepare(query).bind(phoneNumber).first<UserDB>()
 
     if (!existingUser) {
-      const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
+      const insertQuery = 'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
       const id = phoneNumber.startsWith('+9999') ? phoneNumber + newId(2) : newId()
       const createdAt = Math.floor(Date.now() / 1000)
-      await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
+      const verified = false
+      await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt, verified).run()
       return new User(id, phoneNumber)
     } else {
       return User.fromDb(existingUser)

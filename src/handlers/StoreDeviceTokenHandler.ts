@@ -57,6 +57,9 @@ export class StoreDeviceTokenHandler extends Route {
 
       return new Response(JSON.stringify({ message: 'Device token stored successfully' }), {
         status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
     } catch (error) {
       await writeErrorLog(error)

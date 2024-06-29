@@ -5,6 +5,7 @@ import { getMergedContacts } from '../services/contacts'
 import { Env } from '../types/Env'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { errorResponse } from '~/utils/error-response'
 
 export class GetMergedContactsHandler extends Route {
   static schema = {
@@ -30,10 +31,7 @@ export class GetMergedContactsHandler extends Route {
         headers: { 'Content-Type': 'application/json' },
       })
     } catch (error) {
-      return new Response(JSON.stringify({ error: (error as Error).message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return errorResponse(JSON.stringify({ error: (error as Error).message }))
     }
   }
 }

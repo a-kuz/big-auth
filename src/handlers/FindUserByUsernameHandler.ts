@@ -1,15 +1,14 @@
 import {
-  DataOf,
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Query,
-  Str,
+	DataOf,
+	Str
 } from '@cloudflare/itty-router-openapi'
+import { z } from 'zod'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { Route } from '~/utils/route'
+import { findUserByUsername } from '../services/contacts'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { findUserByUsername } from '../services/contacts'
-import { z } from 'zod'
 
 export class FindUserByUsernameHandler extends Route {
   static schema = {
@@ -21,21 +20,12 @@ export class FindUserByUsernameHandler extends Route {
     responses: {
       '200': {
         description: 'User found',
-        schema: {
-          id: new Str(),
-          username: new Str(),
-          phoneNumber: new Str(),
-          firstName: new Str({ required: false }),
-          lastName: new Str({ required: false }),
-          avatarUrl: new Str({ required: false }),
-        },
+        schema: ProfileSchema,
       },
       '404': {
         description: 'User not found',
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses
     },
     security: [{ BearerAuth: [] }],
   }
@@ -51,7 +41,12 @@ export class FindUserByUsernameHandler extends Route {
       if (!user) {
         return errorResponse('User not found', 404)
       }
-      return new Response(JSON.stringify(user), { status: 200 })
+      return new Response(JSON.stringify(user), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find user', 500)

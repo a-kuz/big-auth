@@ -1,19 +1,18 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { digest } from '../utils/digest'
 import { errorResponse } from '../utils/error-response'
-import { errorResponses } from '~/types/openapi-schemas/error-responses'
-import { ZodObject, UnknownKeysParam, ZodTypeAny } from 'zod'
 
 export class UploadFileHandler extends Route {
   //@ts-ignore
-  async validateRequest(request: Request<unknown, CfProperties<unknown>>) {
+  async validateRequest(request: Request<unknown, CfProperties<unknown>>): Promise<{ data: FormData }> {
     return { data: await request.formData() }
   }
-	extractQueryParameters(request: Request<unknown, CfProperties<unknown>>, schema?: ZodObject<any, UnknownKeysParam, ZodTypeAny, { [x: string]: any; }, { [x: string]: any; }> | undefined): Record<string, any> | null {
 
-	}
+
+
   static schema: OpenAPIRouteSchema = {
     summary: 'Upload a file',
     tags: ['files'],
@@ -53,11 +52,10 @@ export class UploadFileHandler extends Route {
 
         return new Response(
           JSON.stringify({
-            message: 'File uploaded successfully',
-
             url: `${new URL(request.url).origin}/public/${id}`,
           }),
           {
+						headers: {'Content-Type': 'application/json'},
             status: 200,
           },
         )

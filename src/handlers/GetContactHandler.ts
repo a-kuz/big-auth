@@ -1,15 +1,14 @@
 import {
-  DataOf,
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Path,
-  Str,
+	DataOf,
+	OpenAPIRouteSchema,
+	Path,
+	Str
 } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
-import { Env } from '../types/Env'
 import { getContactById } from '../services/contacts'
-import { errorResponse } from '../utils/error-response'
+import { Env } from '../types/Env'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
+import { errorResponse } from '../utils/error-response'
 
 export class GetContactHandler extends Route {
   static schema: OpenAPIRouteSchema = {
@@ -51,7 +50,12 @@ export class GetContactHandler extends Route {
       if (!contact) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify(contact), { status: 200 })
+      return new Response(JSON.stringify(contact), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to retrieve contact', 500)

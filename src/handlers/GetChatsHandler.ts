@@ -73,7 +73,10 @@ export class GetChatsHandler extends Route {
           method: 'POST',
           body: '{}',
         }),
-      )
+      ).then(response => {
+        response.headers.set('Content-Type', 'application/json')
+        return response
+      })
     } catch (error: unknown) {
       // Handle any errors
       writeErrorLog(error)

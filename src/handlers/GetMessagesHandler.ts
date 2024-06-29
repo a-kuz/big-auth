@@ -7,6 +7,8 @@ import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { DEFAULT_PORTION, MAX_PORTION } from '~/durable-objects/messaging/constants'
 
 export class GetMessagesHandler extends Route {
   static schema = {
@@ -15,7 +17,7 @@ export class GetMessagesHandler extends Route {
 
     parameters: {
       chatId: Query(z.coerce.string().optional(), { description: 'The ID of the chat' }),
-      count: Query(z.coerce.number().max(500).default(50).optional(), {
+      count: Query(z.coerce.number().max(MAX_PORTION).default(DEFAULT_PORTION).optional(), {
         description: 'portion length',
       }),
       endId: Query(z.coerce.number().optional(), { description: 'to id' }),
@@ -24,9 +26,12 @@ export class GetMessagesHandler extends Route {
     responses: {
       '200': {
         description: 'Messages retrieved successfully',
-        schema: z.union([z.array(DialogMessageSchema), z.array(GroupChatMessageSchema)], {
-          description: 'Dialog or groupchat messages',
+        schema: z.object({
+          messages: z.union([z.array(DialogMessageSchema), z.array(GroupChatMessageSchema)], {
+            description: 'Dialog or groupchat messages',
+          }),
         }),
+        authors: z.array(ProfileSchema),
       },
       ...errorResponses,
     },
@@ -47,12 +52,17 @@ export class GetMessagesHandler extends Route {
       }
       let user = env.user
       const userMessagingDO = userStorage(env, user.id)
-      return userMessagingDO.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
-          method: 'POST',
-          body: JSON.stringify({ chatId, count, endId, startId }),
-        }),
-      )
+      return userMessagingDO
+        .fetch(
+          new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ chatId, count, endId, startId }),
+          }),
+        )
+        .then(response => {
+          response.headers.set('Content-Type', 'application/json')
+          return response
+        })
     } catch (error) {
       console.error('Failed to retrieve messages:', error)
       return errorResponse('Internal Server Error', 500)

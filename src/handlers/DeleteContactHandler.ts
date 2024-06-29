@@ -44,7 +44,12 @@ export class DeleteContactHandler extends Route {
       if (!success) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify({ id }), { status: 200 })
+      return new Response(JSON.stringify({ id }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to delete contact', 500)

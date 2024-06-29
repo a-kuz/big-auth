@@ -3,6 +3,7 @@ import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { getUserById } from '../db/services/get-user' // import function to fetch user details from DB
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 export class GetAvatarHandler extends Route {
   static schema: OpenAPIRouteSchema = {
@@ -26,12 +27,7 @@ export class GetAvatarHandler extends Route {
           error: new Str({ example: 'Avatar not found' }),
         },
       },
-      '500': {
-        description: 'Server Error',
-        schema: {
-          error: new Str({ example: 'Failed to retrieve avatar' }),
-        },
-      },
+      ...errorResponses,
     },
   }
 

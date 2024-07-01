@@ -25,11 +25,13 @@ export interface DeleteMessageEvent {
 
 export interface OnlineEvent {
   userId: string
+	lastSeen: number
 }
 export interface ChatsEvent {}
 
 export interface OfflineEvent {
   userId: string
+	lastSeen: number
 }
 
 export interface TypingServerEvent {

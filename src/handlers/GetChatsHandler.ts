@@ -74,7 +74,7 @@ export class GetChatsHandler extends Route {
           body: '{}',
         }),
       ).then(response => {
-        response.headers.set('Content-Type', 'application/json')
+
         return response
       })
     } catch (error: unknown) {

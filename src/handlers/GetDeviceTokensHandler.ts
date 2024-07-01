@@ -1,7 +1,7 @@
 import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Path, Str } from '@cloudflare/itty-router-openapi'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { pushStorage } from '~/durable-objects/messaging/utils/mdo'
+import { fingerprintDO } from '~/durable-objects/messaging/utils/mdo'
 import { writeErrorLog } from '~/utils/serialize-error'
 
 export async function GetDeviceTokensHandler(
@@ -19,7 +19,7 @@ export async function GetDeviceTokensHandler(
   }
 
   try {
-    const storage = pushStorage(env, userId)
+    const storage = fingerprintDO(env, userId)
     const tokens = await storage.getTokens()
 
     if (!tokens || tokens.length === 0) {

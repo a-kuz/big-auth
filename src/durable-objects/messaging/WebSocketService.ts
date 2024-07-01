@@ -156,14 +156,10 @@ export class WebSocketGod {
       })
   }
   sendPacket(packet: ServerEvent) {
-    let wasSent = false
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {
       ws.send(JSON.stringify(packet))
-      wasSent = true
     }
-
-    return wasSent
   }
 
   sendBuffer() {
@@ -200,10 +196,6 @@ export class WebSocketGod {
             return
           } catch (e) {
             await writeErrorLog(e)
-          }
-        } else if (Date.now() - this.#lastPing > 10000) {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(`{"event":"pong"}`)
           }
         }
       }

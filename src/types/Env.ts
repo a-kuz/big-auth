@@ -21,7 +21,7 @@ export interface Env {
   readonly GROUP_CHATS_DO: DurableObjectNamespace<GroupChatsDO>
   readonly DIALOG_DO: DurableObjectNamespace<DialogsDO>
   readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
-  readonly PUSH_DO: DurableObjectNamespace<PushDO>
+  readonly PUSH_TOKEN_DO: DurableObjectNamespace<PushDO>
 
   readonly PUSH_QUEUE: Queue<PushNotification>
 

@@ -130,7 +130,8 @@ export async function getMergedContacts(env: Env) {
            CASE WHEN COALESCE(c.avatar_url, '') = '' THEN u.avatar_url ELSE c.avatar_url END AS avatar_url,
            u.phone_number,
            u.username,
-           u.created_at
+           u.created_at,
+           u.verified
     FROM contacts c
     JOIN users u ON u.id = c.user_id
     WHERE c.owner_id = ?
@@ -141,7 +142,8 @@ export async function getMergedContacts(env: Env) {
            u.avatar_url,
            u.phone_number,
            u.username,
-           u.created_at
+           u.created_at,
+					 u.verified
     FROM phone_numbers pn
     JOIN users u ON pn.phone_number2 = u.phone_number
     WHERE pn.phone_number1 = ?
@@ -195,6 +197,7 @@ export async function getMergedContacts(env: Env) {
       lastName: contact.last_name || undefined,
       username: contact.username || undefined,
       avatarUrl: contact.avatar_url || undefined,
+			verified: !!(contact.verified || false),
     }
   })
 

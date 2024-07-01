@@ -53,7 +53,8 @@ export class FindContactsHandler extends Route {
       const hash = await digest(JSON.stringify(phoneNumbers))
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
-        headers: { 'Cache-Control': 'max-age=20' },
+        headers: { 'Cache-Control': 'max-age=20', ...request.headers },
+				method: 'GET'
       })
       const resp = await cache.match(cacheKey)
       if (resp) return resp
@@ -85,7 +86,7 @@ export class FindContactsHandler extends Route {
         ]),
       )
 
-      response.headers.set('Content-Type', 'application/json')
+
       return response
     } catch (error) {
       console.error(error)

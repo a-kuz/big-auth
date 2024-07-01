@@ -41,7 +41,7 @@ import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { chatStorage, chatType, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
+import { chatStorage, chatType, gptStorage, isGroup, fingerprintDO, userStorage } from './utils/mdo'
 import { ProfileService } from './ProfileService'
 import { Profile } from '~/db/models/User'
 
@@ -72,12 +72,7 @@ export class UserMessagingDO implements DurableObject {
 
   private timestamp() {
     const current = performance.now()
-    if (current > this.#timestamp) {
-      this.#timestamp = current
-      return current
-    }
-    this.#timestamp++
-    return this.#timestamp
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
   async alarm(): Promise<void> {
@@ -321,7 +316,7 @@ export class UserMessagingDO implements DurableObject {
     const chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
     const chatIndex = this.#chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-
+    this.state.waitUntil(this.toQ(eventData, chatData))
     if (isNew || this.#chatList[chatIndex].lastMessageId != chatData.lastMessageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: chatData.chatId,
@@ -355,7 +350,7 @@ export class UserMessagingDO implements DurableObject {
       })
       dlvrd = true
     }
-    this.toQ(eventData, chatData, dlvrd)
+
     return { success: true, dlvrd }
   }
   private async updateProfileHandler(request: Request) {
@@ -381,26 +376,10 @@ export class UserMessagingDO implements DurableObject {
     } else {
       if (!this.#deviceToken) {
         this.#deviceToken = (await this.state.storage.get('deviceToken')) || ''
-        if (!this.#deviceToken) {
-          const tokens = await pushStorage(this.env, this.#userId).getTokens()
-          if (tokens && tokens.length) {
-            this.#deviceToken = tokens[0].deviceToken
-          }
-        }
-        if (!this.#deviceToken) {
-          const tokens = await pushStorage(this.env, this.#fingerprint).getTokens()
-          if (tokens && tokens.length) {
-            this.#deviceToken = tokens[0].deviceToken
-          }
-        }
       }
     }
   }
-  private async toQ(
-    eventData: NewGroupMessageEvent | NewMessageEvent,
-    chat: Group | Dialog | DialogAI,
-    alreadySentByWebsocket: boolean,
-  ) {
+  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, chat: Group | Dialog | DialogAI) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
@@ -412,8 +391,12 @@ export class UserMessagingDO implements DurableObject {
       deviceToken: this.#deviceToken,
       body: eventData.message,
       title: chat.name,
+      lastMessageId: chat.lastMessageId,
+      imgUrl: chat.photoUrl,
       subtitle: eventData.senderName,
       badge: missedCount,
+      threadId: chat.chatId,
+      category: 'message',
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }
@@ -470,12 +453,15 @@ export class UserMessagingDO implements DurableObject {
   }
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
-    await this.wsService.toBuffer('online', { userId: eventData.userId })
-    return new Response(this.onlineService.isOnline() ? 'online' : '')
+    await this.wsService.toBuffer('online', eventData)
+    return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
-    this.wsService.toBuffer('offline', { userId: eventData.userId })
+		const chatIndex = this.#chatList.findIndex(chat => chat.id === eventData.userId)
+		if (chatIndex >= 0) this.#chatList[chatIndex].lastSeen = eventData.lastSeen
+		this.save()
+    this.wsService.toBuffer('offline', eventData)
     return new Response()
   }
   async friendTyping(request: Request) {
@@ -564,7 +550,10 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async getMessagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
-    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(payload, this.#userId)
+    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(
+      payload,
+      this.#userId,
+    )
     resp.messages = resp.messages.filter(
       m =>
         resp.messages.findIndex(m2 => m2.clientMessageId === m.clientMessageId) ===

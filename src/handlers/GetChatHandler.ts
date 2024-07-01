@@ -50,7 +50,7 @@ export class GetChatHandler extends Route {
           },
         },
       ).then(response => {
-        response.headers.set('Content-Type', 'application/json')
+
         return response
       })
     } catch (error) {

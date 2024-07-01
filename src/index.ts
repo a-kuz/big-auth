@@ -1,12 +1,12 @@
 import 'reflect-metadata'
 
 import { APIType, OpenAPIRouter } from '@cloudflare/itty-router-openapi'
-import { SendCodeHandler } from './handlers/SendCodeHandler'
 import { CreateContactHandler } from './handlers/CreateContactHandler'
-import { UpdateContactHandler } from './handlers/UpdateContactHandler'
-import { GetContactsHandler } from './handlers/GetContactsHandler'
-import { GetContactHandler } from './handlers/GetContactHandler'
 import { DeleteContactHandler } from './handlers/DeleteContactHandler'
+import { GetContactHandler } from './handlers/GetContactHandler'
+import { GetContactsHandler } from './handlers/GetContactsHandler'
+import { SendCodeHandler } from './handlers/SendCodeHandler'
+import { UpdateContactHandler } from './handlers/UpdateContactHandler'
 import { VerifyCodeHandler } from './handlers/VerifyCodeHandler'
 
 import { RefreshTokenHandler } from './handlers/RefreshTokenHandler'
@@ -21,26 +21,26 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
 import { CreateChatHandler } from './handlers/CreateChatHandler'
+import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
+import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
+import { GetAvatarHandler } from './handlers/GetAvatarHandler'
+import { GetChatHandler } from './handlers/GetChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
+import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
+import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
 import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
-import { WebsocketHandler } from './handlers/WebsocketHandler'
-import { CORS } from './utils/cors'
-import { GetChatHandler } from './handlers/GetChatHandler'
-import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
-import { GetAvatarHandler } from './handlers/GetAvatarHandler'
-import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
-import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
-import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
-import { authenticateUser } from './middleware/auth'
-import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
-export { WorkerBigAuth } from './worker'
 import { OnlinesHandler } from './handlers/OnlinesHandler'
+import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
+import { WebsocketHandler } from './handlers/WebsocketHandler'
+import { authenticateUser } from './middleware/auth'
+import { CORS } from './utils/cors'
+export { WorkerBigAuth } from './worker'
 
-export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
+export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
-export { DialogsDO, GroupChatsDO, UserMessagingDO, ChatGptDO } from './durable-objects/messaging'
+export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 
 const router = OpenAPIRouter({
   schema: {
@@ -49,30 +49,13 @@ const router = OpenAPIRouter({
       version: '1.0',
     },
   },
-
-  aiPlugin: {
-    name_for_human: 'B.I.G Ai',
-    name_for_model: 'expert_of_all',
-    description_for_human: "Get data insights from Cloudflare's and BIG messenger point of view.",
-    description_for_model:
-      "Plugin for retrieving the data based on Cloudflare Radar's data. Use it whenever a user asks something that might be related to Internet usage, eg. outages, Internet traffic, or Cloudflare Radar's data in particular.",
-    contact_email: 'support@iambig.ai',
-    legal_info_url: 'https://www.cloudflare.com/website-terms/',
-    logo_url:
-      'https://dev.iambig.ai/public/1feb2e3c2d04dec268da0606dd163e76f6869233129be1633ab9937903640818',
-
-    api: {
-      has_user_authentication: false,
-      type: APIType.OPENAPI,
-      url: '/openai.json',
-    },
-  },
 })
 
 router.registry.registerComponent('securitySchemes', 'BearerAuth', {
   type: 'http',
   scheme: 'bearer',
 })
+
 
 router.original.options('*', CORS) // TODO: add security CORS
 
@@ -120,11 +103,5 @@ router.post('/chats', CreateChatHandler)
 router.all('*', () => new Response('Not Found.', { status: 404 }))
 
 export default {
-  fetch: router.handle
+  fetch: router.handle,
 }
-/*
-export default 
-    //@ts-ignore
-    fetch: router.handle,
-  }
-*/

@@ -1,8 +1,10 @@
-import { Arr, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, Bool, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { getContacts } from '../services/contacts'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { verify } from 'crypto'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 export class GetContactsHandler extends Route {
   static schema: OpenAPIRouteSchema = {
@@ -21,12 +23,11 @@ export class GetContactsHandler extends Route {
             firstName: new Str({ required: false }),
             lastName: new Str({ required: false }),
             avatarUrl: new Str({ required: false }),
+						verified: new Bool({ required: false }),
           }),
         },
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses
     },
     security: [{ BearerAuth: [] }],
   }

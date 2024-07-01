@@ -17,7 +17,7 @@ export class GetMergedContactsHandler extends Route {
       '200': {
         description: 'Contact retrieved successfully',
         schema: z.object({
-          contacts: ProfileSchema,
+          contacts: z.array(ProfileSchema),
         }),
       },
       ...errorResponses,

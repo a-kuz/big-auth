@@ -71,7 +71,7 @@ export class OnlinesHandler extends Route {
         }
       }
 
-      return new Response(JSON.stringify({ onlineContacts }), {
+      return new Response(JSON.stringify({ users: onlineContacts }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',

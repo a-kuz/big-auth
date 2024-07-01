@@ -3,9 +3,10 @@ import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { z } from 'zod'
-import { pushStorage } from '~/durable-objects/messaging/utils/mdo'
+import { fingerprintDO } from '~/durable-objects/messaging/utils/mdo'
 import { getUserByToken } from '~/services/get-user-by-token'
 import { writeErrorLog } from '~/utils/serialize-error'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
 export class StoreDeviceTokenHandler extends Route {
   static schema = {
@@ -16,12 +17,8 @@ export class StoreDeviceTokenHandler extends Route {
       fingerprint: z.string(),
     }),
     responses: {
-      '200': {
-        description: 'Device token stored successfully',
-      },
-      '400': {
-        description: 'Bad request',
-      },
+      200: { description: 'ok', schema: z.object({}) },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -33,49 +30,15 @@ export class StoreDeviceTokenHandler extends Route {
     { body }: DataOf<typeof StoreDeviceTokenHandler.schema>,
   ) {
     const { deviceToken, fingerprint } = body
-    const authorization = request.headers.get('Authorization')
-    const token = authorization?.split(' ')[1]
 
-    if (!token) {
-      return this.handleWithoutToken(env, deviceToken, fingerprint)
-    }
-    let user
-    try {
-      user = await getUserByToken(env.DB, token, env.JWT_SECRET)
-      if (!user) {
-        return errorResponse('user not exist', 401)
-      }
-    } catch (error) {
-      await writeErrorLog(error)
-      return errorResponse('Failed to fetch profile', 401)
-    }
-    const userId = user.id
-    try {
-      await pushStorage(env, userId).setToken(userId, fingerprint, deviceToken)
-      await pushStorage(env, fingerprint).setToken(fingerprint, fingerprint, deviceToken)
-      console.log(JSON.stringify({ fingerprint }))
+    const tokenStorage = fingerprintDO(env, fingerprint)
+    await tokenStorage.setToken(fingerprint, deviceToken)
 
-      return new Response(JSON.stringify({ message: 'Device token stored successfully' }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-    } catch (error) {
-      await writeErrorLog(error)
-      return errorResponse('Failed to store device token', 500)
-    }
-  }
-  async handleWithoutToken(env: Env, deviceToken: string, fingerprint: string) {
-    try {
-      await pushStorage(env, fingerprint).setToken(fingerprint, fingerprint, deviceToken)
-
-      return new Response(JSON.stringify({ message: 'Device token stored successfully' }), {
-        status: 200,
-      })
-    } catch (error) {
-      await writeErrorLog(error)
-      return errorResponse('Failed to store device token', 500)
-    }
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
   }
 }

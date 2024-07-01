@@ -10,4 +10,6 @@ export interface PushNotification {
   sound?: string
   category?: 'message'
   threadId?: string
+	lastMessageId? :number
+	imgUrl?: string
 }

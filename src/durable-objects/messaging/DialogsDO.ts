@@ -250,8 +250,8 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     let dlvrdMark = dlvrdMarks.length ? dlvrdMarks[0] : undefined
     // Use cached #readMarks and #dlvrdMarks
     for (const message of messages) {
-			message.read = undefined
-			message.dlvrd= undefined
+      message.read = undefined
+      message.dlvrd = undefined
       if (message.sender !== userId) continue
       if (readMark) {
         if (readMark[0] < message.messageId) {
@@ -524,15 +524,7 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     } else {
       const { dlvrd = false } = await resp.json<{ dlvrd?: boolean }>()
       if (dlvrd) {
-        this.#messages[message.messageId] = {
-          ...this.#messages[message.messageId],
-          dlvrd: timestamp,
-        }
-        this.ctx.waitUntil(
-          this.#storage.put<DialogMessage>(`message-${message.messageId}`, message, {
-            allowConcurrency: true,
-          }),
-        )
+        this.dlvrd(receiverId, { chatId: senderId, messageId: message.messageId }, this.timestamp())
       }
     }
   }

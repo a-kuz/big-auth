@@ -1,6 +1,7 @@
 import { Exclude, Expose, Transform, Type, instanceToPlain, plainToClass } from 'class-transformer'
 import 'reflect-metadata'
 import { ObjectCamelToSnakeCase, fromSnakeToCamel } from '../../utils/name-сases'
+import { Bool } from '@cloudflare/itty-router-openapi'
 
 const NullToUndefined = Transform(({ value }) => value || undefined)
 
@@ -23,6 +24,7 @@ export class User {
   avatarUrl?: string
 
   @NullToUndefined
+	@Type(()=>Boolean)
   verified?: boolean
 
   @Type(() => Number)

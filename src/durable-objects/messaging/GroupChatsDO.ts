@@ -248,14 +248,10 @@ export class GroupChatsDO extends DurableObject {
     await this.#storage.put('counter', ++this.#counter)
     return this.#counter
   }
+
   private timestamp() {
     const current = performance.now()
-    if (current > this.#timestamp) {
-      this.#timestamp = current
-      return current
-    }
-    this.#timestamp++
-    return this.#timestamp
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
   chat(userId: string): Group {

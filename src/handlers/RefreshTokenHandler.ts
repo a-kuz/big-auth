@@ -47,7 +47,7 @@ export class RefreshTokenHandler extends Route {
           method: 'POST',
         }),
       ).then(response => {
-        response.headers.set('Content-Type', 'application/json')
+
         return response
       })
     } catch (error) {

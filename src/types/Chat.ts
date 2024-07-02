@@ -43,12 +43,8 @@ export type GroupChat = {
 type ChatType = 'dialog' | 'group' | 'channel' | 'ai' | 'favorotes'
 
 // Define interfaces for Meta, DialogMeta, and GroupMeta
-export interface DialogMeta {
-  firstName?: string
-  lastName?: string
-  username?: string
-  phoneNumber?: string
-}
+export type DialogMeta = Partial<Profile>
+
 export interface AiMeta {
   firstName?: string
   lastName?: string

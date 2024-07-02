@@ -366,7 +366,7 @@ export class UserMessagingDO implements DurableObject {
 
     return { success: true, dlvrd }
   }
-4
+
   private async updateProfileHandler(request: Request) {
     const profile = await request.json<Profile>()
     await this.profileService.broadcastProfile(profile)

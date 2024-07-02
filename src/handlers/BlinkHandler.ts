@@ -13,6 +13,11 @@ export class BlinkHandler extends OpenAPIRoute {
       '200': { description: 'ok', schema: z.object({}) },
     },
     ...errorResponses,
+		security: [
+      {
+        BearerAuth: [],
+      },
+    ],
   }
 
   async handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

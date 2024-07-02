@@ -5,12 +5,12 @@ import {
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
+  ReplyTo,
 } from '~/types/ws/client-requests'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { NewMessageEvent } from '~/types/ws/server-events'
 import { Env } from '../../types/Env'
 import { DurableObject } from 'cloudflare:workers'
-import { TM_DurableObject, Task } from 'do-taskmanager'
 import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
@@ -31,7 +31,7 @@ import { Mark, Marks, MarkPointer } from '../../types/Marks'
 import { messages } from '~/types/ws/event-literals'
 import { i } from 'vitest/dist/reporters-yx5ZTtEV'
 
-export class DialogsDO extends DurableObject implements TM_DurableObject {
+export class DialogsDO extends DurableObject {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [Profile, Profile]
@@ -160,21 +160,15 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       lastMessageId: this.#counter - 1,
       photoUrl: user2.avatarUrl,
       type: 'dialog',
-      meta: {
-        firstName: user2.firstName,
-        lastName: user2.lastName,
-        phoneNumber: user2.phoneNumber,
-        username: user2.username,
-      },
+      meta: user2,
       missed: this.missedFor(userId),
       lastMessageText: this.#lastMessage?.message,
       lastMessageTime: this.#lastMessage?.createdAt,
       lastMessageAuthor: this.#lastMessage?.sender,
       lastMessageStatus,
       isMine,
-      name: '',
+      name: displayName(user2),
     }
-    chat.name = displayName(chat.meta)
 
     return chat
   }
@@ -184,8 +178,8 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   }
 
   private newId() {
-		this.#counter++
-		this.#storage.put('counter', this.#counter, {})
+    this.#counter++
+    this.#storage.put('counter', this.#counter, {})
     return this.#counter - 1
   }
 
@@ -274,6 +268,19 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
     const timestamp = this.timestamp()
     const messageId = await this.newId()
+    let replyTo: ReplyTo | undefined
+    if (request.replyTo) {
+      const replyToMessage = await this.#message(request.replyTo)
+      if (replyToMessage) {
+        replyTo = {
+          clientMessageId: replyToMessage.clientMessageId,
+          messageId: replyToMessage.messageId,
+          createdAt: replyToMessage.createdAt,
+          sender: replyToMessage.sender,
+          message: replyToMessage.message,
+        }
+      }
+    }
     const message: DialogMessage = {
       createdAt: timestamp,
       messageId,
@@ -281,13 +288,13 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       message: request.message,
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
+			replyTo
     }
     this.#messages[messageId] = message
-		const prevMessage = this.#lastMessage;
+    const prevMessage = this.#lastMessage
     this.#lastMessage = message
-    await this.sendNewEventToReceiver(request.chatId, message, timestamp)
-
     await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
     if (messageId > 0) {
       if (prevMessage && prevMessage.sender !== sender) {
@@ -295,7 +302,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
 
-    const mark: Mark = [messageId, timestamp]
     const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
     this.#lastReadMark.set(sender, markPointer)
     await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
@@ -554,14 +560,14 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     }
     this.#messages = []
 
-		let indexCandidat = this.#counter - 1;
+    let indexCandidat = this.#counter - 1
     if (this.#counter) {
       let lastMessageCandidat = await this.getLastMessage(indexCandidat)
       if (lastMessageCandidat) {
-				this.#lastMessage = lastMessageCandidat
+        this.#lastMessage = lastMessageCandidat
         this.#messages[this.#counter - 1] = this.#lastMessage
       }
-			const lastMessage = await this.#storage.get<DialogMessage>(`message-${this.#counter - 1}`)
+      const lastMessage = await this.#storage.get<DialogMessage>(`message-${this.#counter - 1}`)
     }
   }
   async messageStatus(
@@ -596,9 +602,9 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
         }
       }
     }
-		if (!lastMessage) {
-			return this.getLastMessage(index)
-		}
+    if (!lastMessage) {
+      return this.getLastMessage(index)
+    }
     return lastMessage
   }
   private async isMarked(
@@ -615,7 +621,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
-  async processTask(task: Task): Promise<void> {}
 
   async fetch(request: Request<unknown, CfProperties<unknown>>): Promise<Response> {
     return new Response()

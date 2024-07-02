@@ -36,6 +36,7 @@ import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { authenticateUser } from './middleware/auth'
 import { CORS } from './utils/cors'
+import { BlinkHandler } from './handlers/BlinkHandler'
 export { WorkerBigAuth } from './worker'
 
 export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
@@ -99,6 +100,7 @@ router.get('/chat', GetChatHandler)
 router.get('/chats', GetChatsHandler)
 router.post('/chats', CreateChatHandler)
 
+router.get('/blink', BlinkHandler)
 // 404 for everything else
 router.all('*', () => new Response('Not Found.', { status: 404 }))
 

@@ -11,16 +11,16 @@ import { errorResponses } from '~/types/openapi-schemas/error-responses'
 export class StoreDeviceTokenHandler extends Route {
   static schema = {
     tags: ['device'],
-    summary: 'Store Apple device token with fingerprint',
+    summary: 'Store device tokens with fingerprint (device id)',
     requestBody: z.object({
-      deviceToken: z.string(),
-      fingerprint: z.string(),
+      deviceToken: z.string({ description: 'base64 encoded' }),
+      tokenType: z.enum(['ios-notification', 'ios-voip']).default('ios-notification').optional(),
+      fingerprint: z.string({ description: 'device id' }),
     }),
     responses: {
       200: { description: 'ok', schema: z.object({}) },
       ...errorResponses,
     },
-    security: [{ BearerAuth: [] }],
   }
 
   async handle(
@@ -29,10 +29,10 @@ export class StoreDeviceTokenHandler extends Route {
     _context: any,
     { body }: DataOf<typeof StoreDeviceTokenHandler.schema>,
   ) {
-    const { deviceToken, fingerprint } = body
+    const { deviceToken, fingerprint, tokenType = 'ios-notification' } = body
 
     const tokenStorage = fingerprintDO(env, fingerprint)
-    await tokenStorage.setToken(fingerprint, deviceToken)
+    await tokenStorage.setToken(fingerprint, tokenType, deviceToken)
 
     return new Response(JSON.stringify({}), {
       status: 200,

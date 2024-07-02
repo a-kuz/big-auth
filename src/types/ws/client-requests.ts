@@ -42,6 +42,15 @@ export interface NewMessageRequest {
   message: string
   attachments?: Attachment[]
   clientMessageId: string
+	replyTo?: number
+}
+
+export interface ReplyTo {
+	messageId: number
+	clientMessageId: string
+	message?: string
+	sender: string
+	createdAt: number
 }
 export interface GetChatRequest {
   chatId: string

@@ -4,7 +4,7 @@ import axios from 'axios'
 import WebSocket from 'ws'
 import { newId } from '../utils/new-id'
 
-const COUNT = 1000
+const COUNT = 100000
 // const USER1 = '+79875425970'
 // const USER1 = '+34627068478'
 const USER2 = '+999'
@@ -12,8 +12,8 @@ const USER1 = '+79875425970'
 // const USER2 = '+9999'
 //const USER2 = '+79875425970'
 //const USER2 = '+9999'
-//const baseUrl = 'http://localhost:8787'
-const baseUrl = 'https://dev.iambig.ai'
+const baseUrl = 'http://localhost:8787'
+// const baseUrl = 'https://dev.iambig.ai'
 describe('WebSocket Chat Integration Test', () => {
   it(
     'should send and receive messages via WebSocket concurrently',
@@ -57,7 +57,7 @@ describe('WebSocket Chat Integration Test', () => {
       console.log(userId)
 
       // Step 2: Connect to WebSocket using the accessToken
-      let ws = new WebSocket(`wss://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
+      let ws = new WebSocket(`ws://${baseUrl.replace(/https?\:\/\//, '')}/websocket`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
 

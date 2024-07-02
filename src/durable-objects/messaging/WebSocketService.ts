@@ -80,10 +80,12 @@ export class WebSocketGod {
           const response: WebsocketServerResponse = {
             type: 'response',
             id: packet.id,
-            timestamp: Math.floor(Date.now()),
+            timestamp: this.timestamp(),
             ...(responsePayload ? { payload: responsePayload } : {}),
           }
-          ws.send(JSON.stringify(response))
+					if (ws.readyState === WebSocket.OPEN) {
+         	 ws.send(JSON.stringify(response))
+					}
         case 'ack':
 					try {
           	this.#eventBuffer.delete(packet.id)

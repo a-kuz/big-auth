@@ -28,10 +28,33 @@ export class OnlineStatusService {
     }
   }
 
+  async blink(): Promise<void> {
+    this.#isOnline = true
+    const chatList = await this.state.storage.get<ChatList>('chatList')!
+    const timestamp = this.timestamp()
+    const promises: Promise<never>[] = []
+    if (!chatList) {
+      return
+    }
+
+    for (const chat of chatList.filter(
+      c =>
+        c.type === 'dialog' &&
+        c.id !== this.userId &&
+        !c.isMine &&
+        c.lastMessageStatus === 'undelivered',
+    )) {
+      const storage = chatStorage(this.env, chat.id, this.userId)
+      chat.lastMessageStatus = 'unread'
+      promises.push(storage.dlvrd(this.userId, { chatId: chat.id }, timestamp))
+    }
+    await this.state.storage.put('chatList', chatList)
+    this.state.waitUntil(Promise.all(promises))
+  }
   async online(): Promise<ChatList> {
     this.#isOnline = true
     const chatList = await this.state.storage.get<ChatList>('chatList')!
-    const timestamp = this.timestamp();
+    const timestamp = this.timestamp()
     const promises: Promise<never>[] = []
     if (!chatList) {
       return []
@@ -58,16 +81,10 @@ export class OnlineStatusService {
           this.ws.toBuffer('online', event)
         }
       }
-      if (chat.type !== 'ai') {
-        if (chat.lastMessageStatus === 'undelivered' && !chat.isMine) {
-          const storage = chatStorage(this.env, chat.id, this.userId)
-          chat.lastMessageStatus = 'unread'
-          promises.push(storage.dlvrd(this.userId, { chatId: chat.id }, timestamp))
-        }
-      }
+
     }
-    await this.state.storage.put('chatList', chatList)
-    this.state.waitUntil(Promise.all(promises))
+		await this.blink()
+
     return chatList
   }
 

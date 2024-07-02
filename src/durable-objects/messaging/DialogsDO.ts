@@ -294,13 +294,14 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       clientMessageId: request.clientMessageId,
     }
     this.#messages[messageId] = message
+		const prevMessage = this.#lastMessage;
     this.#lastMessage = message
     await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
     await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
 
     if (messageId > 0) {
-      if ((await this.#message(messageId - 1))!.sender !== sender) {
+      if (prevMessage && prevMessage.sender !== sender) {
         await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       }
     }

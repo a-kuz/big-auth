@@ -206,18 +206,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     }
   }
   async loadMessages(startId: number, endId: number, userId: string) {
-    // TODO: algoritm to fill read and dlvrd fileds in messages from #readMarks and #dlvrdMarks with dynamic loading from #storage
-    // NOTE:
-    // export interface DialogMessage {
-    // 	messageId: number
-    // 	clientMessageId: string
-    // 	message?: string
-    // 	sender: string
-    // 	attachments?: Attachment[]
-    // 	read?: number
-    // 	dlvrd?: number
-    // 	createdAt: number
-    // }
     const secondUserId = this.chatIdFor(userId)
     const missedIds = []
     for (let i = startId; i <= endId; i++) {
@@ -311,9 +299,6 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
     this.#lastReadMark.set(sender, markPointer)
     await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
-    this.#readMarks[sender].push(mark)
-    await this.#storage.put<Mark>(`read-${sender}-${this.#readMarks[sender].length - 1}`, mark)
-
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
@@ -571,9 +556,8 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
 
 		let indexCandidat = this.#counter - 1;
     if (this.#counter) {
-      let lastMessageCandidat = await this.#storage.get<DialogMessage>(`message-${indexCandidat}`)
-      if (!lastMessageCandidat) {
-				lastMessageCandidat = getLastMessage(indexCandidat)
+      let lastMessageCandidat = await this.getLastMessage(indexCandidat)
+      if (lastMessageCandidat) {
 				this.#lastMessage = lastMessageCandidat
         this.#messages[this.#counter - 1] = this.#lastMessage
       }
@@ -593,13 +577,28 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     return 'undelivered'
   }
 
-	private getLastMessage(index: number): DialogMessage | null {
+  private async getLastMessage(index: number): Promise<DialogMessage | null> {
     let lastMessage: DialogMessage | null = null
-    while (index >= 0) {
-      lastMessage = this.#storage.get<DialogMessage>(`message-${index}`)
-      if (lastMessage) break
+    const keys = []
+    while (index >= 0 && keys.length < 128) {
+      keys.push(`message-${index}`)
       index--
     }
+
+    const keyChunks = splitArray(keys, 128)
+    for (const chunk of keyChunks) {
+      const messagesChunk = await this.#storage.get<DialogMessage>(chunk)
+      for (const [key, message] of messagesChunk.entries()) {
+        const messageIndex = parseInt(key.split('-')[1])
+        this.#messages[messageIndex] = message
+        if (!lastMessage) {
+          lastMessage = message
+        }
+      }
+    }
+		if (!lastMessage) {
+			return this.getLastMessage(index)
+		}
     return lastMessage
   }
   private async isMarked(

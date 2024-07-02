@@ -313,24 +313,34 @@ export class UserMessagingDO implements DurableObject {
   }
   async receiveMessage(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
-    const chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
     const chatIndex = this.#chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-    this.state.waitUntil(this.toQ(eventData, chatData))
-    if (isNew || this.#chatList[chatIndex].lastMessageId != chatData.lastMessageId) {
+    let someChatData
+    const chatlListItem = this.#chatList.find(e => e.id === chatId)
+    if (chatlListItem) {
+			someChatData = {...chatlListItem, chatId}
+    } else {
+			someChatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
+    }
+		this.toQ(eventData, someChatData.name, someChatData.photoUrl)
+    if (isNew || this.#chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
-        id: chatData.chatId,
-        lastMessageStatus: chatData.lastMessageStatus,
-        lastMessageText: chatData.lastMessageText,
-        lastMessageTime: chatData.lastMessageTime,
-        name: chatData.name,
+        id: eventData.chatId,
+        lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
+        lastMessageText: eventData.message
+          ? eventData.message.length > 133
+            ? eventData.message?.slice(0, 130) + '...'
+            : eventData.message
+          : '',
+        lastMessageTime: eventData.timestamp,
+        name: someChatData.name,
         type: chatType(chatId),
         verified: false,
-        lastMessageAuthor: chatData.lastMessageAuthor,
-        photoUrl: chatData.photoUrl,
-        isMine: chatData.isMine,
-        lastMessageId: chatData.lastMessageId,
-        missed: chatData.missed,
+        lastMessageAuthor: eventData.senderName,
+        photoUrl: someChatData.photoUrl,
+        isMine: eventData.sender === this.#userId,
+        lastMessageId: eventData.messageId,
+        missed: eventData.missed,
       }
       const chat = this.toTop(chatId, chatChanges)
 
@@ -345,7 +355,7 @@ export class UserMessagingDO implements DurableObject {
       }
       await this.wsService.toBuffer('new', {
         ...eventData,
-        ...{ missed: chatData.missed },
+        ...{ missed: eventData.missed },
         sender: eventData.sender ?? eventData.chatId,
       })
       dlvrd = true
@@ -379,7 +389,7 @@ export class UserMessagingDO implements DurableObject {
       }
     }
   }
-  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, chat: Group | Dialog | DialogAI) {
+  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, title: string, imgUrl?: string) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
@@ -390,12 +400,11 @@ export class UserMessagingDO implements DurableObject {
       event: eventData,
       deviceToken: this.#deviceToken,
       body: eventData.message,
-      title: chat.name,
-      lastMessageId: chat.lastMessageId,
-      imgUrl: chat.photoUrl,
+      title,
+      imgUrl,
       subtitle: eventData.senderName,
       badge: missedCount,
-      threadId: chat.chatId,
+      threadId: eventData.chatId,
       category: 'message',
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
@@ -453,14 +462,21 @@ export class UserMessagingDO implements DurableObject {
   }
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
+    const chatIndex = this.#chatList.findIndex(chat => chat.id === eventData.userId)
+    if (chatIndex >= 0) {
+      this.#chatList[chatIndex].lastSeen = undefined
+      this.save()
+    }
     await this.wsService.toBuffer('online', eventData)
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
-		const chatIndex = this.#chatList.findIndex(chat => chat.id === eventData.userId)
-		if (chatIndex >= 0) this.#chatList[chatIndex].lastSeen = eventData.lastSeen
-		this.save()
+    const chatIndex = this.#chatList.findIndex(chat => chat.id === eventData.userId)
+    if (chatIndex >= 0) {
+      this.#chatList[chatIndex].lastSeen = eventData.lastSeen
+      this.save()
+    }
     this.wsService.toBuffer('offline', eventData)
     return new Response()
   }

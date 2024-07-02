@@ -31,7 +31,7 @@ export class OnlineStatusService {
   async online(): Promise<ChatList> {
     this.#isOnline = true
     const chatList = await this.state.storage.get<ChatList>('chatList')!
-    const timestamp = Date.now()
+    const timestamp = this.timestamp();
     const promises: Promise<never>[] = []
     if (!chatList) {
       return []

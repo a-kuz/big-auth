@@ -6,7 +6,7 @@ import { ServerEventPayload } from './payload-types'
 export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
   type: 'event'
   timestamp: number
-  id?: number
+  id?: string
   eventType: Event
   payload: ServerEventPayload
 }

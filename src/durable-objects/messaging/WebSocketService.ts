@@ -7,16 +7,19 @@ import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { UserMessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
+import { nanoid } from 'nanoid'
+import { timeStamp } from 'console'
+import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
-  #eventBuffer = new Map<number, ServerEvent>()
-  #eventCounter: number = 0
+  #eventBuffer = new Map<string, ServerEvent>()
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
+	#timestamp: number = 0
   constructor(
     private state: DurableObjectState,
     private env: Env,
@@ -82,7 +85,11 @@ export class WebSocketGod {
           }
           ws.send(JSON.stringify(response))
         case 'ack':
-          this.#eventBuffer.delete(packet.id as number)
+					try {
+          	this.#eventBuffer.delete(packet.id)
+					} catch (e) {
+						await writeErrorLog(e)
+					}
       }
     } catch (e) {
       await writeErrorLog(e)
@@ -131,26 +138,29 @@ export class WebSocketGod {
     this.#lastPing = Date.now()
   }
 
-  private newBufferIndex() {
-    return this.#eventBuffer.size
-  }
+
   clearBuffer() {
-    this.#eventBuffer = new Map()
+    this.#eventBuffer.clear()
   }
 
-  async toBuffer(eventType: ServerEventType, event: ServerEventPayload) {
-    const id = this.newBufferIndex()
+	private timestamp() {
+    const current = performance.now()
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
+  }
+
+  async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100) {
+    const id = newId(10)
     const packet: ServerEvent = {
       eventType,
       payload: event,
-      timestamp: Date.now(),
+      timestamp: this.timestamp(),
       type: 'event',
       id,
     }
     this.#eventBuffer.set(id, packet)
     const alarm = await this.state.storage.getAlarm()
-    if (!alarm || alarm > Date.now() + 100)
-      await this.state.storage.setAlarm(Date.now() + 100, {
+    if (!alarm || alarm > Date.now() + after)
+      await this.state.storage.setAlarm(Date.now() + after, {
         allowConcurrency: true,
         allowUnconfirmed: true,
       })

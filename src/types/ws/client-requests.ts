@@ -34,7 +34,7 @@ export interface ClientEvent<Type extends ClientEventType = ClientEventType> {
 
 export interface ClientAccept {
   type: 'ack'
-  id: number
+  id: string
 }
 
 export interface NewMessageRequest {

@@ -100,6 +100,7 @@ export class UserMessagingDO implements DurableObject {
         | 'setDeviceToken'
         | 'updateProfile'
         | 'updateChat'
+        | 'blink'
       ),
     ]
     if (!this.#userId) {
@@ -129,6 +130,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.setDeviceTokenHandler(request)
               case 'updateProfile':
                 return this.updateProfileHandler(request)
+              case 'blink':
+                return this.blinkHandler(request);
             }
         }
 
@@ -363,11 +366,13 @@ export class UserMessagingDO implements DurableObject {
 
     return { success: true, dlvrd }
   }
+4
   private async updateProfileHandler(request: Request) {
     const profile = await request.json<Profile>()
     await this.profileService.broadcastProfile(profile)
     return new Response()
   }
+
   private async setDeviceTokenHandler(request: Request) {
     const data = await request.json<{ fingerprint: string; deviceToken: string }>()
     this.setFingerprint(data.fingerprint)
@@ -409,6 +414,12 @@ export class UserMessagingDO implements DurableObject {
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }
+
+  async blinkHandler(request: Request) {
+    this.onlineService.blink();
+    return new Response();
+  }
+
   async chatsHandler(request: Request) {
     const ai = this.#chatList.find(chat => chat.id === 'AI')
     const gpt = gptStorage(this.env, this.#userId)

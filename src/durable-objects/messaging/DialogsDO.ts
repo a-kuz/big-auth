@@ -183,8 +183,9 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     return this.#counter
   }
 
-  private async newId() {
-    await this.#storage.put('counter', ++this.#counter)
+  private newId() {
+		this.#counter++
+		this.#storage.put('counter', this.#counter, {})
     return this.#counter - 1
   }
 
@@ -567,12 +568,16 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
       }
     }
     this.#messages = []
+
+		let indexCandidat = this.#counter - 1;
     if (this.#counter) {
-      const lastMessage = await this.#storage.get<DialogMessage>(`message-${this.#counter - 1}`)
-      if (lastMessage) {
-        this.#lastMessage = lastMessage
-        this.#messages[this.#counter - 1] = lastMessage
+      let lastMessageCandidat = await this.#storage.get<DialogMessage>(`message-${indexCandidat}`)
+      if (!lastMessageCandidat) {
+				lastMessageCandidat = getLastMessage(indexCandidat)
+				this.#lastMessage = lastMessageCandidat
+        this.#messages[this.#counter - 1] = this.#lastMessage
       }
+			const lastMessage = await this.#storage.get<DialogMessage>(`message-${this.#counter - 1}`)
     }
   }
   async messageStatus(
@@ -588,6 +593,15 @@ export class DialogsDO extends DurableObject implements TM_DurableObject {
     return 'undelivered'
   }
 
+	private getLastMessage(index: number): DialogMessage | null {
+    let lastMessage: DialogMessage | null = null
+    while (index >= 0) {
+      lastMessage = this.#storage.get<DialogMessage>(`message-${index}`)
+      if (lastMessage) break
+      index--
+    }
+    return lastMessage
+  }
   private async isMarked(
     messageId: number,
     userId: string,

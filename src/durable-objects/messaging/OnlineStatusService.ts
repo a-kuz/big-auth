@@ -13,6 +13,7 @@ export class OnlineStatusService {
     state.blockConcurrencyWhile(async () => this.initialize())
   }
 
+
   async initialize() {
     this.#lastSeen = (await this.state.storage.get<number>('lastSeen')) || 0
   }

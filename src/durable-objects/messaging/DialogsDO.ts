@@ -40,7 +40,7 @@ export class DialogsDO extends DebugWrapper {
   #lastReadMark = new Map<string, MarkPointer>()
   #lastDlvrdMark = new Map<string, MarkPointer>() // TODO: initialization, storing at reading in dlvrd, read methods; using in dlvrd, read, getMessages methods
   #storage!: DurableObjectStorage
-  #lastMessage?: DialogMessage
+  #lastMessageOfPreviousAuthor?: DialogMessage
   #lastMessage?: DialogMessage
 
   constructor(

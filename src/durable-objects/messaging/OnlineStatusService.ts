@@ -3,6 +3,7 @@ import { Env } from '~/types/Env'
 import { WebSocketGod } from './WebSocketService'
 import { OfflineEvent, OnlineEvent } from '~/types/ws/server-events'
 import { chatStorage, userStorage } from './utils/mdo'
+import { url } from 'inspector'
 export type OnlineStatus = { lastSeen: number; status: 'online' | 'offline' }
 export class OnlineStatusService {
   constructor(
@@ -53,6 +54,7 @@ export class OnlineStatusService {
     this.state.waitUntil(Promise.all(promises))
   }
   async online(): Promise<ChatList> {
+		// use tasks too
     this.#isOnline = true
     const chatList = await this.state.storage.get<ChatList>('chatList')!
     const timestamp = this.timestamp()
@@ -100,12 +102,15 @@ export class OnlineStatusService {
       }
       const receiverDO = userStorage(this.env, chat.id)
       const event: OfflineEvent = { userId: this.userId, lastSeen: this.#lastSeen }
-      await receiverDO.fetch(
-        new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, {
-          method: 'POST',
-          body: JSON.stringify(event),
-        }),
-      )
+			const reqBody = JSON.stringify(event)
+			const task = {url: `${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, body: reqBody}
+			// put task to outgoing events queue to perfom fetch:
+      // await receiverDO.fetch(
+      //   new Request(`${this.env.ORIGIN}/${chat.id}/messaging/event/offline`, {
+      //     method: 'POST',
+      //     body: JSON.stringify(event),
+      //   }),
+      // )
     }
   }
 

@@ -8,6 +8,7 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { DebugLogger } from 'util'
 import { DebugWrapper } from '~/durable-objects/DebugWrapper'
+import { DialogsDO } from '~/durable-objects/messaging'
 
 export const DebugListKeysHandler = async (request: Request, env: Env, ..._args: any[]) => {
   try {
@@ -39,11 +40,12 @@ export const DebugMemoryHandler = async (request: Request, env: Env, ..._args: a
     const chatId = decodeURIComponent(parts[2])
     const variable = decodeURIComponent(parts[3])
 
-    let stub//: DurableObjectStub<DebugWrapper>
 
 
-      stub = chatStorage(env, chatId, userId)
-			return new Response(JSON.stringify(await stub.getPrivate(variable)))
+
+      const stub = chatStorage(env, chatId, userId) as DurableObjectStub<DialogsDO>
+
+			return new Response(JSON.stringify(await stub.debugInfo()))
 
   } catch (error) {
     console.error(error)

@@ -25,11 +25,12 @@ export class DebugWrapper extends DurableObject {
   async getPrivate(field) {
     if (this.env.ENV === 'production') return
     //@ts-ignore
-    return this[field] || this['#' + field].filter(e=>!!)
+    return this[field] || this['#' + field].filter(e=>!!e)
   }
 
   async run(code: string) {
+   if (this.env.ENV === 'production') return
+		return this.debugInfo()
     //@ts-ignore
-    if (this.env.ENV !== 'production') return eval(code)
   }
 }

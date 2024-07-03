@@ -122,7 +122,7 @@ export class WebSocketGod {
       this.state.getWebSockets().filter(w => w !== ws && w.readyState === WebSocket.OPEN).length ===
       0
     )
-      this.state.waitUntil(this.onlineService.offline())
+      await this.onlineService.offline()
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {

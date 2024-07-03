@@ -6,19 +6,19 @@ import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { DialogMessage } from '~/types/ChatMessage'
 import {
-	GetMessagesRequest,
-	GetMessagesResponse,
-	MarkDeliveredRequest,
-	MarkReadRequest,
-	NewMessageRequest,
-	ReplyTo,
+  GetMessagesRequest,
+  GetMessagesResponse,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
+  ReplyTo,
 } from '~/types/ws/client-requests'
 import {
-	MarkDeliveredInternalEvent,
-	MarkReadInternalEvent,
-	MessageId,
-	Timestamp,
-	UpdateChatInternalEvent
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  MessageId,
+  Timestamp,
+  UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { NewMessageEvent } from '~/types/ws/server-events'
@@ -114,6 +114,22 @@ export class DialogsDO extends DebugWrapper {
     }
 
     return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
+  }
+
+  debugInfo() {
+    if (this.#users) {
+      return `in memory:
+messages: ${this.#messages.filter(e => !!e).length},
+#dlvrdMarks: ${this.#dlvrdMarks[this.#users[0].id].filter(e => !!e).length + this.#dlvrdMarks[this.#users[1].id].filter(e => !!e).length},
+#readMarks: ${this.#readMarks[this.#users[0].id].filter(e => !!e).length + this.#readMarks[this.#users[1].id].filter(e => !!e).length},
+
+#lastMessageOfPreviousAuthor: ${this.#lastMessageOfPreviousAuthor?.messageId},
+#lastMessage: ${this.#lastMessage?.messageId},
+#lastReadMark: ${Array.from(this.#lastReadMark.values()).join(', ')},
+#lastDlvrdMark: ${Array.from(this.#lastDlvrdMark.values()).join(', ')}
+messages in storage: ${this.#counter},
+		`
+    }
   }
 
   async create(owner: string, secondUser: string): Promise<Dialog> {
@@ -287,23 +303,18 @@ export class DialogsDO extends DebugWrapper {
       message: request.message,
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
-			replyTo
+      replyTo,
     }
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage
     this.#lastMessage = message
     await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
+      await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      this.#lastMessageOfPreviousAuthor = prevMessage
+    }
     await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
-    if (messageId > 0) {
-      if (prevMessage && prevMessage.sender !== sender) {
-        await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
-      }
-    }
-
-    const markPointer = { index: this.#readMarks[sender].length-1, messageId, timestamp }
-    this.#lastReadMark.set(sender, markPointer)
-    await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
 
@@ -521,9 +532,18 @@ export class DialogsDO extends DebugWrapper {
     }
   }
   private missedFor(userId: string): number {
+    if (this.#lastMessage?.sender === userId) {
+      return 0
+    }
     const lastReadMark = this.#lastReadMark?.get(userId)
+    let currentBlockOfMessagesOfOneAuthorLength = (this.#lastMessage?.messageId || 0) + 1
+    if (this.#lastMessageOfPreviousAuthor) {
+      currentBlockOfMessagesOfOneAuthorLength -= this.#lastMessageOfPreviousAuthor.messageId
+    }
 
-    return this.#counter - (lastReadMark?.messageId || 0) - 1
+    return (
+      Math.min(this.#counter - (lastReadMark?.messageId || 0) - 1, currentBlockOfMessagesOfOneAuthorLength-1)
+    )
   }
 
   private async initialize() {

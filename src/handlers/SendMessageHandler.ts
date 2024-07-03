@@ -17,14 +17,15 @@ import { errorResponse } from '../utils/error-response'
 import { newId } from '~/utils/new-id'
 import { sendMessage } from '../services/send-message'
 
-const requestBody = {
+const requestBody = z.object({
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
   attachments: z.optional(AttachmentSchema.array().optional()),
   message: new Str({ example: 'Hello, how are you?', required: false }),
   clientMessageId: new Str({ example: 'ldjkedlkedlk', required: false }),
-}
+	replyTo: new Num({ example: 1, required: false }),
+})
 export class SendMessageHandler extends Route {
-  static schema: OpenAPIRouteSchema = {
+  static schema = {
     tags: ['messages'],
     summary: 'Send a chat message ',
 
@@ -49,7 +50,7 @@ export class SendMessageHandler extends Route {
     security: [{ BearerAuth: [] }],
   }
 
-  async handle(request: Request, env: Env, _ctx: any, { body }: { body: NewMessageRequest }) {
+  async handle(request: Request, env: Env, _ctx: any, { body }: DataOf<typeof SendMessageHandler.schema>) {
     try {
       const response = await sendMessage(body, env)
 

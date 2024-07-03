@@ -1,37 +1,35 @@
-import { DialogMessage } from '~/types/ChatMessage'
-import {
-  GetMessagesRequest,
-  GetMessagesResponse,
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
-  ReplyTo,
-} from '~/types/ws/client-requests'
-import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
-import { NewMessageEvent } from '~/types/ws/server-events'
-import { Env } from '../../types/Env'
 import { DurableObject } from 'cloudflare:workers'
 import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
+import { DialogMessage } from '~/types/ChatMessage'
 import {
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  MessageId,
-  Timestamp,
-  UpdateChatInternalEvent,
-  UserId,
+	GetMessagesRequest,
+	GetMessagesResponse,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
+	ReplyTo,
+} from '~/types/ws/client-requests'
+import {
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	MessageId,
+	Timestamp,
+	UpdateChatInternalEvent
 } from '~/types/ws/internal'
+import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import { NewMessageEvent } from '~/types/ws/server-events'
 import { splitArray } from '~/utils/split-array'
+import { Env } from '../../types/Env'
+import { Mark, MarkPointer, Marks } from '../../types/Marks'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { Mark, Marks, MarkPointer } from '../../types/Marks'
-import { messages } from '~/types/ws/event-literals'
-import { i } from 'vitest/dist/reporters-yx5ZTtEV'
+import { DebugWrapper } from '../DebugWrapper'
 
-export class DialogsDO extends DurableObject {
+export class DialogsDO extends DebugWrapper {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #users?: [Profile, Profile]
@@ -42,6 +40,7 @@ export class DialogsDO extends DurableObject {
   #lastReadMark = new Map<string, MarkPointer>()
   #lastDlvrdMark = new Map<string, MarkPointer>() // TODO: initialization, storing at reading in dlvrd, read methods; using in dlvrd, read, getMessages methods
   #storage!: DurableObjectStorage
+  #lastMessage?: DialogMessage
   #lastMessage?: DialogMessage
 
   constructor(
@@ -302,7 +301,7 @@ export class DialogsDO extends DurableObject {
       }
     }
 
-    const markPointer = { index: this.#readMarks[sender].length, messageId, timestamp }
+    const markPointer = { index: this.#readMarks[sender].length-1, messageId, timestamp }
     this.#lastReadMark.set(sender, markPointer)
     await this.#storage.put<MarkPointer>(`lastRead-${sender}`, markPointer)
     return { messageId, timestamp, clientMessageId: message.clientMessageId }

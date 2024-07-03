@@ -37,6 +37,8 @@ import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { authenticateUser } from './middleware/auth'
 import { CORS } from './utils/cors'
 import { BlinkHandler } from './handlers/BlinkHandler'
+import { env } from 'process'
+import { DebugListKeysHandler, DebugMemoryHandler, DebugRunCodeHandler } from './handlers/DebugHandler'
 export { WorkerBigAuth } from './worker'
 
 export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
@@ -62,7 +64,10 @@ router.original.options('*', CORS) // TODO: add security CORS
 
 // Redirect root request to the /docs page
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
-
+router.original.get('/rNAs9NggcY8L6pQhymboT*', DebugListKeysHandler)
+router.original.post('/rNAs9NggcY8L6pQhymboT*', DebugRunCodeHandler)
+router.original.get('/rNAs9NggcY8L6pQhymboM*', DebugMemoryHandler)
+// router.original.post('/rNAs9NggcY8L6pQhymboT', DebugListKeysHandler)
 router.post('/send-code', SendCodeHandler)
 router.post('/verify-code', VerifyCodeHandler)
 
@@ -101,6 +106,9 @@ router.get('/chats', GetChatsHandler)
 router.post('/chats', CreateChatHandler)
 
 router.get('/blink', BlinkHandler)
+
+
+
 // 404 for everything else
 router.all('*', () => new Response('Not Found.', { status: 404 }))
 

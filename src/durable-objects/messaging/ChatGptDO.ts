@@ -1,31 +1,31 @@
 import { ChatMessage, DialogMessage } from '~/types/ChatMessage'
 import {
-  GetMessagesRequest,
-  GetMessagesResponse,
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
+	GetMessagesRequest,
+	GetMessagesResponse,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
 } from '~/types/ws/client-requests'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { Env } from '../../types/Env'
 
-import { DurableObject } from 'cloudflare:workers'
 import { User } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
+import { GPTmessage, askGPT } from '~/services/ask-gpt'
+import { DialogAI } from '~/types/Chat'
+import { ChatListItem } from '~/types/ChatList'
 import { MarkReadInternalEvent } from '~/types/ws/internal'
+import { NewMessageEvent } from '~/types/ws/server-events'
+import { newId } from '~/utils/new-id'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { Chat, Dialog, DialogAI } from '~/types/Chat'
-import { GPTmessage, askGPT } from '~/services/ask-gpt'
-import { newId } from '~/utils/new-id'
-import { NewMessageEvent } from '~/types/ws/server-events'
-import { ChatListItem } from '~/types/ChatList'
 
+import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
-import { serializeError, writeErrorLog } from '~/utils/serialize-error'
+import { DebugWrapper } from '../DebugWrapper'
 
-export class ChatGptDO extends DurableObject {
+export class ChatGptDO extends DebugWrapper {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #user?: User

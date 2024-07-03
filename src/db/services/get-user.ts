@@ -16,7 +16,7 @@ export const getOrCreateUserByPhone = async (
 
     if (!existingUser) {
       const insertQuery = 'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
-      const id = phoneNumber.startsWith('+9999') ? phoneNumber + newId(2) : newId()
+      const id = newId()
       const createdAt = Math.floor(Date.now() / 1000)
       const verified = false
       await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt, verified).run()

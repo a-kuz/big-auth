@@ -1,34 +1,33 @@
-import { DurableObject } from 'cloudflare:workers'
-import { writeErrorLog } from '~/utils/serialize-error'
-import { Profile, User } from '~/db/models/User'
+import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
+import { NotFoundError } from '~/errors/NotFoundError'
+import { displayName } from '~/services/display-name'
 import { Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
-  GetMessagesRequest,
-  GetMessagesResponse,
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
+	GetMessagesRequest,
+	GetMessagesResponse,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
 } from '~/types/ws/client-requests'
 import {
-  InternalEvent,
-  InternalEventType,
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  NewChatEvent,
-  NewGroupMessageEvent,
-  Timestamp,
-  UserId,
+	InternalEvent,
+	InternalEventType,
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	NewGroupMessageEvent,
+	Timestamp,
+	UserId
 } from '~/types/ws/internal'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { displayName } from '~/services/display-name'
-import { NotFoundError } from '~/errors/NotFoundError'
+import { DebugWrapper } from '../DebugWrapper'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -39,7 +38,7 @@ export type OutgoingEvent = {
 }
 
 const MESSAGES_LOAD_CHUNK_SIZE = 128
-export class GroupChatsDO extends DurableObject {
+export class GroupChatsDO extends DebugWrapper {
   #timestamp = Date.now()
   #messages: GroupChatMessage[] = []
   group!: Group

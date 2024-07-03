@@ -1,12 +1,9 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, DataOf } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
-import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
+import { DataOf } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { fingerprintDO } from '~/durable-objects/messaging/utils/mdo'
-import { getUserByToken } from '~/services/get-user-by-token'
-import { writeErrorLog } from '~/utils/serialize-error'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { Route } from '~/utils/route'
+import { Env } from '../types/Env'
 
 export class StoreDeviceTokenHandler extends Route {
   static schema = {

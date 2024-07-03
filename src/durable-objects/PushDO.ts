@@ -1,9 +1,7 @@
-import { DurableObject } from 'cloudflare:workers'
 import { Env } from '~/types/Env'
-import { UserId } from '~/types/ws/internal'
-import { userStorage } from './messaging/utils/mdo'
+import { DebugWrapper } from './DebugWrapper'
 export type TokenType = 'ios-notification' | 'ios-voip'
-export class PushDO extends DurableObject {
+export class PushDO extends DebugWrapper {
   constructor(
     readonly state: DurableObjectState,
     readonly env: Env,

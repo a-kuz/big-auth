@@ -46,6 +46,7 @@ bindings = [
 	{ name = "DIALOG_DO", class_name = "DialogsDO" },
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
+	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" }
 ]
 
 
@@ -55,3 +56,6 @@ deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO"]
 [[migrations]]
 tag = "v57"
 new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO"]
+[[migrations]]
+tag = "v58"
+new_classes = [ "VoipTokenDO"]

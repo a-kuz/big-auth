@@ -18,6 +18,13 @@ export const WebsocketHandler = async (request: Request, env: Env, ..._args: any
           body: JSON.stringify({ fingerprint, deviceToken }),
         }),
       )
+      const deviceTokenVoip = await tokenStorage.getToken('ios-voip');
+      if (deviceTokenVoip) {
+        const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO;
+        const id = VOIP_TOKEN_DO.idFromName(user.id);
+        const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
+        voipTokenDO.setToken(deviceTokenVoip);
+      }
     }
     return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))
   } catch (error) {

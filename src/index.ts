@@ -44,6 +44,8 @@ export { WorkerBigAuth } from './worker'
 export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
+export { VoipTokenDO } from './durable-objects/VoipTokenDO'
+
 
 const router = OpenAPIRouter({
   schema: {

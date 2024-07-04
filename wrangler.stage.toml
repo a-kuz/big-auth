@@ -59,6 +59,7 @@ durable_objects = { bindings = [
 	{ name = "DIALOG_DO", class_name = "DialogsDO" },
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
+	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" }
 ] }
 vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0" }
 kv_namespaces = [
@@ -82,3 +83,6 @@ deleted_classes = ["PushDO"]
 [[migrations]]
 tag = "v3"               # Should be unique for each entry
 new_classes = ["PushDO"]
+[[migrations]]
+tag = "v4"               # Should be unique for each entry
+new_classes = ["VoipTokenDO"]

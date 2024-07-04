@@ -32,6 +32,11 @@ export interface NewGroupMessageEvent {
   messageId: number
   timestamp: number
   missed: number
+  voip?: boolean,
+  callId?: string
+  uid?: number
+  token?: string
+  appId?: string
 }
 
 export interface NewChatEvent extends Chat<'group'> {

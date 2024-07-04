@@ -40,15 +40,19 @@ export interface TypingServerEvent {
 }
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
-  chatId: string
+  chatId?: string
   sender?: string
   message?: string
   senderName?: string
   timestamp?: number
   attachments?: Attachment<A>[]
-  messageId: number
-  clientMessageId: string
-  missed: number
+  messageId?: number
+  clientMessageId?: string
+  missed?: number,
+  callId?: string
+  uid?: number
+  token?: string
+  appId?: string
 }
 
 export interface MarkDeliveredEvent {

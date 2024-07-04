@@ -19,12 +19,30 @@ export class WebSocketGod {
   #eventBuffer = new Map<string, ServerEvent>()
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
-	#timestamp: number = 0
+  #timestamp: number = 0
   constructor(
     private state: DurableObjectState,
     private env: Env,
   ) {
     this.state.setHibernatableWebSocketEventTimeout(1000 * 60)
+    this.state.storage.setAlarm(Date.now() + 5000, {
+      allowConcurrency: true,
+      allowUnconfirmed: true,
+    })
+  }
+
+  async alarm(): Promise<void> {
+    await this.checkStatus()
+    await this.onlineService.alarm()
+    const sockets = this.state.getWebSockets()
+    if (sockets.length) {
+      this.sendBuffer()
+
+      await this.state.storage.setAlarm(Date.now() + 5000, {
+        allowConcurrency: true,
+        allowUnconfirmed: true,
+      })
+    }
   }
 
   async acceptWebSocket(request: Request): Promise<Response> {
@@ -83,15 +101,15 @@ export class WebSocketGod {
             timestamp: this.timestamp(),
             ...(responsePayload ? { payload: responsePayload } : {}),
           }
-					if (ws.readyState === WebSocket.OPEN) {
-         	 ws.send(JSON.stringify(response))
-					}
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(response))
+          }
         case 'ack':
-					try {
-          	this.#eventBuffer.delete(packet.id)
-					} catch (e) {
-						await writeErrorLog(e)
-					}
+          try {
+            this.#eventBuffer.delete(packet.id)
+          } catch (e) {
+            await writeErrorLog(e)
+          }
       }
     } catch (e) {
       await writeErrorLog(e)
@@ -140,12 +158,11 @@ export class WebSocketGod {
     this.#lastPing = Date.now()
   }
 
-
   clearBuffer() {
     this.#eventBuffer.clear()
   }
 
-	private timestamp() {
+  private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
@@ -177,18 +194,6 @@ export class WebSocketGod {
   sendBuffer() {
     for (const event of this.#eventBuffer.values()) {
       this.sendPacket(event)
-    }
-  }
-  async alarm(): Promise<void> {
-    await this.checkStatus()
-    const sockets = this.state.getWebSockets()
-    if (sockets.length) {
-      this.sendBuffer()
-
-      await this.state.storage.setAlarm(Date.now() + 5000, {
-        allowConcurrency: true,
-        allowUnconfirmed: true,
-      })
     }
   }
 

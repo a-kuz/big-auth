@@ -125,9 +125,10 @@ messages: ${this.#messages.filter(e => !!e).length},
 
 #lastMessageOfPreviousAuthor: ${this.#lastMessageOfPreviousAuthor?.messageId},
 #lastMessage: ${this.#lastMessage?.messageId},
-#lastReadMark: ${Array.from(this.#lastReadMark.values()).join(', ')},
-#lastDlvrdMark: ${Array.from(this.#lastDlvrdMark.values()).join(', ')}
+#lastReadMark: ${JSON.stringify(Object.fromEntries(this.#lastReadMark.entries()))},
+#lastDlvrdMark: ${JSON.stringify(Object.fromEntries(this.#lastDlvrdMark.entries()))},
 messages in storage: ${this.#counter},
+
 		`
     }
   }
@@ -203,13 +204,13 @@ messages in storage: ${this.#counter},
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
-      const startIndex = endIndex > portion ? endIndex - portion : 0
+      const startIndex = endIndex >= portion ? endIndex - portion + 1 : 0
       const messages = await this.loadMessages(startIndex, endIndex, userId)
       return { messages, authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
-      const endIndex = startIndex + portion
+      const endIndex = startIndex + portion - 1
       const messages = await this.loadMessages(startIndex, endIndex, userId)
       return { messages, authors: [] }
     }
@@ -231,11 +232,11 @@ messages in storage: ${this.#counter},
         const i = keys.indexOf(key)
         const message = messagesChunk.get(key)
         if (message) {
-          this.#messages[i] = message
+          this.#messages[message.messageId] = message
         }
       }
     }
-    const messages = this.#messages.slice(startId, endId).filter(m => !!m)
+    const messages = this.#messages.slice(startId, endId + 1).filter(m => !!m)
 
     if (messages.length === 0) {
       return messages
@@ -541,8 +542,9 @@ messages in storage: ${this.#counter},
       currentBlockOfMessagesOfOneAuthorLength -= this.#lastMessageOfPreviousAuthor.messageId
     }
 
-    return (
-      Math.min(this.#counter - (lastReadMark?.messageId || 0) - 1, currentBlockOfMessagesOfOneAuthorLength-1)
+    return Math.min(
+      this.#counter - (lastReadMark?.messageId || 0) - 1,
+      currentBlockOfMessagesOfOneAuthorLength - 1,
     )
   }
 

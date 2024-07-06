@@ -45,25 +45,27 @@ import { chatStorage, chatType, gptStorage, isGroup, fingerprintDO, userStorage 
 import { ProfileService } from './ProfileService'
 import { Profile } from '~/db/models/User'
 import { ChatListService } from './ChatListService'
+import { messagePreview } from './utils/message-preview'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
   #timestamp = Date.now()
   #deviceToken = ''
-  private readonly wsService: WebSocketGod
-  private readonly onlineService: OnlineStatusService
-  private readonly profileService: ProfileService
-  private readonly cl: ChatListService
+  private  wsService!: WebSocketGod
+  private  onlineService!: OnlineStatusService
+  private  profileService!: ProfileService
+  private  cl!: ChatListService
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
   ) {
+		this.state.blockConcurrencyWhile(async () => {
     this.wsService = new WebSocketGod(state, env)
     this.profileService = new ProfileService(this.state, this.env)
     this.cl = new ChatListService(this.state, this.env)
     this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
     this.wsService.onlineService = this.onlineService
-    this.state.blockConcurrencyWhile(async () => {
+
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
     })
   }
@@ -99,6 +101,7 @@ export class UserMessagingDO implements DurableObject {
         | 'updateProfile'
         | 'updateChat'
         | 'blink'
+        | 'lastSeen'
       ),
     ]
     if (!this.#userId) {
@@ -130,6 +133,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.updateProfileHandler(request)
               case 'blink':
                 return this.blinkHandler(request)
+              case 'lastSeen':
+                return this.lastSeenHandler(request)
             }
         }
 
@@ -164,6 +169,11 @@ export class UserMessagingDO implements DurableObject {
 
       case 'messaging': {
         switch (type) {
+          case 'request':
+            switch (action) {
+              case 'lastSeen':
+                return this.lastSeenHandler(request)
+            }
           case 'event':
             switch (action) {
               case 'online':
@@ -328,12 +338,8 @@ export class UserMessagingDO implements DurableObject {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
-        lastMessageText: eventData.message
-          ? eventData.message.length > 133
-            ? eventData.message?.slice(0, 130) + '...'
-            : eventData.message
-          : '',
-        lastMessageTime: eventData.timestamp,
+        lastMessageText: messagePreview(eventData.message),
+
         name: someChatData.name,
         type: chatType(chatId),
         verified: false,
@@ -344,7 +350,7 @@ export class UserMessagingDO implements DurableObject {
         missed: eventData.missed,
       }
       const chat = this.toTop(chatId, chatChanges)
-
+      if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
       this.cl.chatList.unshift(chat)
       this.cl.save()
     }
@@ -353,6 +359,8 @@ export class UserMessagingDO implements DurableObject {
     if (this.onlineService.isOnline()) {
       if (isNew) {
         await this.wsService.toBuffer('chats', this.cl.chatList)
+
+        this.state.waitUntil(this.onlineService.online())
       }
       await this.wsService.toBuffer('new', {
         ...eventData,
@@ -465,6 +473,9 @@ export class UserMessagingDO implements DurableObject {
   }
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
+  }
+  async lastSeenHandler(request: Request) {
+    return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
@@ -591,11 +602,15 @@ export class UserMessagingDO implements DurableObject {
     }
 
     const storage = this.chatStorage(chatId)
-    if (!this.cl.chatList.find(chat => chat.id === chatId)) {
+    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
+    let lastSeen = chatItem?.lastSeen
+    if (!chatItem) {
       if (!isGroup(chatId)) {
-        await this.state.blockConcurrencyWhile(async () =>
-          (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId),
-        )
+        await this.state.blockConcurrencyWhile(async () => {
+          ;(storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
+
+          lastSeen = await this.onlineService.lastSeenOf(chatId)
+        })
       }
     }
 
@@ -617,6 +632,7 @@ export class UserMessagingDO implements DurableObject {
       lastMessageAuthor: '',
       photoUrl: dialog.photoUrl,
       isMine: true,
+      ...lastSeen ? {lastSeen} : {},
       lastMessageId: messageId,
       ...(payload.attachments?.length ? { attachmentType: payload.attachments[0].type } : {}),
     }
@@ -625,6 +641,10 @@ export class UserMessagingDO implements DurableObject {
     this.cl.chatList.unshift(chat)
 
     this.cl.save()
+		if (!chatItem) {
+			await this.onlineService.online()
+		}
+
     return { messageId, timestamp, clientMessageId }
   }
 
@@ -674,3 +694,4 @@ export class UserMessagingDO implements DurableObject {
     this.onlineService.setUserId(id)
   }
 }
+

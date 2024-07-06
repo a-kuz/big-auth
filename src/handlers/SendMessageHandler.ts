@@ -52,8 +52,7 @@ export class SendMessageHandler extends Route {
 
   async handle(request: Request, env: Env, _ctx: any, { body }: DataOf<typeof SendMessageHandler.schema>) {
     try {
-      const response = await sendMessage(body, env)
-
+      const response = await sendMessage(body as NewMessageRequest, env)
       return response
     } catch (error) {
       console.error('SendMessageHandler Error:', error)

@@ -1,16 +1,14 @@
 import { Profile } from '~/db/models/User'
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
-import { OnlineEvent } from '~/types/ws/server-events'
-import { WebSocketGod } from './WebSocketService'
-import { chatStorage, userStorage } from './utils/mdo'
-import { set } from 'zod'
-import { GroupChatsDO } from './GroupChatsDO'
 import { DialogsDO } from './DialogsDO'
+import { GroupChatsDO } from './GroupChatsDO'
+import { chatStorage } from './utils/mdo'
 
 export class ProfileService {
   constructor(
     private readonly state: DurableObjectState,
+
     private env: Env,
   ) {}
 

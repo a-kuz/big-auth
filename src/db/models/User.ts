@@ -56,3 +56,4 @@ export type Profile = Pick<
   User,
   'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl' | 'verified'
 >
+export type ProfileWithLastSeen = Profile & { lastSeen?: number }

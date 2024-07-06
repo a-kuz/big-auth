@@ -1,11 +1,10 @@
-import { Num, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
 import { z } from 'zod'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileWithLastSeenSchema } from '~/types/openapi-schemas/profile'
+import { errorResponse } from '~/utils/error-response'
+import { Route } from '~/utils/route'
 import { getMergedContacts } from '../services/contacts'
 import { Env } from '../types/Env'
-import { ProfileSchema } from '~/types/openapi-schemas/profile'
-import { errorResponses } from '~/types/openapi-schemas/error-responses'
-import { errorResponse } from '~/utils/error-response'
 
 export class GetMergedContactsHandler extends Route {
   static schema = {
@@ -17,7 +16,7 @@ export class GetMergedContactsHandler extends Route {
       '200': {
         description: 'Contact retrieved successfully',
         schema: z.object({
-          contacts: z.array(ProfileSchema),
+          contacts: z.array(ProfileWithLastSeenSchema),
         }),
       },
       ...errorResponses,

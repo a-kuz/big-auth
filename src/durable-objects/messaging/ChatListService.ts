@@ -5,7 +5,10 @@ export class ChatListService {
   public chatList: ChatList = [] // memory access optimization
   #chatListTimer: NodeJS.Timeout | undefined
   #storage!: DurableObjectStorage
-  constructor(state: DurableObjectState, env: Env) {
+  constructor(
+    private state: DurableObjectState,
+    env: Env,
+  ) {
     this.#storage = state.storage
 
     state.blockConcurrencyWhile(async () => this.initialize())
@@ -16,15 +19,6 @@ export class ChatListService {
   }
 
   save() {
-    if (this.#chatListTimer) {
-      clearTimeout(this.#chatListTimer)
-    }
-    this.#chatListTimer = setTimeout(async () => {
-      await this.#storage.put('chatList', this.chatList, {
-        allowUnconfirmed: true,
-        allowConcurrency: true,
-      })
-      this.#chatListTimer = undefined
-    }, 10)
+    this.state.blockConcurrencyWhile(() => this.#storage.put('chatList', this.chatList))
   }
 }

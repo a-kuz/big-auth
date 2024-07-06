@@ -1,4 +1,5 @@
-import { Profile, User, UserDB } from '~/db/models/User'
+import { Profile, ProfileWithLastSeen, User, UserDB } from '~/db/models/User'
+import { OnlineStatus, UNKNOWN_LAST_SEEN } from '~/durable-objects/messaging/OnlineStatusService'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
@@ -122,7 +123,7 @@ export async function getContacts(env: Env, ownerId: string) {
   return contacts.results.map(fromSnakeToCamel)
 }
 
-export async function getMergedContacts(env: Env) {
+export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
   const query = `
     SELECT u.id,
            CASE WHEN COALESCE(c.first_name, '') = '' THEN u.first_name ELSE c.first_name END AS first_name,
@@ -189,6 +190,30 @@ export async function getMergedContacts(env: Env) {
     return acc
   }, [])
 
+  const lastSeens: Map<string, number | undefined> = new Map()
+  const promises = []
+  for (const contact of uniqueResults) {
+    const contactFromChatList = chatList.find(chat => chat.id === contact.id)
+    if (contactFromChatList) {
+      lastSeens.set(contact.id, contactFromChatList.lastSeen)
+    } else {
+      const mdo = userStorage(env, contact.id)
+      promises.push(async () => {
+        const lastSeenResponse = await mdo.fetch(
+          new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
+            method: 'POST',
+          }),
+        )
+
+        const lastSeen = await lastSeenResponse.json<OnlineStatus>()
+        if (lastSeen.status === 'offline') {
+          lastSeens.set(contact.id, lastSeen.lastSeen || UNKNOWN_LAST_SEEN)
+        }
+      })
+    }
+  }
+  await Promise.all(promises)
+
   const results = uniqueResults.map(contact => {
     return {
       id: contact.id,
@@ -197,7 +222,8 @@ export async function getMergedContacts(env: Env) {
       lastName: contact.last_name || undefined,
       username: contact.username || undefined,
       avatarUrl: contact.avatar_url || undefined,
-			verified: !!(contact.verified || false),
+      verified: !!(contact.verified || false),
+      lastSeen: lastSeens.get(contact.id),
     }
   })
 

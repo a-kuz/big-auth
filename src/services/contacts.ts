@@ -46,18 +46,20 @@ export async function putContacts(
   const newNumbers = phoneNumbers.filter(pn => !existing.find(e => e.phone_number2 === pn))
 
   const insertQuery = 'INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES (?, ?)'
-  for (const pn of newNumbers) {
+  const chunkSize = 20;
+  for (let i = 0; i < newNumbers.length; i += chunkSize) {
+    const chunk = newNumbers.slice(i, i + chunkSize);
+    const values = chunk.map(pn => `('${user.phoneNumber}', '${pn}')`).join(', ');
+    const chunkInsertQuery = `INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES ${values}`;
     try {
-      await DB.prepare(insertQuery).bind(user.phoneNumber, pn).run()
+      await DB.prepare(chunkInsertQuery).run();
     } catch (error) {
       // Handle error
-      console.error(error)
-      throw error
+      console.error(error);
+      throw error;
     }
 
-    const contact = contacts.find(c => c.phoneNumber === pn)
-    if (contact) {
-    }
+
   }
 }
 

@@ -28,6 +28,7 @@ import { Mark, MarkPointer, Marks } from '../../types/Marks'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { DebugWrapper } from '../DebugWrapper'
+import { MessageStatus } from '~/types/ChatList'
 
 export class DialogsDO extends DebugWrapper {
   #timestamp = Date.now()
@@ -265,6 +266,7 @@ messages in storage: ${this.#counter},
 
       message.read = readMark ? readMark[1] : undefined
       message.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
+      message.status = this.messageStatus(message.messageId, userId)
     }
     return messages
   }
@@ -586,19 +588,15 @@ messages in storage: ${this.#counter},
       let lastMessageCandidat = await this.getLastMessage(indexCandidat)
       if (lastMessageCandidat) {
         this.#lastMessage = lastMessageCandidat
-        this.#messages[this.#counter - 1] = this.#lastMessage
+        this.#messages[this.#lastMessage.messageId] = this.#lastMessage
       }
-      const lastMessage = await this.#storage.get<DialogMessage>(`message-${this.#counter - 1}`)
     }
   }
-  async messageStatus(
-    messageId: number,
-    userId: string,
-  ): Promise<'read' | 'unread' | 'undelivered'> {
-    const isRead = await this.isMarked(messageId, userId, 'read')
+  private messageStatus(messageId: number, userId: string): MessageStatus {
+    const isRead = this.isMarked(messageId, userId, 'read')
     if (isRead) return 'read'
 
-    const isDelivered = await this.isMarked(messageId, userId, 'dlvrd')
+    const isDelivered = this.isMarked(messageId, userId, 'dlvrd')
     if (isDelivered) return 'unread'
 
     return 'undelivered'
@@ -611,28 +609,23 @@ messages in storage: ${this.#counter},
       keys.push(`message-${index}`)
       index--
     }
-
-    const keyChunks = splitArray(keys, 128)
-    for (const chunk of keyChunks) {
-      const messagesChunk = await this.#storage.get<DialogMessage>(chunk)
-      for (const [key, message] of messagesChunk.entries()) {
-        const messageIndex = parseInt(key.split('-')[1])
-        this.#messages[messageIndex] = message
-        if (!lastMessage) {
-          lastMessage = message
-        }
+    let maxIndex = -1
+    const messagesChunk = await this.#storage.get<DialogMessage>(keys)
+    for (const [key, message] of messagesChunk.entries()) {
+      const messageIndex = parseInt(key.split('-')[1])
+      this.#messages[messageIndex] = message
+      if (maxIndex < messageIndex) {
+        lastMessage = message
+        maxIndex = messageIndex
       }
     }
+
     if (!lastMessage) {
       return this.getLastMessage(index)
     }
     return lastMessage
   }
-  private async isMarked(
-    messageId: number,
-    userId: string,
-    markType: 'read' | 'dlvrd',
-  ): Promise<boolean> {
+  private isMarked(messageId: number, userId: string, markType: 'read' | 'dlvrd'): boolean {
     const lastMark = (markType === 'read' ? this.#lastReadMark : this.#lastDlvrdMark).get(userId)
     if (!lastMark) return false
     return lastMark.messageId >= messageId
@@ -643,13 +636,10 @@ messages in storage: ${this.#counter},
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
-  async fetch(request: Request<unknown, CfProperties<unknown>>): Promise<Response> {
-    return new Response()
-  }
   async updateProfile(profile: Profile) {
     if (!this.#users) return
     const index = this.#users.findIndex(user => user.id === profile.id)
-    if (index && index >= 0) {
+    if (index >= 0) {
       this.#users[index] = profile
     }
     await this.ctx.storage.put('users', this.#users)

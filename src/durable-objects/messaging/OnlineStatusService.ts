@@ -51,15 +51,15 @@ export class OnlineStatusService {
     const onlineStatus = await lastSeenResponse.json<OnlineStatus>()
 
     if (onlineStatus.status === 'online') {
-			return undefined;
-		} else {
-			return onlineStatus.lastSeen
-		}
+      return undefined
+    } else {
+      return onlineStatus.lastSeen
+    }
   }
   status(): OnlineStatus {
     return {
       status: this.#isOnline ? 'online' : 'offline',
-      lastSeen: this.#isOnline ? undefined : this.#lastSeen,
+      lastSeen: this.#isOnline ? undefined : this.#lastSeen ? this.#lastSeen : UNKNOWN_LAST_SEEN,
     }
   }
 
@@ -67,7 +67,7 @@ export class OnlineStatusService {
     if (!this.chatListService.chatList) {
       return
     }
-    this.#outgoingDlvrdQueue = []
+
     for (const chat of this.chatListService.chatList.filter(
       chat =>
         (chat.type === 'dialog' || chat.type === 'group') &&
@@ -137,7 +137,7 @@ export class OnlineStatusService {
     }
   }
   async processOutgoingDlvrdQueue(): Promise<void> {
-    console.log('outgoing dlvrd queue processing')
+
     const timestamp = this.timestamp()
     let eventsPerProcessing = 3
     let hasErrored = false
@@ -168,8 +168,7 @@ export class OnlineStatusService {
     this.#lastSeen = undefined
 
     const chatList = this.chatListService.chatList
-    const timestamp = this.timestamp()
-    const promises: Promise<never>[] = []
+
     if (!chatList) {
       return []
     }
@@ -178,7 +177,7 @@ export class OnlineStatusService {
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
 
-    await this.blink()
+    this.state.waitUntil(this.blink())
     await this.state.storage.setAlarm(Date.now() + 100)
     return chatList
   }
@@ -203,6 +202,50 @@ export class OnlineStatusService {
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
+  }
+
+  async sendOnlineTo(userId: string) {
+    const body = JSON.stringify({
+      userId: this.userId,
+    })
+    let resp: Response, friendStatus: OnlineStatus
+    try {
+      const receiverDO = userStorage(this.env, userId)
+
+      const url = `${this.env.ORIGIN}/${userId}/messaging/event/online`
+      try {
+        resp = await receiverDO.fetch(url, { body, method: 'POST' })
+        friendStatus = await resp.json<OnlineStatus>()
+      } catch (error) {
+        writeErrorLog(error)
+        if (resp!) console.log('!!!!! FRIEND', await resp.clone().text())
+
+        friendStatus = { status: 'offline', lastSeen: UNKNOWN_LAST_SEEN }
+      }
+      if (friendStatus.status === 'online') {
+        const wsEvent: OnlineEvent = { userId }
+        if (this.#isOnline) {
+          this.ws.toBuffer('online', wsEvent)
+        }
+      } else {
+      }
+      const chatIndex = this.chatListService.chatList.findIndex(c => c.id === userId)
+      if (chatIndex !== -1) {
+        const lastSeen =
+          friendStatus.status === 'online'
+            ? undefined
+            : friendStatus.lastSeen
+              ? friendStatus.lastSeen
+              : UNKNOWN_LAST_SEEN
+
+        if (this.chatListService.chatList[chatIndex].lastSeen !== lastSeen) {
+          this.chatListService.chatList[chatIndex].lastSeen = lastSeen
+          this.chatListService.save()
+        }
+      }
+    } catch (error) {
+      await writeErrorLog(error)
+    }
   }
   userId!: string
   #isOnline = false

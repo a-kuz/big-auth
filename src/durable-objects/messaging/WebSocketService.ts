@@ -24,7 +24,7 @@ export class WebSocketGod {
     private state: DurableObjectState,
     private env: Env,
   ) {
-    this.state.setHibernatableWebSocketEventTimeout(1000 * 60)
+
     this.state.storage.setAlarm(Date.now() + 5000, {
       allowConcurrency: true,
       allowUnconfirmed: true,
@@ -136,11 +136,7 @@ export class WebSocketGod {
   async handleClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     console.log(JSON.stringify({ f: 'webSocketClose', code, reason, wasClean }))
 
-    if (
-      this.state.getWebSockets().filter(w => w !== ws && w.readyState === WebSocket.OPEN).length ===
-      0
-    )
-      await this.onlineService.offline()
+    await this.onlineService.offline()
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
@@ -200,7 +196,7 @@ export class WebSocketGod {
   async checkStatus(): Promise<void> {
     const sockets = this.state.getWebSockets()
     if (sockets.length > 1) {
-      console.log('sockets.length = ' + sockets.length.toString())
+      console.log('sockets.length = ' + sockets.length.toString(), )
     }
     for (const socket of sockets) {
       if (this.#lastPing) {

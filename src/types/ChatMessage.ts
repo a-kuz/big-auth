@@ -1,4 +1,5 @@
 import { Attachment } from './Attachment'
+import { MessageStatus } from './ChatList'
 import { ReplyTo } from './ws/client-requests'
 
 interface Delivering {
@@ -14,8 +15,9 @@ export interface DialogMessage {
   sender: string
 	replyTo?: ReplyTo
   attachments?: Attachment[]
-  read?: number
-  dlvrd?: number
+  read?: number // deprecated
+  dlvrd?: number // depracted
+	status?: MessageStatus
   createdAt: number
   updatedAt?: number
 }

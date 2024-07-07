@@ -70,10 +70,10 @@ export class FindContactsHandler extends Route {
           'Content-Type': 'application/json',
         },
       })
-
+			await putContacts(env.user, phoneNumbers, contacts, env)
       context.waitUntil(
         Promise.all([
-          putContacts(env.user, phoneNumbers, contacts, env),
+
           cache.put(
             cacheKey,
             new Response(responseBody, {

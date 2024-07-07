@@ -1,4 +1,4 @@
-import { ChatList } from '~/types/ChatList'
+import { ChatList, ChatListItem } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 
 export class ChatListService {
@@ -20,5 +20,16 @@ export class ChatListService {
 
   save() {
     this.state.blockConcurrencyWhile(() => this.#storage.put('chatList', this.chatList))
+  }
+
+	toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
+    const currentChatIndex = this.chatList.findIndex(chat => chat.id === chatId)
+    const currentChat: ChatListItem =
+      currentChatIndex === -1
+        ? (eventData as ChatListItem)
+        : { ...this.chatList[currentChatIndex], ...eventData }
+    if (currentChatIndex >= 0) this.chatList.splice(currentChatIndex, 1)
+
+    return currentChat
   }
 }

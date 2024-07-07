@@ -540,7 +540,7 @@ export class GroupChatsDO extends DebugWrapper {
         timestamp: this.timestamp(),
       })
     }
-    this.#storage.deleteAlarm()
+    await this.#storage.deleteAlarm()
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
 

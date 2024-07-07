@@ -51,20 +51,20 @@ export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
   #timestamp = Date.now()
   #deviceToken = ''
-  private  wsService!: WebSocketGod
-  private  onlineService!: OnlineStatusService
-  private  profileService!: ProfileService
-  private  cl!: ChatListService
+  private wsService!: WebSocketGod
+  private onlineService!: OnlineStatusService
+  private profileService!: ProfileService
+  private cl!: ChatListService
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
   ) {
-		this.state.blockConcurrencyWhile(async () => {
-    this.wsService = new WebSocketGod(state, env)
-    this.profileService = new ProfileService(this.state, this.env)
-    this.cl = new ChatListService(this.state, this.env)
-    this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
-    this.wsService.onlineService = this.onlineService
+    this.state.blockConcurrencyWhile(async () => {
+      this.wsService = new WebSocketGod(state, env)
+      this.profileService = new ProfileService(this.state, this.env)
+      this.cl = new ChatListService(this.state, this.env)
+      this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
+      this.wsService.onlineService = this.onlineService
 
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
     })
@@ -212,7 +212,7 @@ export class UserMessagingDO implements DurableObject {
     console.log(eventData)
     const { chatId, name, meta } = eventData
     const { owner } = meta
-    const chat = this.toTop(chatId, {
+    const chat = this.cl.toTop(chatId, {
       id: chatId,
       photoUrl: eventData.photoUrl,
       lastMessageStatus: 'undelivered',
@@ -236,7 +236,7 @@ export class UserMessagingDO implements DurableObject {
   async updateChatEventHandler(request: Request) {
     const eventData = await request.json<UpdateChatInternalEvent>()
     const { chatId, name, meta, photoUrl } = eventData
-    const index = this.cl.chatList.findIndex(chat => chat.id === eventData.chatId)
+    const index = this.cl.chatList.findIndex(chat => chat.id === chatId)
     this.cl.chatList[index].name = name
     this.cl.chatList[index].photoUrl = photoUrl
     await this.wsService.toBuffer('chats', this.cl.chatList)
@@ -249,17 +249,14 @@ export class UserMessagingDO implements DurableObject {
 
     const chatId = eventData.chatId
 
-    const counter = await this.chatStorage(chatId).counter()
-
-    if (counter - 1 === eventData.messageId) {
-      const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
-      if (
-        !this.cl.chatList[i].lastMessageStatus ||
-        this.cl.chatList[i].lastMessageStatus === 'undelivered'
-      ) {
-        this.cl.chatList[i].lastMessageStatus = 'unread'
-        this.cl.save()
-      }
+    console.log(JSON.stringify(eventData))
+		const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    if (
+      !this.cl.chatList[i].lastMessageStatus ||
+      this.cl.chatList[i].lastMessageStatus === 'undelivered'
+    ) {
+      this.cl.chatList[i].lastMessageStatus = 'unread'
+      await this.cl.save()
     }
 
     if (this.onlineService.isOnline()) {
@@ -303,7 +300,7 @@ export class UserMessagingDO implements DurableObject {
   }
   async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.#userId
-    const chat = this.toTop(chatId, {
+    const chat = this.cl.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'read',
       lastMessageText: eventData.message,
@@ -326,30 +323,26 @@ export class UserMessagingDO implements DurableObject {
     const chatId = eventData.chatId
     const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-    let someChatData
-    const chatlListItem = this.cl.chatList.find(e => e.id === chatId)
-    if (chatlListItem) {
-      someChatData = { ...chatlListItem, chatId }
-    } else {
-      someChatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
-    }
-    this.toQ(eventData, someChatData.name, someChatData.photoUrl)
+    let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
+
+    this.toQ(eventData, chatData.name, chatData.photoUrl)
     if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
         lastMessageText: messagePreview(eventData.message),
 
-        name: someChatData.name,
+        name: chatData.name,
         type: chatType(chatId),
         verified: false,
-        lastMessageAuthor: eventData.senderName,
-        photoUrl: someChatData.photoUrl,
-        isMine: eventData.sender === this.#userId,
-        lastMessageId: eventData.messageId,
-        missed: eventData.missed,
+        lastMessageAuthor: chatData.lastMessageAuthor,
+        photoUrl: chatData.photoUrl,
+        isMine: false,
+        lastMessageId: chatData.lastMessageId,
+        missed: chatData.missed,
+        lastMessageTime: chatData.lastMessageTime,
       }
-      const chat = this.toTop(chatId, chatChanges)
+      const chat = this.cl.toTop(chatId, chatChanges)
       if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
       this.cl.chatList.unshift(chat)
       this.cl.save()
@@ -360,7 +353,7 @@ export class UserMessagingDO implements DurableObject {
       if (isNew) {
         await this.wsService.toBuffer('chats', this.cl.chatList)
 
-        this.state.waitUntil(this.onlineService.online())
+        await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toBuffer('new', {
         ...eventData,
@@ -510,13 +503,8 @@ export class UserMessagingDO implements DurableObject {
   private async handleWebsocket(request: Request): Promise<Response> {
     console.log('CONNECT!')
     this.wsService.clearBuffer()
+    await this.onlineService.online()
     const response = await this.wsService.acceptWebSocket(request)
-    this.state.waitUntil(
-      (async () => {
-        this.cl.chatList = await this.onlineService.online()
-        return
-      })(),
-    )
     return response
   }
   ////////////////////////////////////////////////////////////////////////////////////
@@ -607,9 +595,7 @@ export class UserMessagingDO implements DurableObject {
     if (!chatItem) {
       if (!isGroup(chatId)) {
         await this.state.blockConcurrencyWhile(async () => {
-          ;(storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
-
-          lastSeen = await this.onlineService.lastSeenOf(chatId)
+          await (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
         })
       }
     }
@@ -632,31 +618,19 @@ export class UserMessagingDO implements DurableObject {
       lastMessageAuthor: '',
       photoUrl: dialog.photoUrl,
       isMine: true,
-      ...lastSeen ? {lastSeen} : {},
       lastMessageId: messageId,
       ...(payload.attachments?.length ? { attachmentType: payload.attachments[0].type } : {}),
     }
 
-    const chat = this.toTop(chatId, chatChanges)
+    const chat = this.cl.toTop(chatId, chatChanges)
     this.cl.chatList.unshift(chat)
 
     this.cl.save()
-		if (!chatItem) {
-			await this.onlineService.online()
-		}
+    if (!chatItem) {
+      await this.onlineService.sendOnlineTo(chatId)
+    }
 
     return { messageId, timestamp, clientMessageId }
-  }
-
-  toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
-    const currentChatIndex = this.cl.chatList.findIndex(chat => chat.id === chatId)
-    const currentChat: ChatListItem =
-      currentChatIndex === -1
-        ? (eventData as ChatListItem)
-        : { ...this.cl.chatList[currentChatIndex], ...eventData }
-    if (currentChatIndex >= 0) this.cl.chatList.splice(currentChatIndex, 1)
-
-    return currentChat
   }
 
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
@@ -694,4 +668,3 @@ export class UserMessagingDO implements DurableObject {
     this.onlineService.setUserId(id)
   }
 }
-

@@ -162,7 +162,7 @@ messages in storage: ${this.#counter},
   }
 
   async chat(userId: string): Promise<Dialog> {
-    if (!this.#users) {
+    	if (!this.#users) {
       console.error("DO dialog: 'users' is not initialized")
       throw new Error("DO dialog: 'users' is not initialized")
     }
@@ -170,7 +170,7 @@ messages in storage: ${this.#counter},
     const isMine = this.#lastMessage?.sender === userId
     const lastMessageStatus = this.#lastMessage
       ? await this.messageStatus(this.#lastMessage.messageId, userId)
-      : 'undelivered'
+      : 'unread'
 
     const chat: Dialog = {
       chatId: user2.id,
@@ -593,10 +593,11 @@ messages in storage: ${this.#counter},
     }
   }
   private messageStatus(messageId: number, userId: string): MessageStatus {
-    const isRead = this.isMarked(messageId, userId, 'read')
+		const id = this.chatIdFor(userId)
+    const isRead = this.isMarked(messageId, id, 'read')
     if (isRead) return 'read'
 
-    const isDelivered = this.isMarked(messageId, userId, 'dlvrd')
+    const isDelivered = this.isMarked(messageId, id, 'dlvrd')
     if (isDelivered) return 'unread'
 
     return 'undelivered'
@@ -634,6 +635,35 @@ messages in storage: ${this.#counter},
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
+  }
+
+  async newCall(newCallRequest: any) {
+    const timestamp = this.timestamp();
+    const messageId = await this.newId();
+    const message: DialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: newCallRequest.initiatorId,
+      message: 'New call initiated',
+      clientMessageId: newCallRequest.clientMessageId,
+    };
+    this.#messages[messageId] = message;
+    await this.#storage.put<DialogMessage>(`message-${messageId}`, message);
+    await this.callCreated(newCallRequest);
+  }
+
+  async callCreated(newCallRequest: any) {
+    const event = {
+      type: 'newCall',
+      chatId: this.#id,
+      initiatorId: newCallRequest.initiatorId,
+      timestamp: this.timestamp(),
+    };
+
+    for (const user of this.#users) {
+      const receiverDO = userStorage(this.env, user.id);
+      await receiverDO.newCallEventHandler(event);
+    }
   }
 
   async updateProfile(profile: Profile) {

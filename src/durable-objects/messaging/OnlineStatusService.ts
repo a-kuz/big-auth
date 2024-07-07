@@ -1,12 +1,10 @@
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
-import { WebSocketGod } from './WebSocketService'
-import { OfflineEvent, OnlineEvent } from '~/types/ws/server-events'
-import { chatStorage, userStorage } from './utils/mdo'
-import { url } from 'inspector'
-import { wrap } from 'module'
+import { OnlineEvent } from '~/types/ws/server-events'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { ChatListService } from './ChatListService'
+import { chatStorage, userStorage } from './utils/mdo'
+import { WebSocketGod } from './WebSocketService'
 export type OnlineStatus = { lastSeen?: number; status: 'online' | 'offline' }
 export const UNKNOWN_LAST_SEEN = 1719781200000 // 2024-07-01
 export class OnlineStatusService {
@@ -67,7 +65,7 @@ export class OnlineStatusService {
     if (!this.chatListService.chatList) {
       return
     }
-
+    const timestamp = this.timestamp()
     for (const chat of this.chatListService.chatList.filter(
       chat =>
         (chat.type === 'dialog' || chat.type === 'group') &&
@@ -76,20 +74,22 @@ export class OnlineStatusService {
         chat.lastMessageStatus === 'undelivered',
     )) {
       this.#outgoingDlvrdQueue.push({ chatId: chat.id })
+      const receiverDO = chatStorage(this.env, chat.id, this.userId)
+      await receiverDO.dlvrd(this.userId, { chatId: chat.id }, timestamp)
       chat.lastMessageStatus = 'unread'
       this.chatListService.save()
     }
     await this.state.storage.put('outgoingDlvrdQueue', this.#outgoingDlvrdQueue)
   }
 
-  async processOutgoingStatusQueue(): Promise<void> {
+  async processOutgoingStatusQueue(eventsPerProcessing = 3): Promise<void> {
     const { status } = this.status()
     const reqBody = JSON.stringify({
       userId: this.userId,
-      lastSeen: status === 'online' ? undefined : this.#lastSeen,
+      ...(status === 'online' ? {} : { lastSeen: this.#lastSeen || Date.now() }),
     })
     console.log(reqBody)
-    let eventsPerProcessing = 3
+
     while (this.#outgoingStatusQueue.length && eventsPerProcessing) {
       eventsPerProcessing--
       const event = this.#outgoingStatusQueue.shift()
@@ -118,10 +118,20 @@ export class OnlineStatusService {
           const chatIndex = this.chatListService.chatList.findIndex(c => c.id === event.userId)
           if (chatIndex !== -1) {
             const lastSeen = friendStatus.status === 'online' ? undefined : friendStatus.lastSeen
-
+            let save = false
+            if (
+              this.chatListService.chatList[chatIndex].lastMessageStatus === 'undelivered' &&
+              friendStatus.status === 'online'
+            ) {
+              this.chatListService.chatList[chatIndex].lastMessageStatus = 'unread'
+              save = true
+            }
             if (this.chatListService.chatList[chatIndex].lastSeen !== lastSeen) {
               this.chatListService.chatList[chatIndex].lastSeen = lastSeen
-              this.chatListService.save()
+              save = true
+            }
+            if (save) {
+              await this.chatListService.save()
             }
           }
           await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
@@ -137,7 +147,6 @@ export class OnlineStatusService {
     }
   }
   async processOutgoingDlvrdQueue(): Promise<void> {
-
     const timestamp = this.timestamp()
     let eventsPerProcessing = 3
     let hasErrored = false
@@ -192,6 +201,7 @@ export class OnlineStatusService {
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
     await this.state.storage.setAlarm(Date.now() + 100)
+    this.state.waitUntil(async () => this.processOutgoingStatusQueue(20))
   }
 
   async setUserId(id: string) {

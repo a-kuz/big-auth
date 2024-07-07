@@ -18,11 +18,11 @@ export class ChatListService {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
   }
 
-  save() {
-    this.state.blockConcurrencyWhile(() => this.#storage.put('chatList', this.chatList))
+  async save() {
+    await this.#storage.put('chatList', this.chatList)
   }
 
-	toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
+  toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
     const currentChatIndex = this.chatList.findIndex(chat => chat.id === chatId)
     const currentChat: ChatListItem =
       currentChatIndex === -1

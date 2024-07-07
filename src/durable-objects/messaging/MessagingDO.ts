@@ -26,7 +26,7 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Dialog, DialogAI, Group } from '~/types/Chat'
+import { Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
@@ -70,7 +70,16 @@ export class UserMessagingDO implements DurableObject {
     })
   }
 
-  private timestamp() {
+  async newCallEventHandler(newCallInternalEvent: any) {
+    console.log('New call event received:', newCallInternalEvent);
+    const chatId = newCallInternalEvent.chatId;
+    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === chatId);
+    if (chatIndex >= 0) {
+      this.cl.chatList[chatIndex].lastMessageText = 'New call initiated';
+      this.cl.chatList[chatIndex].lastMessageTime = newCallInternalEvent.timestamp;
+      await this.cl.save();
+    }
+  }
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
@@ -226,7 +235,7 @@ export class UserMessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
-    this.cl.save()
+    await this.cl.save()
     if (this.onlineService.isOnline()) {
       await this.wsService.toBuffer('chats', this.cl.chatList)
     }
@@ -240,7 +249,7 @@ export class UserMessagingDO implements DurableObject {
     this.cl.chatList[index].name = name
     this.cl.chatList[index].photoUrl = photoUrl
     await this.wsService.toBuffer('chats', this.cl.chatList)
-    this.cl.save()
+    await this.cl.save()
 
     return new Response()
   }
@@ -285,7 +294,7 @@ export class UserMessagingDO implements DurableObject {
         this.cl.chatList[i].lastMessageStatus === 'unread'
       ) {
         this.cl.chatList[i].lastMessageStatus = 'read'
-        this.cl.save()
+        await this.cl.save()
       }
     }
 
@@ -313,7 +322,7 @@ export class UserMessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
-    this.cl.save()
+    await this.cl.save()
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
@@ -345,7 +354,7 @@ export class UserMessagingDO implements DurableObject {
       const chat = this.cl.toTop(chatId, chatChanges)
       if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
       this.cl.chatList.unshift(chat)
-      this.cl.save()
+      await this.cl.save()
     }
 
     let dlvrd = false
@@ -426,7 +435,7 @@ export class UserMessagingDO implements DurableObject {
       const chat = await gpt.create(this.#userId)
       this.cl.chatList.unshift(chat)
 
-      this.cl.save()
+      await this.cl.save()
     }
     return new Response(
       JSON.stringify(
@@ -440,6 +449,7 @@ export class UserMessagingDO implements DurableObject {
             lastMessageAuthor: e.lastMessageAuthor ?? this.#userId,
             lastMessageTime: e.lastMessageTime ?? Date.now(),
             lastMessageText: e.lastMessageText ?? '',
+            lastMessageStatus: e.lastMessageStatus ?? 'unread',
             id: e.id,
           })),
       ),
@@ -475,7 +485,7 @@ export class UserMessagingDO implements DurableObject {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
       this.cl.chatList[chatIndex].lastSeen = undefined
-      this.cl.save()
+      await this.cl.save()
     }
     await this.wsService.toBuffer('online', eventData)
     return new Response(JSON.stringify(this.onlineService.status()))
@@ -484,8 +494,8 @@ export class UserMessagingDO implements DurableObject {
     const eventData = await request.json<OfflineEvent>()
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
-      this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen
-      this.cl.save()
+      this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
+      await this.cl.save()
     }
     this.wsService.toBuffer('offline', eventData)
     return new Response(JSON.stringify(this.onlineService.status()))
@@ -591,9 +601,10 @@ export class UserMessagingDO implements DurableObject {
 
     const storage = this.chatStorage(chatId)
     const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
-    let lastSeen = chatItem?.lastSeen
+		let lastSeen = chatItem?.lastSeen
     if (!chatItem) {
-      if (!isGroup(chatId)) {
+			if (!isGroup(chatId)) {
+				lastSeen = await this.onlineService.lastSeenOf(chatId)
         await this.state.blockConcurrencyWhile(async () => {
           await (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
         })
@@ -605,17 +616,17 @@ export class UserMessagingDO implements DurableObject {
       payload,
     )
 
-    const dialog: Dialog = await storage.chat(this.#userId)
+    const dialog = await storage.chat(this.#userId) as Dialog | Group
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: 'undelivered',
+      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
       lastMessageText: payload.message,
       lastMessageTime: timestamp,
+      lastMessageAuthor: '',
       missed: 0,
       name: dialog.name,
       type: chatType(chatId),
-      verified: false,
-      lastMessageAuthor: '',
+      verified: dialog.meta.verified || false,
       photoUrl: dialog.photoUrl,
       isMine: true,
       lastMessageId: messageId,
@@ -625,7 +636,7 @@ export class UserMessagingDO implements DurableObject {
     const chat = this.cl.toTop(chatId, chatChanges)
     this.cl.chatList.unshift(chat)
 
-    this.cl.save()
+    await this.cl.save()
     if (!chatItem) {
       await this.onlineService.sendOnlineTo(chatId)
     }
@@ -647,7 +658,7 @@ export class UserMessagingDO implements DurableObject {
     )) as MarkReadResponse
     const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
     this.cl.chatList[i].missed = resp.missed
-    this.cl.save()
+    await this.cl.save()
     return resp
   }
 

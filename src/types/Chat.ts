@@ -55,6 +55,7 @@ export interface AiMeta {
 export interface GroupMeta {
   name: string
   owner: string
+	verified?: boolean
   participants: Profile[] | string[] // TODO
   createdAt: number
 }

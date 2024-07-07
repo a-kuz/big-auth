@@ -8,6 +8,7 @@ import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { infer, z } from 'zod'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string
@@ -30,7 +31,7 @@ export class VerifyCodeHandler extends Route {
     responses: {
       '200': {
         description: 'OTP verification successful',
-        schema: {
+        schema: z.object({
           accessToken: new Str({
             example:
               'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ',
@@ -38,7 +39,8 @@ export class VerifyCodeHandler extends Route {
           refreshToken: new Str({
             example: 'TnLZcHQX2O560P9YM4QGQ',
           }),
-        },
+					profile: ProfileSchema
+        }),
       },
       ...errorResponses,
     },

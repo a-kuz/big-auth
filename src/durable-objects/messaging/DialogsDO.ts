@@ -174,7 +174,7 @@ messages in storage: ${this.#counter},
 
     const chat: Dialog = {
       chatId: user2.id,
-      lastMessageId: this.#counter - 1,
+      lastMessageId: this.#lastMessage?.messageId || this.#counter - 1,
       photoUrl: user2.avatarUrl,
       type: 'dialog',
       meta: user2,

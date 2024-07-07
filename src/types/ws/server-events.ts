@@ -54,7 +54,17 @@ export interface NewMessageEvent<A extends AttachmentType | never = never> {
   token?: string
   appId?: string
 }
-
+export interface NewVOIPEvent<A extends AttachmentType | never = never> {
+  appId: string
+  callId?: string
+  chatId: string,
+  uid: number
+  token?: string
+  title: string
+  isVideo: boolean,
+  isGroup: boolean,
+  type: string
+}
 export interface MarkDeliveredEvent {
   chatId: string
   userId?: string

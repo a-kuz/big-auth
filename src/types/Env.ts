@@ -2,7 +2,7 @@ import { TaskManager } from 'do-taskmanager/dist/types'
 import { User } from '~/db/models/User'
 import { PushDO } from '~/durable-objects/PushDO'
 import { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from '..'
-import { PushNotification } from './queue/PushNotification'
+import { PushNotification, VoipPushNotification } from './queue/PushNotification'
 import { VoipTokenDO } from '~/durable-objects/VoipTokenDO'
 
 export interface Env {
@@ -25,7 +25,7 @@ export interface Env {
   readonly PUSH_TOKEN_DO: DurableObjectNamespace<PushDO>
   readonly VOIP_TOKEN_DO: DurableObjectNamespace<VoipTokenDO>
 
-  readonly PUSH_QUEUE: Queue<PushNotification>
+  readonly PUSH_QUEUE: Queue<PushNotification | VoipPushNotification>
 
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string

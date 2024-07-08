@@ -167,7 +167,7 @@ export class ChatGptDO extends DebugWrapper {
       lastMessageId: this.#messages.length ? this.#messages.length - 1 : 0,
       photoUrl: this.env.AI_AVATAR_URL,
       type: 'ai',
-      missed: this.#counter - (this.#lastRead.get(this.#id) || 0) - 1,
+      missed: this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0,
       lastMessageText: lastMessage?.message ?? '',
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,

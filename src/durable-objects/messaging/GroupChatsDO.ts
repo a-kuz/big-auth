@@ -561,36 +561,6 @@ export class GroupChatsDO extends DebugWrapper {
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
 
-  async newCall(newCallRequest: any) {
-    const timestamp = this.timestamp();
-    const messageId = await this.newId();
-    const message: GroupChatMessage = {
-      createdAt: timestamp,
-      messageId,
-      sender: newCallRequest.initiatorId,
-      message: 'New call initiated',
-      clientMessageId: newCallRequest.clientMessageId,
-    };
-    this.#messages[messageId] = message;
-    await this.#storage.put<GroupChatMessage>(`message-${messageId}`, message);
-    await this.callCreated(newCallRequest);
-  }
-
-  async callCreated(newCallRequest: any) {
-    const event = {
-      type: 'newCall',
-      chatId: this.#id,
-      initiatorId: newCallRequest.initiatorId,
-      timestamp: this.timestamp(),
-    };
-
-    for (const participant of this.group.meta.participants) {
-      if (participant !== newCallRequest.initiatorId) {
-        const receiverDO = userStorage(this.env, participant);
-        await receiverDO.newCallEventHandler(event);
-      }
-    }
-  }
 
   async updateProfile(profile: Profile) {
     if (!this.#users) return

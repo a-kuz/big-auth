@@ -162,14 +162,14 @@ messages in storage: ${this.#counter},
   }
 
   async chat(userId: string): Promise<Dialog> {
-    	if (!this.#users) {
+    if (!this.#users) {
       console.error("DO dialog: 'users' is not initialized")
       throw new Error("DO dialog: 'users' is not initialized")
     }
     const user2 = this.#users[0].id === userId ? this.#users[1] : this.#users[0]
     const isMine = this.#lastMessage?.sender === userId
     const lastMessageStatus = this.#lastMessage
-      ? await this.messageStatus(this.#lastMessage.messageId, userId)
+      ? await this.messageStatus(this.#lastMessage, userId)
       : 'unread'
 
     const chat: Dialog = {
@@ -252,21 +252,24 @@ messages in storage: ${this.#counter},
     for (const message of messages) {
       message.read = undefined
       message.dlvrd = undefined
-      if (message.sender !== userId) continue
-      if (readMark) {
-        if (readMark[0] < message.messageId) {
-          readMark = readMarks[readMarks.indexOf(readMark) + 1] ?? undefined
-        }
-      }
-      if (dlvrdMark) {
-        if (dlvrdMark[0] < message.messageId) {
-          dlvrdMark = dlvrdMarks[dlvrdMarks.indexOf(dlvrdMark) + 1] ?? undefined
-        }
-      }
+      // if (message.sender !== userId) continue
+			message.status = this.messageStatus(message, userId)
+			message.read = message.status === 'read' ? 1 : undefined
+			message.dlvrd = message.status === 'read'||message.status === 'unread' ? 1 : undefined
 
-      message.read = readMark ? readMark[1] : undefined
-      message.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
-      message.status = this.messageStatus(message.messageId, userId)
+      // if (readMark) {
+      //   if (readMark[0] < message.messageId) {
+      //     readMark = readMarks[readMarks.indexOf(readMark) + 1] ?? undefined
+      //   }
+      // }
+      // if (dlvrdMark) {
+      //   if (dlvrdMark[0] < message.messageId) {
+      //     dlvrdMark = dlvrdMarks[dlvrdMarks.indexOf(dlvrdMark) + 1] ?? undefined
+      //   }
+      // }
+
+      // message.read = readMark ? readMark[1] : undefined
+      // message.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
     }
     return messages
   }
@@ -544,10 +547,12 @@ messages in storage: ${this.#counter},
       currentBlockOfMessagesOfOneAuthorLength -= this.#lastMessageOfPreviousAuthor.messageId
     }
 
-    return Math.min(
-      this.#counter - (lastReadMark?.messageId || 0) - 1,
-      currentBlockOfMessagesOfOneAuthorLength - 1,
-    )
+    return lastReadMark
+      ? Math.min(
+          this.#counter - lastReadMark.messageId - 1,
+          currentBlockOfMessagesOfOneAuthorLength - 1,
+        )
+      : currentBlockOfMessagesOfOneAuthorLength - 1
   }
 
   private async initialize() {
@@ -583,7 +588,7 @@ messages in storage: ${this.#counter},
     }
     this.#messages = []
 
-    let indexCandidat = this.#counter - 1
+    let indexCandidat = this.#counter
     if (this.#counter) {
       let lastMessageCandidat = await this.getLastMessage(indexCandidat)
       if (lastMessageCandidat) {
@@ -591,13 +596,24 @@ messages in storage: ${this.#counter},
         this.#messages[this.#lastMessage.messageId] = this.#lastMessage
       }
     }
+    if (this.#lastMessage) {
+      let i = this.#lastMessage.messageId - 1
+      while (i >= 0) {
+        const message = await this.#message(i)
+        if (message && message.sender !== this.#lastMessage.sender) {
+          this.#lastMessageOfPreviousAuthor = message
+          break
+        }
+        i--
+      }
+    }
   }
-  private messageStatus(messageId: number, userId: string): MessageStatus {
-		const id = this.chatIdFor(userId)
-    const isRead = this.isMarked(messageId, id, 'read')
+  private messageStatus(message: DialogMessage, userId: string): MessageStatus {
+    const id = this.chatIdFor(message.sender)
+    const isRead = this.isMarked(message.messageId, id, 'read')
     if (isRead) return 'read'
 
-    const isDelivered = this.isMarked(messageId, id, 'dlvrd')
+    const isDelivered = this.isMarked(message.messageId, id, 'dlvrd')
     if (isDelivered) return 'unread'
 
     return 'undelivered'
@@ -637,34 +653,6 @@ messages in storage: ${this.#counter},
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
-  async newCall(newCallRequest: any) {
-    const timestamp = this.timestamp();
-    const messageId = await this.newId();
-    const message: DialogMessage = {
-      createdAt: timestamp,
-      messageId,
-      sender: newCallRequest.initiatorId,
-      message: 'New call initiated',
-      clientMessageId: newCallRequest.clientMessageId,
-    };
-    this.#messages[messageId] = message;
-    await this.#storage.put<DialogMessage>(`message-${messageId}`, message);
-    await this.callCreated(newCallRequest);
-  }
-
-  async callCreated(newCallRequest: any) {
-    const event = {
-      type: 'newCall',
-      chatId: this.#id,
-      initiatorId: newCallRequest.initiatorId,
-      timestamp: this.timestamp(),
-    };
-
-    for (const user of this.#users) {
-      const receiverDO = userStorage(this.env, user.id);
-      await receiverDO.newCallEventHandler(event);
-    }
-  }
 
   async updateProfile(profile: Profile) {
     if (!this.#users) return

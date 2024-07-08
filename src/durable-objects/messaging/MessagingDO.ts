@@ -70,20 +70,6 @@ export class UserMessagingDO implements DurableObject {
     })
   }
 
-  async newCallEventHandler(newCallInternalEvent: any) {
-    console.log('New call event received:', newCallInternalEvent);
-    const chatId = newCallInternalEvent.chatId;
-    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === chatId);
-    if (chatIndex >= 0) {
-      this.cl.chatList[chatIndex].lastMessageText = 'New call initiated';
-      this.cl.chatList[chatIndex].lastMessageTime = newCallInternalEvent.timestamp;
-      await this.cl.save();
-    }
-  }
-    const current = performance.now()
-    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
-  }
-
   async alarm(): Promise<void> {
     await this.wsService.alarm()
   }
@@ -259,7 +245,7 @@ export class UserMessagingDO implements DurableObject {
     const chatId = eventData.chatId
 
     console.log(JSON.stringify(eventData))
-		const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
     if (
       !this.cl.chatList[i].lastMessageStatus ||
       this.cl.chatList[i].lastMessageStatus === 'undelivered'
@@ -601,10 +587,10 @@ export class UserMessagingDO implements DurableObject {
 
     const storage = this.chatStorage(chatId)
     const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
-		let lastSeen = chatItem?.lastSeen
+    let lastSeen = chatItem?.lastSeen
     if (!chatItem) {
-			if (!isGroup(chatId)) {
-				lastSeen = await this.onlineService.lastSeenOf(chatId)
+      if (!isGroup(chatId)) {
+        lastSeen = await this.onlineService.lastSeenOf(chatId)
         await this.state.blockConcurrencyWhile(async () => {
           await (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
         })
@@ -616,7 +602,7 @@ export class UserMessagingDO implements DurableObject {
       payload,
     )
 
-    const dialog = await storage.chat(this.#userId) as Dialog | Group
+    const dialog = (await storage.chat(this.#userId)) as Dialog | Group
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
       lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
@@ -672,7 +658,10 @@ export class UserMessagingDO implements DurableObject {
       }),
     )
   }
-
+  private timestamp() {
+    const current = performance.now()
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
+  }
   #userId = ''
   #setUserId(id: string) {
     this.#userId = id

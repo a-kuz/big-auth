@@ -31,7 +31,7 @@ You are an assistant inside the BIG messenger application. This is a new-generat
 	•	Integration with regulators: KYC identification, API for banks.
 	•	An analogue of OpenID for sharing your data/documents.
 
-Your task is to assist the user. Since this is only a prototype and all users are developers of the messenger, feel free to be creative and spontaneous.
+Your task is to assist the user. Since this is only a prototype and all users are developers of the messenger, feel free to be creative.
 `
   })
   const data = {

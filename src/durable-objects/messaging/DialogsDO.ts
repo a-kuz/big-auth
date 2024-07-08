@@ -253,9 +253,9 @@ messages in storage: ${this.#counter},
       message.read = undefined
       message.dlvrd = undefined
       // if (message.sender !== userId) continue
-			message.status = this.messageStatus(message, userId)
-			message.read = message.status === 'read' ? 1 : undefined
-			message.dlvrd = message.status === 'read'||message.status === 'unread' ? 1 : undefined
+      message.status = this.messageStatus(message, userId)
+      message.read = message.status === 'read' ? 1 : undefined
+      message.dlvrd = message.status === 'read' || message.status === 'unread' ? 1 : undefined
 
       // if (readMark) {
       //   if (readMark[0] < message.messageId) {
@@ -355,7 +355,7 @@ messages in storage: ${this.#counter},
       throw new Error(`messageId is not exists`)
     }
 
-    const messageId: MessageId = request.messageId ?? this.#counter - 1
+    const messageId: MessageId = request.messageId ?? this.#lastMessage?.messageId ?? 0
     const message = (await this.#message(messageId))!
     const clientMessageId = message.clientMessageId
     const readMark = await this.findMark(sender, messageId, 'read')
@@ -542,7 +542,9 @@ messages in storage: ${this.#counter},
       return 0
     }
     const lastReadMark = this.#lastReadMark?.get(userId)
-    let currentBlockOfMessagesOfOneAuthorLength = (this.#lastMessage?.messageId || 0) + 1
+    let currentBlockOfMessagesOfOneAuthorLength = this.#lastMessage?.messageId
+      ? this.#lastMessage.messageId
+      : 1
     if (this.#lastMessageOfPreviousAuthor) {
       currentBlockOfMessagesOfOneAuthorLength -= this.#lastMessageOfPreviousAuthor.messageId
     }
@@ -550,9 +552,9 @@ messages in storage: ${this.#counter},
     return lastReadMark
       ? Math.min(
           this.#counter - lastReadMark.messageId - 1,
-          currentBlockOfMessagesOfOneAuthorLength - 1,
+          currentBlockOfMessagesOfOneAuthorLength,
         )
-      : currentBlockOfMessagesOfOneAuthorLength - 1
+      : currentBlockOfMessagesOfOneAuthorLength
   }
 
   private async initialize() {
@@ -652,7 +654,6 @@ messages in storage: ${this.#counter},
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
-
 
   async updateProfile(profile: Profile) {
     if (!this.#users) return

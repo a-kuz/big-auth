@@ -45,10 +45,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     if (isGroup(chatId)) {
       const chat = chatStorage(this.env, chatId, userId);
       //@ts-ignore
-      returnObf.participants = await Promise.all((await chat.chat(userId)).meta?.participants.map(async participant => {
-        participant = (await getUserById(this.env.DB, participant.id)).profile();
-        return participant;
-      }));
+      returnObf.participants = (await chat.chat(userId)).meta?.participants;
     } else {
       try {
         const user = (await getUserById(this.env.DB, userId, new NotFoundError(`user ${userId} is not exists`))).profile();

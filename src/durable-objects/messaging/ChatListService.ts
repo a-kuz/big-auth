@@ -19,6 +19,11 @@ export class ChatListService {
   }
 
   async save() {
+    if (this.#chatListTimer) clearTimeout(this.#chatListTimer)
+    
+    this.#chatListTimer = setTimeout(async () => {
+      this.chatList = this.chatList.filter((e, i) => this.chatList.findIndex(chat => chat.id == e.id) === i)
+    }, 1000)
     await this.#storage.put('chatList', this.chatList)
   }
 

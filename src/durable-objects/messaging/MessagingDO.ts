@@ -412,38 +412,21 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async chatsHandler(request: Request) {
+    await this.checkAi()
+    return new Response(JSON.stringify(this.cl.chatList), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  private async checkAi() {
     const ai = this.cl.chatList.find(chat => chat.id === 'AI')
-    const gpt = gptStorage(this.env, this.#userId)
-    this.cl.chatList = this.cl.chatList.filter((chat, index) =>
-      chat.id === 'AI' ? this.cl.chatList.findIndex(c => c.id === 'AI') === index : true,
-    )
     if (!ai) {
-      const chat = await gpt.create(this.#userId)
+      const gpt = gptStorage(this.env, this.#userId)
+      const chat = gpt.create(this.#userId)
       this.cl.chatList.unshift(chat)
-
       await this.cl.save()
     }
-    return new Response(
-      JSON.stringify(
-        this.cl.chatList
-          .filter((e, i) => this.cl.chatList.findIndex(chat => chat.id == e.id) === i)
-          .map(e => ({
-            ...e,
-            type: chatType(e.id),
-            lastMessageId: (e.lastMessageId ?? 0) >= 0 ? e.lastMessageId : 0,
-            missed: (e.missed ?? 0) >= 0 ? e.missed : 0,
-            lastMessageAuthor: e.lastMessageAuthor ?? this.#userId,
-            lastMessageTime: e.lastMessageTime ?? Date.now(),
-            lastMessageText: e.lastMessageText ?? '',
-            lastMessageStatus: e.lastMessageStatus ?? 'unread',
-            id: e.id,
-          })),
-      ),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
   }
+
   async chatHandler(request: Request) {
     const { chatId } = await request.json<GetChatRequest>()
     const chat = await this.chatStorage(chatId).chat(this.#userId)

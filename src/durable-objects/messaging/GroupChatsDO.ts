@@ -17,6 +17,7 @@ import {
 	InternalEventType,
 	MarkDeliveredInternalEvent,
 	MarkReadInternalEvent,
+	NewCallEvent,
 	NewGroupMessageEvent,
 	Timestamp,
 	UserId
@@ -45,7 +46,8 @@ export class GroupChatsDO extends DebugWrapper {
   #id: string = ''
   #counter = 0
   #users: Profile[] = []
-
+  #callId?: string
+  #startCallAt?: number
   #storage!: DurableObjectStorage
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
@@ -208,7 +210,8 @@ export class GroupChatsDO extends DebugWrapper {
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
     this.#counter = -1
     const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
-
+    this.#callId = await this.#storage.get<string>('callId');
+    this.#startCallAt = await this.#storage.get<number>('startCallAt');
     for (const chunk of keyChunks) {
       const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
       for (const key of messagesChunk.keys()) {
@@ -269,6 +272,8 @@ export class GroupChatsDO extends DebugWrapper {
       lastMessageStatus: this.messageStatus(lastMessage),
       isMine: userId === lastMessage?.sender,
       name: this.group?.name,
+      startCallAt: this.#startCallAt,
+      callId: this.#callId
     }
 
     return chat
@@ -287,7 +292,18 @@ export class GroupChatsDO extends DebugWrapper {
   counter() {
     return this.#messages.length
   }
-
+  async newCall(callId: string,userId:string) {
+    this.#callId = callId;
+    this.#startCallAt = Date.now();
+    await this.#storage.put('callId', callId);
+    await this.#storage.put('startCallAt', this.#startCallAt);
+    const _newCall: NewCallEvent = {
+      callId,
+      startCallAt: this.#startCallAt,
+      userId
+    }
+    await this.broadcastEvent('newCall', { ..._newCall }, userId)
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
 

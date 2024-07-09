@@ -102,3 +102,16 @@ export interface CreateChatRequest {
   imgUrl: string
   participants: string[]
 }
+export interface NewCallRequest {
+  chatId: string
+  callId: string
+  userId: string
+  participantsInvited: string[]
+}
+export interface CloseCallRequest {
+  chatId: string
+  callId: string
+  userIdCreateCall: string
+  participantsInvited: string[]
+  participantsConnected: string[]
+}

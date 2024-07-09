@@ -76,3 +76,4 @@ export interface MarkReadEvent {
   clientMessageId: string
   timestamp: number
 }
+

@@ -17,6 +17,8 @@ export interface Chat<T extends ChatType> {
   lastMessageStatus?: MessageStatus
   missed: number
   isMine?: boolean
+  callId?: string
+  startCallAt?: number
   attachmentType?: AttachmentType
   meta: T extends 'dialog'
     ? DialogMeta

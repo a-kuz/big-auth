@@ -46,6 +46,10 @@ import { ProfileService } from './ProfileService'
 import { Profile } from '~/db/models/User'
 import { ChatListService } from './ChatListService'
 import { messagePreview } from './utils/message-preview'
+import { getUserById } from '~/db/services/get-user'
+import { displayName } from '~/services/display-name'
+import { captureRejectionSymbol } from 'events'
+import { stat } from 'fs'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -100,12 +104,12 @@ export class UserMessagingDO implements DurableObject {
       ),
     ]
     if (!this.#userId) {
-      this.#setUserId(userId)
+      await this.#setUserId(userId)
       if (action !== 'setDeviceToken') {
-        this.setDeviceToken()
+        await this.setDeviceToken()
       }
     }
-    console.log({ from, type, action })
+    console.log(JSON.stringify({ from, type, action }, null, 2))
 
     switch (from) {
       case 'client':
@@ -347,7 +351,6 @@ export class UserMessagingDO implements DurableObject {
     if (this.onlineService.isOnline()) {
       if (isNew) {
         await this.wsService.toBuffer('chats', this.cl.chatList)
-
         await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toBuffer('new', {
@@ -421,7 +424,7 @@ export class UserMessagingDO implements DurableObject {
     const ai = this.cl.chatList.find(chat => chat.id === 'AI')
     if (!ai) {
       const gpt = gptStorage(this.env, this.#userId)
-      const chat = gpt.create(this.#userId)
+      const chat = await gpt.create(this.#userId)
       this.cl.chatList.unshift(chat)
       await this.cl.save()
     }
@@ -429,8 +432,28 @@ export class UserMessagingDO implements DurableObject {
 
   async chatHandler(request: Request) {
     const { chatId } = await request.json<GetChatRequest>()
-    const chat = await this.chatStorage(chatId).chat(this.#userId)
-    return new Response(JSON.stringify(chat), {
+    let result: Dialog
+    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
+    if (chatItem) {
+      const chat = this.chatStorage(chatId)
+
+      result = await chat.chat(this.#userId)
+    } else {
+      const user = (await getUserById(this.env.DB, chatId)).profile()
+      result = {
+        chatId,
+        type: 'dialog',
+        name: displayName(user),
+        photoUrl: user.avatarUrl,
+        isMine: false,
+        lastMessageId: 0,
+        meta: {
+          ...user,
+        },
+        missed: 0,
+      }
+    }
+    return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -447,6 +470,7 @@ export class UserMessagingDO implements DurableObject {
     return chatStorage(this.env, chatId, this.#userId)
   }
   async lastSeenHandler(request: Request) {
+    await this.state.storage.sync()
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOnline(request: Request) {
@@ -480,8 +504,6 @@ export class UserMessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   private async handleWebsocket(request: Request): Promise<Response> {
-    console.log('CONNECT!')
-    this.wsService.clearBuffer()
     await this.onlineService.online()
     const response = await this.wsService.acceptWebSocket(request)
     return response
@@ -646,8 +668,8 @@ export class UserMessagingDO implements DurableObject {
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
   #userId = ''
-  #setUserId(id: string) {
+  async #setUserId(id: string) {
     this.#userId = id
-    this.onlineService.setUserId(id)
+    await this.onlineService.setUserId(id)
   }
 }

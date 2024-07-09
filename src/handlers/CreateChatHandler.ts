@@ -8,6 +8,8 @@ import { errorResponse } from '../utils/error-response'
 import { newId } from '../utils/new-id'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { GROUP_ID_LENGTH } from '~/durable-objects/messaging/constants'
+import { Str, Hostname } from '@cloudflare/itty-router-openapi'
+import { REGEX_URL_FILTER } from '~/constants'
 
 // Define the OpenAPI schema for this route
 
@@ -17,7 +19,7 @@ export class CreateChatHandler extends Route {
     summary: 'Create a new chat group',
     requestBody: z.object({
       name: z.string(),
-      imgUrl: z.string().optional(),
+      imgUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
       participants: z.array(z.string()),
     }),
     responses: {
@@ -28,7 +30,7 @@ export class CreateChatHandler extends Route {
         schema: {
           groupId: z.string(),
           name: z.string(),
-          imgUrl: z.string().optional(),
+          imgUrl: z.string(),
           participants: z.array(z.string()),
         },
       },

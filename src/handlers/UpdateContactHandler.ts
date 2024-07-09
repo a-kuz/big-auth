@@ -5,6 +5,7 @@ import { updateContact } from '../services/contacts'
 import { Env } from '../types/Env'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { errorResponse } from '../utils/error-response'
+import { REGEX_URL_FILTER } from '~/constants'
 
 export class UpdateContactHandler extends Route {
   static schema = {
@@ -18,7 +19,7 @@ export class UpdateContactHandler extends Route {
       username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
-      avatarUrl: new Str({ required: false }),
+      avatarUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
     }),
     responses: {
       '200': {

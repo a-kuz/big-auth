@@ -31,7 +31,7 @@ export class OnlineStatusService {
       (await this.state.storage.get<{ userId: string }[]>('outgoingStatusQueue')) || []
     this.#outgoingDlvrdQueue =
       (await this.state.storage.get<{ chatId: string }[]>('outgoingDlvrdQueue')) || []
-    this.userId = (await this.state.storage.get<string>('userId')) || this.userId
+    this.userId = (await this.state.storage.get<string>('userId')) || this.env.user?.id
   }
 
   isOnline() {
@@ -80,20 +80,21 @@ export class OnlineStatusService {
       this.chatListService.save()
     }
     await this.state.storage.put('outgoingDlvrdQueue', this.#outgoingDlvrdQueue)
+    await this.state.storage.setAlarm(Date.now() + 100)
   }
 
-  async processOutgoingStatusQueue(eventsPerProcessing = 3): Promise<void> {
-    const { status } = this.status()
-    const reqBody = JSON.stringify({
-      userId: this.userId,
-      ...(status === 'online' ? {} : { lastSeen: this.#lastSeen || Date.now() }),
-    })
-    console.log(reqBody)
+  async processOutgoingStatusQueue(eventsPerProcessing = 6): Promise<void> {
+    
 
     while (this.#outgoingStatusQueue.length && eventsPerProcessing) {
       eventsPerProcessing--
       const event = this.#outgoingStatusQueue.shift()
       if (event) {
+        const { status } = this.status()
+        const reqBody = JSON.stringify({
+          userId: this.userId,
+          ...(status === 'online' ? {} : { lastSeen: this.#lastSeen || Date.now() }),
+        })
         let resp: Response, friendStatus: OnlineStatus
         try {
           const receiverDO = userStorage(this.env, event.userId)
@@ -104,7 +105,7 @@ export class OnlineStatusService {
             friendStatus = await resp.json<OnlineStatus>()
           } catch (error) {
             writeErrorLog(error)
-            if (resp!) console.log('!!!!! FRIEND', await resp.clone().text())
+            if (resp!) console.log('!!!!! FRIEND')
 
             friendStatus = { status: 'offline', lastSeen: UNKNOWN_LAST_SEEN }
           }
@@ -143,7 +144,7 @@ export class OnlineStatusService {
       }
     }
     if (this.#outgoingStatusQueue.length) {
-      this.state.storage.setAlarm(new Date(Date.now() + 1000))
+      await this.state.storage.setAlarm(new Date(Date.now() + 1))
     }
   }
   async processOutgoingDlvrdQueue(): Promise<void> {
@@ -200,8 +201,8 @@ export class OnlineStatusService {
       .filter(c => c.type === 'dialog' && c.id !== this.userId)
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
-    await this.state.storage.setAlarm(Date.now() + 100)
-    this.state.waitUntil(async () => this.processOutgoingStatusQueue(20))
+    
+    await this.processOutgoingStatusQueue()
   }
 
   async setUserId(id: string) {

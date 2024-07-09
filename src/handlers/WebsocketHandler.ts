@@ -5,6 +5,7 @@ import { errorResponse } from '../utils/error-response'
 export const WebsocketHandler = async (request: Request, env: Env, ..._args: any[]) => {
   try {
     const user = env.user
+    if (!env.user) {return new Response()}
     const mDO = userStorage(env, user.id)
 
     const fingerprint = request.headers.get('fingerprint')

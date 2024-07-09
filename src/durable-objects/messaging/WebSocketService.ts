@@ -17,6 +17,7 @@ export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
   #eventBuffer = new Map<string, ServerEvent>()
+  #lastCheck: number = 0
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
   #timestamp: number = 0
@@ -24,7 +25,6 @@ export class WebSocketGod {
     private state: DurableObjectState,
     private env: Env,
   ) {
-
     this.state.storage.setAlarm(Date.now() + 5000, {
       allowConcurrency: true,
       allowUnconfirmed: true,
@@ -32,16 +32,19 @@ export class WebSocketGod {
   }
 
   async alarm(): Promise<void> {
-    await this.checkStatus()
+    if (this.#lastCheck + 5000 < Date.now()) {
+      await this.checkStatus()
+    }
     await this.onlineService.alarm()
     const sockets = this.state.getWebSockets()
     if (sockets.length) {
       this.sendBuffer()
-
-      await this.state.storage.setAlarm(Date.now() + 5000, {
-        allowConcurrency: true,
-        allowUnconfirmed: true,
-      })
+      const alarm = await this.state.storage.getAlarm()
+      if (!alarm)
+        await this.state.storage.setAlarm(Date.now() + 5000, {
+          allowConcurrency: true,
+          allowUnconfirmed: true,
+        })
     }
   }
 
@@ -51,16 +54,16 @@ export class WebSocketGod {
     if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
       return new Response('Expected WebSocket Upgrade', { status: 426 })
     }
-
     const webSocketPair = new WebSocketPair()
-
+    
     const [client, server] = Object.values(webSocketPair)
-
+    
     this.state.acceptWebSocket(server, ['user'])
-
+    
     this.refreshPing()
+    this.clearBuffer()
 
-    await this.state.storage.setAlarm(Date.now() + 3000)
+    await this.state.storage.setAlarm(Date.now() + 1)
     return new Response(null, { status: 101, webSocket: client })
   }
 
@@ -180,27 +183,28 @@ export class WebSocketGod {
         allowUnconfirmed: true,
       })
   }
-  sendPacket(packet: ServerEvent) {
+  private sendPacket(packet: ServerEvent) {
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {
       ws.send(JSON.stringify(packet))
     }
   }
 
-  sendBuffer() {
+  private sendBuffer() {
     for (const event of this.#eventBuffer.values()) {
       this.sendPacket(event)
     }
   }
 
-  async checkStatus(): Promise<void> {
+  private async checkStatus(): Promise<void> {
+    this.#lastCheck = Date.now()
     const sockets = this.state.getWebSockets()
     if (sockets.length > 1) {
-      console.log('sockets.length = ' + sockets.length.toString(), )
+      console.log('sockets.length = ' + sockets.length.toString())
     }
-    for (const socket of sockets) {
-      if (this.#lastPing) {
-        if (Date.now() - this.#lastPing > 20000) {
+    if (this.#lastPing) {
+      if (Date.now() - this.#lastPing > 7000) {
+        for (const socket of sockets) {
           try {
             if (socket.readyState !== WebSocket.CLOSING) {
               socket.close(1011, `last ping: ${this.#lastPing}, now: ${Date.now()}`)

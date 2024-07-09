@@ -38,7 +38,7 @@ export class ChatGptDO extends DebugWrapper {
     readonly env: Env,
   ) {
     super(ctx, env)
-    console.log({ 'this.ctx.id.name': this.ctx.id.name })
+    
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 

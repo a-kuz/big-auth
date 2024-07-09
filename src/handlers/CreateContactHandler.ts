@@ -20,6 +20,7 @@ import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
 import { profile } from 'console'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { getUserById } from '~/db/services/get-user'
+import { REGEX_URL_FILTER } from '~/constants'
 
 export class CreateContactHandler extends Route {
   static schema = {
@@ -31,7 +32,7 @@ export class CreateContactHandler extends Route {
       username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
-      avatarUrl: new Str({ required: false }),
+      avatarUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
     }),
     responses: {
       '200': {

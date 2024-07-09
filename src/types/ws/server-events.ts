@@ -41,18 +41,15 @@ export interface TypingServerEvent {
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
-  sender?: string
+  sender: string
   message?: string
   senderName?: string
-  timestamp?: number
+  timestamp: number
   attachments?: Attachment<A>[]
   messageId: number
-  clientMessageId?: string
+  clientMessageId: string
   missed?: number,
-  callId?: string
-  uid?: number
-  token?: string
-  appId?: string
+  
 }
 export interface NewVOIPEvent<A extends AttachmentType | never = never> {
   appId: string

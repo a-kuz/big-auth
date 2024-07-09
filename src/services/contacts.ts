@@ -183,11 +183,11 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
   }
 
   const combinedResults = [...contacts.results, ...chatListUsers.results]
-
-  const uniqueResults = combinedResults.reduce<Required<UserDB>[]>((acc, current) => {
+  type UserDBWithStatus = Required<UserDB> & { status: 'online' | 'offline' | 'unknown' , lastSeen?: number}
+  const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>((acc, current) => {
     const x = acc.find(item => item.id === current.id)
     if (!x) {
-      acc.push(current)
+      acc.push({...current, status: 'unknown'})
     }
     return acc
   }, [])
@@ -197,10 +197,11 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
   for (const contact of uniqueResults) {
     const contactFromChatList = chatList.find(chat => chat.id === contact.id)
     if (contactFromChatList) {
-      lastSeens.set(contact.id, contactFromChatList.lastSeen)
+      contact.lastSeen = contactFromChatList.lastSeen;
+      contact.status = contactFromChatList.lastSeen ? 'offline' : 'online';
     } else {
-      const mdo = userStorage(env, contact.id)
-      promises.push(async () => {
+      
+        const mdo = userStorage(env, contact.id)
         const lastSeenResponse = await mdo.fetch(
           new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
             method: 'POST',
@@ -209,12 +210,14 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
 
         const lastSeen = await lastSeenResponse.json<OnlineStatus>()
         if (lastSeen.status === 'offline') {
-          lastSeens.set(contact.id, lastSeen.lastSeen || UNKNOWN_LAST_SEEN)
+          contact.lastSeen = lastSeen.lastSeen
+          contact.status = lastSeen.status
+
         }
-      })
+      
     }
   }
-  await Promise.all(promises)
+  // await Promise.all(promises)
 
   const results = uniqueResults.map(contact => {
     return {
@@ -225,7 +228,8 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
       username: contact.username || undefined,
       avatarUrl: contact.avatar_url || undefined,
       verified: !!(contact.verified || false),
-      lastSeen: lastSeens.get(contact.id),
+      lastSeen: contact.lastSeen,
+      staus: contact.status,
     }
   })
 

@@ -1,28 +1,27 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 
-import { newId } from '../utils/new-id'
-import { normalizePhoneNumber } from '../utils/normalize-phone-number'
+import { loremIpsum } from 'lorem-ipsum'
 import { generateAccessToken } from '../services/jwt'
+import { newId } from '../utils/new-id'
 
 const users = [
-  {
-    id: '+99990L8',
-  },
+  
   {
     id: '+99991234567ya',
   },
+
+  
   {
-    id: '+9999996c',
+    id: 'bS8JHietAb5O4l7KvGIwf',
   },
-  {
-    id: '+999999992_',
-  },
+
+  
   {
     id: '5K-WhjVwGsFC2PAegPVDa',
   },
 ]
-// const WS_URL = 'ws://localhost:8787/websocket'
+//const WS_URL = 'ws://localhost:8787/websocket'
 const WS_URL = 'wss://dev.iambig.ai/websocket'
 
 describe('WebSocket Messaging Test', async () => {
@@ -31,7 +30,9 @@ describe('WebSocket Messaging Test', async () => {
 
   beforeAll(async () => {
     // Generate tokens for each test user
-    tokens = await Promise.all(users.map(async u => await generateAccessToken({ id: u.id, phoneNumber: '' }, 'secret')))
+    tokens = await Promise.all(
+      users.map(async u => await generateAccessToken({ id: u.id, phoneNumber: '' }, 'secret')),
+    )
   })
 
   afterAll(() => {
@@ -44,7 +45,7 @@ describe('WebSocket Messaging Test', async () => {
     async () => {
       // Establish WebSocket connections
       sockets = tokens.map(token => {
-        const ws = new WebSocket(`${WS_URL}?token=${token}`, {
+        const ws = new WebSocket(`${WS_URL}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 
@@ -60,10 +61,14 @@ describe('WebSocket Messaging Test', async () => {
       const sendFuncrion = () => {
         sockets.forEach(socket => {
           const message = {
-            type: 'new',
+            payloadType: 'new',
+            payload: {
+              message: loremIpsum(),
+              clientMessageId: newId(),
+              chatId: users[Math.floor(Math.random() * users.length)].id,
+            },
+            type: 'request',
             id: newId(),
-            timestamp: Date.now(),
-            content: 'Hello, this is a new message',
           }
           socket.send(JSON.stringify(message))
         })
@@ -76,10 +81,11 @@ describe('WebSocket Messaging Test', async () => {
         () => {
           sockets.forEach(socket => {
             const message = {
-              type: 'read',
-              id: newId(),
-              timestamp: Date.now(),
+              type: 'request',
+              payloadType: 'read',
+              payload: { chatId: users[Math.floor(Math.random() * users.length)].id },
             }
+
             socket.send(JSON.stringify(message))
           })
         },

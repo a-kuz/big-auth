@@ -1,4 +1,4 @@
-import { NewMessageEvent } from '../ws/server-events'
+import { NewMessageEvent, NewVOIPEvent } from '../ws/server-events'
 
 export interface PushNotification {
   event: NewMessageEvent
@@ -10,4 +10,13 @@ export interface PushNotification {
   sound?: string
   category?: 'message'
   threadId?: string
+  lastMessageId?: number
+  imgUrl?: string
 }
+export interface VoipPushNotification {
+  voip: boolean,
+  event:  NewVOIPEvent
+  title: string
+  deviceToken: string
+
+} 

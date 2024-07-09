@@ -1,6 +1,7 @@
 import { Exclude, Expose, Transform, Type, instanceToPlain, plainToClass } from 'class-transformer'
 import 'reflect-metadata'
 import { ObjectCamelToSnakeCase, fromSnakeToCamel } from '../../utils/name-сases'
+import { Bool } from '@cloudflare/itty-router-openapi'
 
 const NullToUndefined = Transform(({ value }) => value || undefined)
 
@@ -22,7 +23,10 @@ export class User {
   @NullToUndefined
   avatarUrl?: string
 
-  @Exclude()
+  @NullToUndefined
+	@Type(()=>Boolean)
+  verified?: boolean
+
   @Type(() => Number)
   @NullToUndefined
   createdAt?: number
@@ -50,5 +54,6 @@ export class User {
 export type UserDB = Omit<ObjectCamelToSnakeCase<User>, 'profile'>
 export type Profile = Pick<
   User,
-  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl'
+  'firstName' | 'lastName' | 'id' | 'username' | 'phoneNumber' | 'avatarUrl' | 'verified'
 >
+export type ProfileWithLastSeen = Profile & { lastSeen?: number }

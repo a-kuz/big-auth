@@ -5,11 +5,12 @@ import {
   Path,
   Str,
 } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { deleteContact } from '../services/contacts'
 import { errorResponse } from '../utils/error-response'
 
-export class DeleteContactHandler extends OpenAPIRoute {
+export class DeleteContactHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     tags: ['contacts'],
     summary: 'Delete a contact by ID',
@@ -43,7 +44,12 @@ export class DeleteContactHandler extends OpenAPIRoute {
       if (!success) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify({ id }), { status: 200 })
+      return new Response(JSON.stringify({ id }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to delete contact', 500)

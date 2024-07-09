@@ -1,21 +1,23 @@
 // File: /src/handlers/GetMessagesHandler.ts
-import { DataOf, OpenAPIRoute, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
+import { DataOf, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { GetMessagesRequest } from '~/types/ws/client-requests'
-import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/Messages'
-import { getUserByToken } from '../services/get-user-by-token'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/messages'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { DEFAULT_PORTION, MAX_PORTION } from '~/durable-objects/messaging/constants'
 
-export class GetMessagesHandler extends OpenAPIRoute {
+export class GetMessagesHandler extends Route {
   static schema = {
     summary: 'Retrieve messages for a chat',
     tags: ['messages'],
 
     parameters: {
       chatId: Query(z.coerce.string().optional(), { description: 'The ID of the chat' }),
-      count: Query(z.coerce.number().max(500).default(50).optional(), {
+      count: Query(z.coerce.number().max(MAX_PORTION).default(DEFAULT_PORTION).optional(), {
         description: 'portion length',
       }),
       endId: Query(z.coerce.number().optional(), { description: 'to id' }),
@@ -24,19 +26,14 @@ export class GetMessagesHandler extends OpenAPIRoute {
     responses: {
       '200': {
         description: 'Messages retrieved successfully',
-        schema: z.union([z.array(DialogMessageSchema), z.array(GroupChatMessageSchema)], {
-          description: 'Dialog or groupchat messages',
+        schema: z.object({
+          messages: z.union([z.array(DialogMessageSchema), z.array(GroupChatMessageSchema)], {
+            description: 'Dialog or groupchat messages',
+          }),
         }),
+        authors: z.array(ProfileSchema),
       },
-      '400': {
-        description: 'Bad Request',
-      },
-      '401': {
-        description: 'Unauthorized',
-      },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -55,12 +52,17 @@ export class GetMessagesHandler extends OpenAPIRoute {
       }
       let user = env.user
       const userMessagingDO = userStorage(env, user.id)
-      return userMessagingDO.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
-          method: 'POST',
-          body: JSON.stringify({ chatId, count, endId, startId }),
-        }),
-      )
+      return userMessagingDO
+        .fetch(
+          new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ chatId, count, endId, startId }),
+          }),
+        )
+        .then(response => {
+
+          return response
+        })
     } catch (error) {
       console.error('Failed to retrieve messages:', error)
       return errorResponse('Internal Server Error', 500)

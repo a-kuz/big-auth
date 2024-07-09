@@ -1,18 +1,13 @@
-import { getUserByToken } from '../services/get-user-by-token'
-import { errorResponse } from '../utils/error-response'
-import { Env } from '../types/Env'
-import {
-  DataOf,
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Path,
-  Str,
-} from '@cloudflare/itty-router-openapi'
-import { instanceToPlain } from 'class-transformer'
+import { DataOf, Path, Str } from '@cloudflare/itty-router-openapi'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { Route } from '~/utils/route'
+import { Env } from '../types/Env'
+import { errorResponse } from '../utils/error-response'
 
-export class GetProfileHandler extends OpenAPIRoute {
+export class GetProfileHandler extends Route {
   static schema = {
     summary: 'Get user profile',
     operationId: 'user profule',
@@ -21,18 +16,9 @@ export class GetProfileHandler extends OpenAPIRoute {
     responses: {
       '200': {
         description: 'Profile fetched successfully',
-        schema: {
-          id: new Str({ example: 'weEEwwecw_wdx2' }),
-          phoneNumber: new Str({ example: '+79333333333' }),
-          username: new Str({ required: false, example: '@ask_uznetsov' }),
-          firstName: new Str({ required: false, example: 'Aleksandr' }),
-          lastName: new Str({ required: false, example: 'Ivanov' }),
-          avatarUrl: new Str({
-            required: false,
-            example: 'https://pics.png/png.png',
-          }),
-        },
+        schema: ProfileSchema,
       },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }

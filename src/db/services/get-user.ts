@@ -4,6 +4,7 @@ import { splitArray } from '../../utils/split-array'
 import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
 import { CustomError } from '~/errors/CustomError'
+import { serializeError } from 'serialize-error'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -14,10 +15,11 @@ export const getOrCreateUserByPhone = async (
     const existingUser = await d1.prepare(query).bind(phoneNumber).first<UserDB>()
 
     if (!existingUser) {
-      const insertQuery = 'INSERT INTO users (id, phone_number, created_at) VALUES (?, ?, ?)'
-      const id = phoneNumber.startsWith('+9999') ? phoneNumber + newId(2) : newId()
+      const insertQuery = 'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
+      const id = newId()
       const createdAt = Math.floor(Date.now() / 1000)
-      await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt).run()
+      const verified = false
+      await d1.prepare(insertQuery).bind(id, phoneNumber, createdAt, verified).run()
       return new User(id, phoneNumber)
     } else {
       return User.fromDb(existingUser)
@@ -31,7 +33,7 @@ export const getOrCreateUserByPhone = async (
 export const getUserById = async (
   d1: D1Database,
   id: string,
-  error: CustomError = new UnauthorizedError(`User not found ${{ id }}`),
+  error: CustomError = new UnauthorizedError(`User not found ${JSON.stringify({ id })}`),
 ): Promise<User> => {
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
@@ -73,7 +75,7 @@ export const getUserByPhoneNumbers = async (
             .all<UserDB>()
           resolve(users.results.map(User.fromDb))
         } catch (error) {
-          console.error('Failed to retrieve users by phone numbers:', error)
+          console.error('Failed to retrieve users by phone numbers:', serializeError(error))
           throw new Error('Failed to retrieve users by phone numbers')
         }
       }),

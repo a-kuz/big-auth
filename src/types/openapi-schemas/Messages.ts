@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AttachmentSchema } from './Attachments'
+import { AttachmentSchema } from './attachments'
 
 const DeliveringSchema = z.object({
   userId: z.string(),

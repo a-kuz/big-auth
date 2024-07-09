@@ -1,30 +1,31 @@
 import { ChatMessage, DialogMessage } from '~/types/ChatMessage'
 import {
-  GetMessagesRequest,
-  GetMessagesResponse,
-  MarkDeliveredRequest,
-  MarkReadRequest,
-  NewMessageRequest,
+	GetMessagesRequest,
+	GetMessagesResponse,
+	MarkDeliveredRequest,
+	MarkReadRequest,
+	NewMessageRequest,
 } from '~/types/ws/client-requests'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { Env } from '../../types/Env'
 
-import { DurableObject } from 'cloudflare:workers'
 import { User } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
+import { GPTmessage, askGPT } from '~/services/ask-gpt'
+import { DialogAI } from '~/types/Chat'
+import { ChatListItem } from '~/types/ChatList'
 import { MarkReadInternalEvent } from '~/types/ws/internal'
+import { NewMessageEvent } from '~/types/ws/server-events'
+import { newId } from '~/utils/new-id'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
-import { Chat, Dialog, DialogAI } from '~/types/Chat'
-import { GPTmessage, askGPT } from '~/services/ask-gpt'
-import { newId } from '~/utils/new-id'
-import { NewMessageEvent } from '~/types/ws/server-events'
-import { ChatListItem } from '~/types/ChatList'
-import { serializeError } from 'serialize-error'
-import { splitArray } from '~/utils/split-array'
 
-export class ChatGptDO extends DurableObject {
+import { writeErrorLog } from '~/utils/serialize-error'
+import { splitArray } from '~/utils/split-array'
+import { DebugWrapper } from '../DebugWrapper'
+
+export class ChatGptDO extends DebugWrapper {
   #timestamp = Date.now()
   #messages: DialogMessage[] = []
   #user?: User
@@ -37,7 +38,7 @@ export class ChatGptDO extends DurableObject {
     readonly env: Env,
   ) {
     super(ctx, env)
-    console.log({ 'this.ctx.id.name': this.ctx.id.name })
+    
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
@@ -81,7 +82,7 @@ export class ChatGptDO extends DurableObject {
         await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
       }
     } catch (e) {
-      console.error(serializeError(e))
+      await writeErrorLog(e)
     }
   }
 
@@ -166,7 +167,7 @@ export class ChatGptDO extends DurableObject {
       lastMessageId: this.#messages.length ? this.#messages.length - 1 : 0,
       photoUrl: this.env.AI_AVATAR_URL,
       type: 'ai',
-      missed: this.#counter - (this.#lastRead.get(this.#id) || 0) - 1,
+      missed: this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0,
       lastMessageText: lastMessage?.message ?? '',
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,
@@ -188,7 +189,7 @@ export class ChatGptDO extends DurableObject {
     await this.ctx.storage.put('counter', this.#counter)
     return this.#counter - 1
   }
-  async getMessages(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+  async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length - 1
@@ -263,7 +264,7 @@ export class ChatGptDO extends DurableObject {
         throw new Error(`messageId is not exists`)
       }
     }
-    const messageId = this.#messages[endIndex].messageId
+    const { messageId, clientMessageId } = this.#messages[endIndex]
     const lastRead = this.#lastRead.get(sender)
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
@@ -286,7 +287,7 @@ export class ChatGptDO extends DurableObject {
     }
     await this.sendReadEventToAuthor(this.#id, messageId, timestamp)
 
-    return { chatId: request.chatId, messageId, timestamp, missed: 0 }
+    return { chatId: request.chatId, messageId, timestamp, missed: 0, clientMessageId }
   }
 
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {

@@ -4,6 +4,7 @@ import {
   GetChatRequest,
   GetChatsRequest,
   GetMessagesRequest,
+  GetMessagesResponse,
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
@@ -25,7 +26,7 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Dialog, DialogAI, Group } from '~/types/Chat'
+import { Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
@@ -34,44 +35,43 @@ import {
   NewChatEvent,
   NewGroupMessageEvent,
   TypingInternalEvent,
+  UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
-import { chatStorage, chatType, gptStorage, isGroup, pushStorage, userStorage } from './utils/mdo'
+import { chatStorage, chatType, gptStorage, isGroup, fingerprintDO, userStorage } from './utils/mdo'
+import { ProfileService } from './ProfileService'
+import { Profile } from '~/db/models/User'
+import { ChatListService } from './ChatListService'
+import { messagePreview } from './utils/message-preview'
+import { getUserById } from '~/db/services/get-user'
+import { displayName } from '~/services/display-name'
+import { captureRejectionSymbol } from 'events'
+import { stat } from 'fs'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
-  #chatList: ChatList = []
   #timestamp = Date.now()
   #deviceToken = ''
-  #fingerprint = ''
-  #chatListTimer: NodeJS.Timeout | undefined
-  private readonly wsService: WebSocketGod
-  private readonly onlineService: OnlineStatusService
+  private wsService!: WebSocketGod
+  private onlineService!: OnlineStatusService
+  private profileService!: ProfileService
+  private cl!: ChatListService
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
   ) {
-    this.wsService = new WebSocketGod(state, env)
-    this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService)
-    this.wsService.onlineService = this.onlineService
     this.state.blockConcurrencyWhile(async () => {
-      this.#chatList = (await this.state.storage.get<ChatList>('chatList')) || []
-      this.#fingerprint = (await this.state.storage.get<string>('fingerprint')) || ''
+      this.wsService = new WebSocketGod(state, env)
+      this.profileService = new ProfileService(this.state, this.env)
+      this.cl = new ChatListService(this.state, this.env)
+      this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
+      this.wsService.onlineService = this.onlineService
+
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
     })
-  }
-
-  private timestamp() {
-    const current = performance.now()
-    if (current > this.#timestamp) {
-      this.#timestamp = current
-      return current
-    }
-    this.#timestamp++
-    return this.#timestamp
   }
 
   async alarm(): Promise<void> {
@@ -97,15 +97,19 @@ export class UserMessagingDO implements DurableObject {
         | ClientRequestType
         | 'websocket'
         | 'setDeviceToken'
+        | 'updateProfile'
+        | 'updateChat'
+        | 'blink'
+        | 'lastSeen'
       ),
     ]
     if (!this.#userId) {
-      this.#setUserId(userId)
+      await this.#setUserId(userId)
       if (action !== 'setDeviceToken') {
-        this.setDeviceToken()
+        await this.setDeviceToken()
       }
     }
-    console.log({ from, type, action })
+    console.log(JSON.stringify({ from, type, action }, null, 2))
 
     switch (from) {
       case 'client':
@@ -124,6 +128,12 @@ export class UserMessagingDO implements DurableObject {
                 return this.newHandler(request)
               case 'setDeviceToken':
                 return this.setDeviceTokenHandler(request)
+              case 'updateProfile':
+                return this.updateProfileHandler(request)
+              case 'blink':
+                return this.blinkHandler(request)
+              case 'lastSeen':
+                return this.lastSeenHandler(request)
             }
         }
 
@@ -139,6 +149,8 @@ export class UserMessagingDO implements DurableObject {
             return this.readEventHandler(request)
           case 'dlvrd':
             return this.dlvrdEventHandler(request)
+          case 'updateChat':
+            return this.updateChatEventHandler(request)
         }
       }
       case 'dialog': {
@@ -149,10 +161,18 @@ export class UserMessagingDO implements DurableObject {
             return this.dlvrdEventHandler(request)
           case 'read':
             return this.readEventHandler(request)
+          case 'updateChat':
+            return this.updateChatEventHandler(request)
         }
       }
+
       case 'messaging': {
         switch (type) {
+          case 'request':
+            switch (action) {
+              case 'lastSeen':
+                return this.lastSeenHandler(request)
+            }
           case 'event':
             switch (action) {
               case 'online':
@@ -191,8 +211,9 @@ export class UserMessagingDO implements DurableObject {
     console.log(eventData)
     const { chatId, name, meta } = eventData
     const { owner } = meta
-    const chat = this.toTop(chatId, {
+    const chat = this.cl.toTop(chatId, {
       id: chatId,
+      photoUrl: eventData.photoUrl,
       lastMessageStatus: 'undelivered',
       lastMessageText: 'chat created',
       lastMessageTime: this.timestamp(),
@@ -203,31 +224,38 @@ export class UserMessagingDO implements DurableObject {
       isMine: owner === this.#userId,
     })
     chat.missed = 0
-    this.#chatList.unshift(chat)
-    this.save()
+    this.cl.chatList.unshift(chat)
+    await this.cl.save()
     if (this.onlineService.isOnline()) {
-      await this.wsService.toBuffer('chats', this.#chatList)
+      await this.wsService.toBuffer('chats', this.cl.chatList)
     }
 
     return new Response()
   }
+  async updateChatEventHandler(request: Request) {
+    const eventData = await request.json<UpdateChatInternalEvent>()
+    const { chatId, name, meta, photoUrl } = eventData
+    const index = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    this.cl.chatList[index].name = name
+    this.cl.chatList[index].photoUrl = photoUrl
+    await this.wsService.toBuffer('chats', this.cl.chatList)
+    await this.cl.save()
 
+    return new Response()
+  }
   async dlvrdEventHandler(request: Request) {
     const eventData = await request.json<MarkDeliveredInternalEvent>()
 
     const chatId = eventData.chatId
 
-    const counter = await this.chatStorage(chatId).counter()
-
-    if (counter - 1 === eventData.messageId) {
-      const i = this.#chatList.findIndex(chat => chat.id === chatId)
-      if (
-        !this.#chatList[i].lastMessageStatus ||
-        this.#chatList[i].lastMessageStatus === 'undelivered'
-      ) {
-        this.#chatList[i].lastMessageStatus = 'unread'
-        this.save()
-      }
+    console.log(JSON.stringify(eventData))
+    const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    if (
+      !this.cl.chatList[i].lastMessageStatus ||
+      this.cl.chatList[i].lastMessageStatus === 'undelivered'
+    ) {
+      this.cl.chatList[i].lastMessageStatus = 'unread'
+      await this.cl.save()
     }
 
     if (this.onlineService.isOnline()) {
@@ -239,23 +267,24 @@ export class UserMessagingDO implements DurableObject {
     }
     return new Response()
   }
-
   async readEventHandler(request: Request) {
     const eventData = await request.json<MarkReadInternalEvent>()
 
     const chatId = eventData.chatId
+    console.log({ chatId })
+    console.log({ eventData })
 
     const counter = await this.chatStorage(chatId).counter()
 
     if (counter - 1 === eventData.messageId) {
-      const i = this.#chatList.findIndex(chat => chat.id === chatId)
+      const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
       if (
-        !this.#chatList[i].lastMessageStatus ||
-        this.#chatList[i].lastMessageStatus === 'undelivered' ||
-        this.#chatList[i].lastMessageStatus === 'unread'
+        !this.cl.chatList[i].lastMessageStatus ||
+        this.cl.chatList[i].lastMessageStatus === 'undelivered' ||
+        this.cl.chatList[i].lastMessageStatus === 'unread'
       ) {
-        this.#chatList[i].lastMessageStatus = 'read'
-        this.save()
+        this.cl.chatList[i].lastMessageStatus = 'read'
+        await this.cl.save()
       }
     }
 
@@ -268,10 +297,9 @@ export class UserMessagingDO implements DurableObject {
     }
     return new Response()
   }
-
   async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.#userId
-    const chat = this.toTop(chatId, {
+    const chat = this.cl.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'read',
       lastMessageText: eventData.message,
@@ -283,68 +311,73 @@ export class UserMessagingDO implements DurableObject {
       isMine: true,
     })
     chat.missed = 0
-    this.#chatList.unshift(chat)
-    this.save()
+    this.cl.chatList.unshift(chat)
+    await this.cl.save()
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
   async receiveMessage(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
-    const chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
-    const chatIndex = this.#chatList.findIndex(ch => ch.id === chatId)
+    const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
-    const counter = await this.chatStorage(chatId).counter()
+    let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
 
-    if (isNew || this.#chatList[chatIndex].lastMessageId != chatData.lastMessageId) {
+    this.toQ(eventData, chatData.name, chatData.photoUrl)
+    if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
-        id: chatData.chatId,
-        lastMessageStatus: chatData.lastMessageStatus,
-        lastMessageText: chatData.lastMessageText,
-        lastMessageTime: chatData.lastMessageTime,
+        id: eventData.chatId,
+        lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
+        lastMessageText: messagePreview(eventData.message),
+
         name: chatData.name,
         type: chatType(chatId),
         verified: false,
         lastMessageAuthor: chatData.lastMessageAuthor,
         photoUrl: chatData.photoUrl,
-        isMine: chatData.isMine,
+        isMine: false,
         lastMessageId: chatData.lastMessageId,
         missed: chatData.missed,
+        lastMessageTime: chatData.lastMessageTime,
       }
-      const chat = this.toTop(chatId, chatChanges)
-
-      this.#chatList.unshift(chat)
-      this.save()
+      const chat = this.cl.toTop(chatId, chatChanges)
+      if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
+      this.cl.chatList.unshift(chat)
+      await this.cl.save()
     }
 
     let dlvrd = false
     if (this.onlineService.isOnline()) {
       if (isNew) {
-        await this.wsService.toBuffer('chats', this.#chatList)
+        await this.wsService.toBuffer('chats', this.cl.chatList)
+        await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toBuffer('new', {
         ...eventData,
+        ...{ missed: eventData.missed },
         sender: eventData.sender ?? eventData.chatId,
       })
       dlvrd = true
     }
-    this.toQ(eventData, chatData, dlvrd)
+
     return { success: true, dlvrd }
+  }
+
+  private async updateProfileHandler(request: Request) {
+    const profile = await request.json<Profile>()
+    await this.profileService.broadcastProfile(profile)
+    return new Response()
   }
 
   private async setDeviceTokenHandler(request: Request) {
     const data = await request.json<{ fingerprint: string; deviceToken: string }>()
-    this.setFingerprint(data.fingerprint)
+
     this.setDeviceToken(data.deviceToken)
 
     return new Response()
   }
-  private async setFingerprint(fingerprint: string) {
-    await this.state.storage.put('fingerprint', fingerprint)
-    this.#fingerprint = fingerprint
-  }
+
   private async setDeviceToken(token?: string) {
     if (token) {
       await this.state.storage.put('deviceToken', token)
@@ -352,109 +385,114 @@ export class UserMessagingDO implements DurableObject {
     } else {
       if (!this.#deviceToken) {
         this.#deviceToken = (await this.state.storage.get('deviceToken')) || ''
-        if (!this.#deviceToken) {
-          const tokens = await pushStorage(this.env, this.#userId).getTokens()
-          if (tokens && tokens.length) {
-            this.#deviceToken = tokens[0].deviceToken
-          }
-        }
-        if (!this.#deviceToken) {
-          const tokens = await pushStorage(this.env, this.#fingerprint).getTokens()
-          if (tokens && tokens.length) {
-            this.#deviceToken = tokens[0].deviceToken
-          }
-        }
       }
     }
   }
-
-  private async toQ(
-    eventData: NewGroupMessageEvent | NewMessageEvent,
-    chat: Group | Dialog | DialogAI,
-    alreadySentByWebsocket: boolean,
-  ) {
+  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, title: string, imgUrl?: string) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
     // Count the number of chats with missed messages > 0
-    const missedCount = this.#chatList.reduce<number>((p, c, i, a) => p + (c.missed ?? 0), 0)
+    const missedCount = this.cl.chatList.reduce<number>((p, c, i, a) => p + (c.missed ?? 0), 0)
 
     const push: PushNotification = {
       event: eventData,
       deviceToken: this.#deviceToken,
       body: eventData.message,
-      title: chat.name,
+      title,
+      imgUrl,
       subtitle: eventData.senderName,
       badge: missedCount,
+      threadId: eventData.chatId,
+      category: 'message',
     }
     this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
   }
 
-  async chatsHandler(request: Request) {
-    const ai = this.#chatList.find(chat => chat.id === 'AI')
-    const gpt = gptStorage(this.env, this.#userId)
-    this.#chatList = this.#chatList.filter((chat, index) =>
-      chat.id === 'AI' ? this.#chatList.findIndex(c => c.id === 'AI') === index : true,
-    )
-    if (!ai) {
-      const chat = await gpt.create(this.#userId)
-      this.#chatList.unshift(chat)
-
-      this.save()
-    }
-    return new Response(
-      JSON.stringify(
-        this.#chatList
-          .filter((e, i) => this.#chatList.findIndex(chat => chat.id == e.id) === i)
-          .map(e => ({
-            ...e,
-            type: chatType(e.id),
-            lastMessageId: (e.lastMessageId ?? 0) >= 0 ? e.lastMessageId : 0,
-            missed: (e.missed ?? 0) >= 0 ? e.missed : 0,
-            lastMessageAuthor: e.lastMessageAuthor ?? this.#userId,
-            lastMessageTime: e.lastMessageTime ?? Date.now(),
-            lastMessageText: e.lastMessageText ?? '',
-            id: e.id,
-          })),
-      ),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
+  async blinkHandler(request: Request) {
+    await this.onlineService.blink()
+    return new Response()
   }
+
+  async chatsHandler(request: Request) {
+    await this.checkAi()
+    return new Response(JSON.stringify(this.cl.chatList), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  private async checkAi() {
+    const ai = this.cl.chatList.find(chat => chat.id === 'AI')
+    if (!ai) {
+      const gpt = gptStorage(this.env, this.#userId)
+      const chat = await gpt.create(this.#userId)
+      this.cl.chatList.unshift(chat)
+      await this.cl.save()
+    }
+  }
+
   async chatHandler(request: Request) {
     const { chatId } = await request.json<GetChatRequest>()
-    const chat = await this.chatStorage(chatId).chat(this.#userId)
-    return new Response(JSON.stringify(chat), {
+    let result: Dialog
+    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
+    if (chatItem) {
+      const chat = this.chatStorage(chatId)
+
+      result = await chat.chat(this.#userId)
+    } else {
+      const user = (await getUserById(this.env.DB, chatId)).profile()
+      result = {
+        chatId,
+        type: 'dialog',
+        name: displayName(user),
+        photoUrl: user.avatarUrl,
+        isMine: false,
+        lastMessageId: 0,
+        meta: {
+          ...user,
+        },
+        missed: 0,
+      }
+    }
+    return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
   async messagesHandler(request: Request) {
     const data = await request.json<GetMessagesRequest>()
-    const dialog = this.chatStorage(data.chatId)
-    const messages = await dialog.getMessages(data)
+
+    const messages = await this.getMessagesRequest(data)
 
     return new Response(JSON.stringify(messages), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
   }
-
+  async lastSeenHandler(request: Request) {
+    await this.state.storage.sync()
+    return new Response(JSON.stringify(this.onlineService.status()))
+  }
   async friendOnline(request: Request) {
     const eventData = await request.json<OnlineEvent>()
-    await this.wsService.toBuffer('online', { userId: eventData.userId })
-    return new Response(this.onlineService.isOnline() ? 'online' : '')
+    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
+    if (chatIndex >= 0) {
+      this.cl.chatList[chatIndex].lastSeen = undefined
+      await this.cl.save()
+    }
+    await this.wsService.toBuffer('online', eventData)
+    return new Response(JSON.stringify(this.onlineService.status()))
   }
-
   async friendOffline(request: Request) {
     const eventData = await request.json<OfflineEvent>()
-    this.wsService.toBuffer('offline', { userId: eventData.userId })
-    return new Response()
+    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
+    if (chatIndex >= 0) {
+      this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
+      await this.cl.save()
+    }
+    this.wsService.toBuffer('offline', eventData)
+    return new Response(JSON.stringify(this.onlineService.status()))
   }
-
   async friendTyping(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
     const event: TypingServerEvent = { chatId: eventData.userId }
@@ -466,9 +504,8 @@ export class UserMessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   private async handleWebsocket(request: Request): Promise<Response> {
-    console.log('CONNECT!')
+    await this.onlineService.online()
     const response = await this.wsService.acceptWebSocket(request)
-    this.state.waitUntil(this.onlineService.online())
     return response
   }
   ////////////////////////////////////////////////////////////////////////////////////
@@ -531,11 +568,20 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async getChatsRequest(payload: GetChatsRequest): Promise<ChatList> {
-    return this.#chatList.filter(chat => chat.id !== this.#userId)
+    return this.cl.chatList.filter(chat => chat.id !== this.#userId)
   }
 
-  async getMessagesRequest(payload: GetMessagesRequest): Promise<ChatMessage[]> {
-    return this.chatStorage(payload.chatId).getMessages(payload)
+  async getMessagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+    const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(
+      payload,
+      this.#userId,
+    )
+    resp.messages = resp.messages.filter(
+      m =>
+        resp.messages.findIndex(m2 => m2.clientMessageId === m.clientMessageId) ===
+        resp.messages.findLastIndex(m2 => m2.clientMessageId === m.clientMessageId),
+    )
+    return resp
   }
 
   async newRequest(payload: NewMessageRequest) {
@@ -545,11 +591,14 @@ export class UserMessagingDO implements DurableObject {
     }
 
     const storage = this.chatStorage(chatId)
-    if (!this.#chatList.find(chat => chat.id === chatId)) {
+    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
+    let lastSeen = chatItem?.lastSeen
+    if (!chatItem) {
       if (!isGroup(chatId)) {
-        await this.state.blockConcurrencyWhile(async () =>
-          (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId),
-        )
+        lastSeen = await this.onlineService.lastSeenOf(chatId)
+        await this.state.blockConcurrencyWhile(async () => {
+          await (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
+        })
       }
     }
 
@@ -558,39 +607,32 @@ export class UserMessagingDO implements DurableObject {
       payload,
     )
 
-    const dialog: Dialog = await storage.chat(this.#userId)
+    const dialog = (await storage.chat(this.#userId)) as Dialog | Group
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: 'undelivered',
+      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
       lastMessageText: payload.message,
       lastMessageTime: timestamp,
+      lastMessageAuthor: '',
       missed: 0,
       name: dialog.name,
       type: chatType(chatId),
-      verified: false,
-      lastMessageAuthor: '',
+      verified: dialog.meta.verified || false,
       photoUrl: dialog.photoUrl,
       isMine: true,
       lastMessageId: messageId,
       ...(payload.attachments?.length ? { attachmentType: payload.attachments[0].type } : {}),
     }
 
-    const chat = this.toTop(chatId, chatChanges)
-    this.#chatList.unshift(chat)
+    const chat = this.cl.toTop(chatId, chatChanges)
+    this.cl.chatList.unshift(chat)
 
-    this.save()
+    await this.cl.save()
+    if (!chatItem) {
+      await this.onlineService.sendOnlineTo(chatId)
+    }
+
     return { messageId, timestamp, clientMessageId }
-  }
-
-  toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
-    const currentChatIndex = this.#chatList.findIndex(chat => chat.id === chatId)
-    const currentChat: ChatListItem =
-      currentChatIndex === -1
-        ? (eventData as ChatListItem)
-        : { ...this.#chatList[currentChatIndex], ...eventData }
-    if (currentChatIndex >= 0) this.#chatList.splice(currentChatIndex, 1)
-
-    return currentChat
   }
 
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
@@ -605,23 +647,10 @@ export class UserMessagingDO implements DurableObject {
       payload,
       timestamp,
     )) as MarkReadResponse
-    const i = this.#chatList.findIndex(chat => chat.id === chatId)
-    this.#chatList[i].missed = resp.missed
-    this.save()
+    const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    this.cl.chatList[i].missed = resp.missed
+    await this.cl.save()
     return resp
-  }
-
-  save() {
-    if (this.#chatListTimer) {
-      clearTimeout(this.#chatListTimer)
-    }
-    this.#chatListTimer = setTimeout(async () => {
-      await this.state.storage.put('chatList', this.#chatList, {
-        allowUnconfirmed: true,
-        allowConcurrency: true,
-      })
-      this.#chatListTimer = undefined
-    }, 10)
   }
 
   async typingEvent(event: TypingClientEvent) {
@@ -634,10 +663,13 @@ export class UserMessagingDO implements DurableObject {
       }),
     )
   }
-
+  private timestamp() {
+    const current = performance.now()
+    return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
+  }
   #userId = ''
-  #setUserId(id: string) {
+  async #setUserId(id: string) {
     this.#userId = id
-    this.onlineService.setUserId(id)
+    await this.onlineService.setUserId(id)
   }
 }

@@ -6,7 +6,7 @@ import { ServerEventPayload } from './payload-types'
 export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
   type: 'event'
   timestamp: number
-  id?: number
+  id?: string
   eventType: Event
   payload: ServerEventPayload
 }
@@ -25,11 +25,13 @@ export interface DeleteMessageEvent {
 
 export interface OnlineEvent {
   userId: string
+	lastSeen?: number
 }
 export interface ChatsEvent {}
 
 export interface OfflineEvent {
   userId: string
+	lastSeen: number
 }
 
 export interface TypingServerEvent {
@@ -39,16 +41,27 @@ export interface TypingServerEvent {
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
-  sender?: string
+  sender: string
   message?: string
   senderName?: string
-  timestamp?: number
+  timestamp: number
   attachments?: Attachment<A>[]
   messageId: number
   clientMessageId: string
-  missed: number
+  missed?: number,
+  
 }
-
+export interface NewVOIPEvent<A extends AttachmentType | never = never> {
+  appId: string
+  callId?: string
+  chatId: string,
+  uid: number
+  token?: string
+  title: string
+  isVideo: boolean,
+  isGroup: boolean,
+  type: string
+}
 export interface MarkDeliveredEvent {
   chatId: string
   userId?: string

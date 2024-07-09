@@ -7,23 +7,25 @@ import {
   Uuid,
   inferData,
 } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { Schema, z } from 'zod'
 import { NewMessageRequest } from '~/types/ws/client-requests'
-import { AttachmentSchema } from '~/types/openapi-schemas/Attachments'
+import { AttachmentSchema } from '~/types/openapi-schemas/attachments'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { newId } from '~/utils/new-id'
 import { sendMessage } from '../services/send-message'
 
-const requestBody = {
+const requestBody = z.object({
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
   attachments: z.optional(AttachmentSchema.array().optional()),
   message: new Str({ example: 'Hello, how are you?', required: false }),
   clientMessageId: new Str({ example: 'ldjkedlkedlk', required: false }),
-}
-export class SendMessageHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+	replyTo: new Num({ example: 1, required: false }),
+})
+export class SendMessageHandler extends Route {
+  static schema = {
     tags: ['messages'],
     summary: 'Send a chat message ',
 
@@ -48,9 +50,10 @@ export class SendMessageHandler extends OpenAPIRoute {
     security: [{ BearerAuth: [] }],
   }
 
-  async handle(request: Request, env: Env, _ctx: any, { body }: { body: NewMessageRequest }) {
+  async handle(request: Request, env: Env, _ctx: any, { body }: DataOf<typeof SendMessageHandler.schema>) {
     try {
-      return sendMessage(body, env)
+      const response = await sendMessage(body as NewMessageRequest, env)
+      return response
     } catch (error) {
       console.error('SendMessageHandler Error:', error)
       return errorResponse('Failed to send message', 500)

@@ -1,9 +1,12 @@
-import { Arr, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
-import { Env } from '../types/Env'
+import { Arr, Bool, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { getContacts } from '../services/contacts'
+import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { verify } from 'crypto'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
-export class 	GetContactsHandler extends OpenAPIRoute {
+export class GetContactsHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     tags: ['contacts'],
     summary: 'Get all contacts',
@@ -16,16 +19,15 @@ export class 	GetContactsHandler extends OpenAPIRoute {
             clientId: new Str({ required: false }),
             userId: new Str({ required: false }),
             phoneNumber: new Str({ required: false }),
-            userName: new Str({ required: false }),
+            username: new Str({ required: false }),
             firstName: new Str({ required: false }),
             lastName: new Str({ required: false }),
             avatarUrl: new Str({ required: false }),
+						verified: new Bool({ required: false }),
           }),
         },
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses
     },
     security: [{ BearerAuth: [] }],
   }
@@ -34,7 +36,12 @@ export class 	GetContactsHandler extends OpenAPIRoute {
     try {
       const ownerId = env.user.id
       const contacts = await getContacts(env, ownerId)
-      return new Response(JSON.stringify({ contacts }), { status: 200 })
+      return new Response(JSON.stringify({ contacts }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to retrieve contacts', 500)

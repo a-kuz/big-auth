@@ -1,38 +1,44 @@
-import { OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { normalizePhoneNumber } from '../utils/normalize-phone-number'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { z } from 'zod'
 
-interface Message {
-  phoneNumber: string
-}
-
-interface Req {
-  body: Message
-}
-
-export class SendCodeHandler extends OpenAPIRoute {
+export class SendCodeHandler extends Route {
   static schema = {
     tags: ['auth'],
     summary: 'Send OTP',
-    requestBody: {
+    requestBody: z.object({
       phoneNumber: new Str({ example: '+99999999999' }),
-    },
+    }),
     responses: {
       '200': {
         description: 'Message sent successfully',
         schema: {},
       },
+      ...errorResponses,
     },
   }
 
-  async handle(_request: Request, env: Env, _ctx: any, { body }: Req) {
+  async handle(
+    _request: Request,
+    env: Env,
+    _ctx: any,
+    { body }: DataOf<typeof SendCodeHandler.schema>,
+  ) {
     // Normalize the phone number to ensure consistency
     const phoneNumber = normalizePhoneNumber(body.phoneNumber)
 
     if (TEST_NUMBERS.includes(phoneNumber) || phoneNumber.startsWith('+999')) {
-      return new Response('{}', { status: 200 })
+      return new Response('{}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     }
 
     // Construct the URL for Twilio's Verification API
@@ -54,10 +60,12 @@ export class SendCodeHandler extends OpenAPIRoute {
         }),
       })
 
-      // Return Twilio's response as a JSON object with the appropriate status code
-      return new Response(JSON.stringify(await response.json()), {
-        status: response.status,
-      })
+      if (response.status - 200 < 100) {
+        // If the request was successful, return a success response
+        return new Response('{}', { status: 200 })
+      } else {
+        return errorResponse((await response.text()) as string, response.status)
+      }
     } catch (error) {
       // In case of an error, return a standardized error response
       return errorResponse('Failed to send OTP')

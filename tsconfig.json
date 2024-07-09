@@ -1,19 +1,29 @@
 {
 	"compilerOptions": {
 		"baseUrl": ".",
+		"skipLibCheck": true,
 		"noEmit": true,
-		"module": "esnext",
+		"module": "CommonJS",
 		"allowSyntheticDefaultImports": true,
 		"target": "ESNext",
-		"lib": ["ESNext"],
+		"lib": [
+			"ESNext"
+		],
 		"experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
+		"emitDecoratorMetadata": true,
 		"strict": true,
 		"paths": {
-      "~/*": ["src/*"]
-    },
-		"moduleResolution": "node",
-		"types": ["@cloudflare/workers-types", "@types/service-worker-mock"]
+			"~/*": [
+				"src/*"
+			]
+		},
+		"moduleResolution": "Node",
+		"types": [
+			"@cloudflare/workers-types",
+			"@types/service-worker-mock"
+		]
 	},
-	"exclude": ["node_modules"]
+	"exclude": [
+		"node_modules"
+	]
 }

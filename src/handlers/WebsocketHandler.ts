@@ -1,54 +1,35 @@
-import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  RouteValidated,
-  Str,
-} from '@cloudflare/itty-router-openapi'
-import { getUserByToken } from '../services/get-user-by-token'
+import { fingerprintDO, userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { pushStorage, userStorage } from '~/durable-objects/messaging/utils/mdo'
 
-export class WebsocketHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
-    security: [{ BearerAuth: [] }],
-  }
-  validateRequest(request: Request<unknown, CfProperties<unknown>>): Promise<RouteValidated> {
-    // @ts-ignore
-    return { data: {} }
-  }
+export const WebsocketHandler = async (request: Request, env: Env, ..._args: any[]) => {
+  try {
+    const user = env.user
+    if (!env.user) {return new Response()}
+    const mDO = userStorage(env, user.id)
 
-  async execute(request: Request, env: Env, _context: any, data: Record<string, any>) {
-    try {
-      const user = env.user
-      if (!user) {
-        return errorResponse('User not found in environment', 401)
-      }
+    const fingerprint = request.headers.get('fingerprint')
 
-      const mDO = userStorage(env, user.id)
-
-      const fingerprint = request.headers.get('fingerprint')
-      const url = new URL(request.url)
-      if (!fingerprint) {
-        console.error('No fp')
-        return errorResponse('need fingerprint', 400)
-      }
-      const deviceToken = await pushStorage(env, user.id).getToken(fingerprint, fingerprint)
-      const resp = await mDO.fetch(
+    if (fingerprint) {
+      const tokenStorage = fingerprintDO(env, fingerprint)
+      const deviceToken = await tokenStorage.getToken()
+      await mDO.fetch(
         new Request(`${env.ORIGIN}/${user.id}/client/request/setDeviceToken`, {
           method: 'POST',
           body: JSON.stringify({ fingerprint, deviceToken }),
         }),
       )
-      return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))
-    } catch (error) {
-      console.error(error)
-      return errorResponse('Something went wrong')
+      const deviceTokenVoip = await tokenStorage.getToken('ios-voip');
+      if (deviceTokenVoip) {
+        const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO;
+        const id = VOIP_TOKEN_DO.idFromName(user.id);
+        const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
+        voipTokenDO.setToken(deviceTokenVoip);
+      }
     }
-  }
-  catch(error: Error) {
-    console.error('!!!!')
-    console.error({ error })
+    return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))
+  } catch (error) {
+    console.error(error)
     return errorResponse('Something went wrong')
   }
 }

@@ -1,76 +1,70 @@
-import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
-} from "@cloudflare/itty-router-openapi";
-import { Env } from "../types/Env";
-import { digest } from "../utils/digest";
-import { errorResponse } from "../utils/error-response";
+import { OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { Route } from '~/utils/route'
+import { Env } from '../types/Env'
+import { digest } from '../utils/digest'
+import { errorResponse } from '../utils/error-response'
 
-export class UploadFileHandler extends OpenAPIRoute {
+export class UploadFileHandler extends Route {
   //@ts-ignore
-  async validateRequest(request: Request<unknown, CfProperties<unknown>>) {
-    return { data: await request.formData() };
+  async validateRequest(request: Request<unknown, CfProperties<unknown>>): Promise<{ data: FormData }> {
+    return { data: await request.formData() }
   }
+
+
+
   static schema: OpenAPIRouteSchema = {
-    summary: "Upload a file",
-    tags: ["files"],
+    summary: 'Upload a file',
+    tags: ['files'],
     responses: {
-      "200": {
-        description: "File uploaded successfully",
+      '200': {
+        description: 'File uploaded successfully',
 
         schema: {
           url: new Str({
-            example:
-              "https://dev.iambig.ai/public/zAE2h2mPSKjWwnxw8qxp4",
+            example: 'https://dev.iambig.ai/public/zAE2h2mPSKjWwnxw8qxp4',
           }),
         },
       },
 
-      "400": {
-        description: "Bad Request",
-      },
-      "500": {
-        description: "Server Error",
-      },
+      ...errorResponses,
     },
-  };
+  }
   async handle(
     request: Request,
     env: Env,
     ctx: ExecutionContext,
     formData: FormData,
   ): Promise<Response> {
-    const file = formData.get("file") as unknown as File;
+    const file = formData.get('file') as unknown as File
 
     if (file) {
-      const fileName = file.name;
-      const buffer = await file.arrayBuffer();
-      const id = await digest(buffer);
+      const fileName = file.name
+      const buffer = await file.arrayBuffer()
+      const id = await digest(buffer)
 
       try {
         ctx.waitUntil(
           env.FILES_KV.put(id, buffer, {
             metadata: { fileName, type: file.type },
           }),
-        );
+        )
 
         return new Response(
           JSON.stringify({
-            message: "File uploaded successfully",
-
             url: `${new URL(request.url).origin}/public/${id}`,
           }),
           {
+						headers: {'Content-Type': 'application/json'},
             status: 200,
           },
-        );
+        )
       } catch (error) {
-        console.error("Error uploading file:", error);
-        return errorResponse("Failed to upload file");
+        console.error('Error uploading file:', error)
+        return errorResponse('Failed to upload file')
       }
     } else {
-      return errorResponse("No file uploaded", 400);
+      return errorResponse('No file uploaded', 400)
     }
   }
 }

@@ -1,11 +1,14 @@
 import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { Route } from '~/utils/route'
 import { instanceToPlain } from 'class-transformer'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { getOrCreateUserByPhone } from '../db/services/get-user'
 import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { infer, z } from 'zod'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string
@@ -17,18 +20,18 @@ export interface OTPResponse {
   message?: string
 }
 
-export class VerifyCodeHandler extends OpenAPIRoute {
+export class VerifyCodeHandler extends Route {
   static schema = {
     tags: ['auth'],
     summary: 'Verify OTP',
     requestBody: z.object({
-      phoneNumber: z.string().startsWith("+").openapi({ example: '+99901234567' }),
+      phoneNumber: z.string().startsWith('+').openapi({ example: '+99901234567' }),
       code: z.string().openapi({ example: '000000' }),
     }),
     responses: {
       '200': {
         description: 'OTP verification successful',
-        schema: {
+        schema: z.object({
           accessToken: new Str({
             example:
               'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJGLXl1Z01uN1A1d0RNYmpjcGVaN1AiLCJwaG9uZSI6MzQ2MjcwNjg0NzgsIm5iZiI6MTcwODgxNzY0OSwiZXhwIjoxNzExNDA5NjQ5LCJpYXQiOjE3MDg4MTc2NDl9.FAqILei0iXB0lAZP41hUYZTnLZcHQX2O560P9YM4QGQ',
@@ -36,12 +39,10 @@ export class VerifyCodeHandler extends OpenAPIRoute {
           refreshToken: new Str({
             example: 'TnLZcHQX2O560P9YM4QGQ',
           }),
-        },
+					profile: ProfileSchema
+        }),
       },
-      '400': {
-        description: 'incorrect code',
-        schema: { error: 'incorrect code' },
-      },
+      ...errorResponses,
     },
   }
 
@@ -62,7 +63,7 @@ export class VerifyCodeHandler extends OpenAPIRoute {
       ) {
         const verificationResult = await this.verifyCodeWithTwilio(phoneNumber, code, env)
         if (verificationResult !== 'approved') {
-          return errorResponse('Incorrect code', 400)
+          return errorResponse('Incorrect code' as string, 400)
         }
       }
       // Get or create user by phone number
@@ -96,7 +97,12 @@ export class VerifyCodeHandler extends OpenAPIRoute {
           refreshToken,
           profile: user.profile(),
         }),
-        { status: 200 },
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
       )
     } catch (error) {
       console.error(error)

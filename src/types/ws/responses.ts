@@ -15,6 +15,7 @@ export interface MarkReadResponse {
   messageId: number
   timestamp: number
   missed: number
+  clientMessageId: string
 }
 
 export interface MarkDlvrdResponse {

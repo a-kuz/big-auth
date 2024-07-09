@@ -16,7 +16,6 @@ export interface Chat<T extends ChatType> {
   lastMessageAuthor?: string
   lastMessageStatus?: MessageStatus
   missed: number
-  verified?: boolean
   isMine?: boolean
   attachmentType?: AttachmentType
   meta: T extends 'dialog'
@@ -44,12 +43,8 @@ export type GroupChat = {
 type ChatType = 'dialog' | 'group' | 'channel' | 'ai' | 'favorotes'
 
 // Define interfaces for Meta, DialogMeta, and GroupMeta
-export interface DialogMeta {
-  firstName?: string
-  lastName?: string
-  username?: string
-  phoneNumber?: string
-}
+export type DialogMeta = Partial<Profile>
+
 export interface AiMeta {
   firstName?: string
   lastName?: string
@@ -60,6 +55,7 @@ export interface AiMeta {
 export interface GroupMeta {
   name: string
   owner: string
+	verified?: boolean
   participants: Profile[] | string[] // TODO
   createdAt: number
 }

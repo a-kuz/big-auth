@@ -1,25 +1,27 @@
-import { OpenAPIRoute, OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { getUserByToken } from '../services/get-user-by-token'
-import { newId } from '../utils/new-id'
-import { errorResponse } from '../utils/error-response'
-import { Env } from '../types/Env'
-import { GroupChatsDO } from '..'
 import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
-
-// Define the request schema using Zod
-const createChatSchema = z.object({
-  name: z.string(),
-  imgUrl: z.string().optional(),
-  participants: z.array(z.string()),
-})
+import { CustomError } from '~/errors/CustomError'
+import { Route } from '~/utils/route'
+import { writeErrorLog } from '~/utils/serialize-error'
+import { Env } from '../types/Env'
+import { errorResponse } from '../utils/error-response'
+import { newId } from '../utils/new-id'
+import { errorResponses } from '~/types/openapi-schemas/error-responses'
+import { GROUP_ID_LENGTH } from '~/durable-objects/messaging/constants'
+import { Str, Hostname } from '@cloudflare/itty-router-openapi'
+import { REGEX_URL_FILTER } from '~/constants'
 
 // Define the OpenAPI schema for this route
-export class CreateChatHandler extends OpenAPIRoute {
-  static schema: OpenAPIRouteSchema = {
+
+export class CreateChatHandler extends Route {
+  static schema = {
     tags: ['chats'],
     summary: 'Create a new chat group',
-    requestBody: createChatSchema,
+    requestBody: z.object({
+      name: z.string(),
+      imgUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
+      participants: z.array(z.string()),
+    }),
     responses: {
       200: {
         description: 'Group chat created successfully',
@@ -28,17 +30,12 @@ export class CreateChatHandler extends OpenAPIRoute {
         schema: {
           groupId: z.string(),
           name: z.string(),
-          imgUrl: z.string().optional(),
+          imgUrl: z.string(),
           participants: z.array(z.string()),
         },
       },
 
-      401: {
-        description: 'Unauthorized',
-      },
-      500: {
-        description: 'Internal server error',
-      },
+      ...errorResponses,
     },
     security: [
       {
@@ -56,9 +53,6 @@ export class CreateChatHandler extends OpenAPIRoute {
   ) {
     try {
       const user = env.user
-      if (!user) {
-        return errorResponse('User not found in environment', 401)
-      }
 
       const { name, imgUrl, participants } = body
 
@@ -66,14 +60,22 @@ export class CreateChatHandler extends OpenAPIRoute {
         participants.push(user.id)
       }
 
-      const groupId = newId(24)
+      const groupId = newId(GROUP_ID_LENGTH)
       const groupChatDO = groupStorage(env, groupId)
-
-      return new Response(
-        JSON.stringify(
-          await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id),
-        ),
-      )
+      try {
+        const chat = await groupChatDO.createGroupChat(groupId, name, imgUrl, participants, user.id)
+        return new Response(JSON.stringify(chat), {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      } catch (error) {
+        await writeErrorLog(error)
+        return errorResponse(
+          `Error creating group chat: ${(error as Error).message}`,
+          (error as CustomError).httpCode ?? 500,
+        )
+      }
     } catch (error) {
       console.error('Error creating group chat:', error)
       return errorResponse('Internal server error', 500)

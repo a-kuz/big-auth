@@ -1,21 +1,21 @@
 import {
+  Arr,
+  Bool,
+  Enumeration,
+  Num,
+  Obj,
   OpenAPIRoute,
   OpenAPIRouteSchema,
-  Arr,
-  Obj,
   Str,
-  Enumeration,
-  Bool,
-  DateTime,
-  Num,
 } from '@cloudflare/itty-router-openapi'
-import { getUserByToken } from '../services/get-user-by-token'
+import { Route } from '~/utils/route'
+import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
-import { serializeError } from 'serialize-error'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
 
-export class GetChatsHandler extends OpenAPIRoute {
+export class GetChatsHandler extends Route {
   static schema: OpenAPIRouteSchema = {
     summary: 'Retrieve chat messages',
     tags: ['chats'],
@@ -57,9 +57,7 @@ export class GetChatsHandler extends OpenAPIRoute {
       '401': {
         description: 'Unauthorized',
       },
-      '500': {
-        description: 'Internal Server Error',
-      },
+      ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
   }
@@ -75,10 +73,13 @@ export class GetChatsHandler extends OpenAPIRoute {
           method: 'POST',
           body: '{}',
         }),
-      )
+      ).then(response => {
+
+        return response
+      })
     } catch (error: unknown) {
       // Handle any errors
-      console.error('Failed to retrieve chats:', serializeError(error))
+      writeErrorLog(error)
 
       return errorResponse(JSON.stringify((error as Error).message), 500)
     }

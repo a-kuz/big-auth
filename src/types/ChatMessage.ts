@@ -1,4 +1,6 @@
 import { Attachment } from './Attachment'
+import { MessageStatus } from './ChatList'
+import { ReplyTo } from './ws/client-requests'
 
 interface Delivering {
   userId: string
@@ -11,12 +13,13 @@ export interface DialogMessage {
   clientMessageId: string
   message?: string
   sender: string
+	replyTo?: ReplyTo
   attachments?: Attachment[]
-  read?: number
-  dlvrd?: number
+  read?: number // deprecated
+  dlvrd?: number // depracted
+	status?: MessageStatus
   createdAt: number
   updatedAt?: number
-  deletedAt?: number
 }
 
 export interface GroupChatMessage {
@@ -24,6 +27,7 @@ export interface GroupChatMessage {
   clientMessageId: string
   message?: string
   sender: string
+	replyTo?: ReplyTo
   attachments?: Attachment[]
   delivering?: Delivering[]
   createdAt: number

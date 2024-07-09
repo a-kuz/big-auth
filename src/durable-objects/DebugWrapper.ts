@@ -20,16 +20,16 @@ export class DebugWrapper extends DurableObject {
       result[key] = value
     }
 
-    return this.returnBigResult(result, partNumber)
+    return DebugWrapper.returnBigResult(result, partNumber)
   }
   async getPrivate(field: string, partNumber: number = 1) {
     if (this.env.ENV === 'production') return
     //@ts-ignore
     const value: number | string | Map | any[] = this[field] || this['#' + field]
-		return this.returnBigResult(value, partNumber)
+		return DebugWrapper.returnBigResult(value, partNumber)
   }
 
-  returnBigResult(value: number | string | Map<any, any> | any[] | Object, partNumber: number) {
+  static returnBigResult(value: number | string | Map<any, any> | any[] | Object, partNumber: number) {
     const serealizeReadyValue = value instanceof Map ? Object.fromEntries(value) : value
 		const result = JSON.stringify(serealizeReadyValue)
     const partSize = 1000000

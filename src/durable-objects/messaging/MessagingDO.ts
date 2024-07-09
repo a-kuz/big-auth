@@ -50,6 +50,7 @@ import { getUserById } from '~/db/services/get-user'
 import { displayName } from '~/services/display-name'
 import { captureRejectionSymbol } from 'events'
 import { stat } from 'fs'
+import { DebugWrapper } from '../DebugWrapper'
 
 export class UserMessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -101,6 +102,7 @@ export class UserMessagingDO implements DurableObject {
         | 'updateChat'
         | 'blink'
         | 'lastSeen'
+        | 'debug'
       ),
     ]
     if (!this.#userId) {
@@ -134,6 +136,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.blinkHandler(request)
               case 'lastSeen':
                 return this.lastSeenHandler(request)
+              case 'debug':
+                return this.debugHandler(request)
             }
         }
 
@@ -188,6 +192,21 @@ export class UserMessagingDO implements DurableObject {
     return new Response(`${url.pathname} Not found`, { status: 404 })
   }
 
+  async debugHandler(request: Request) {
+    
+    
+    if (this.env.ENV === 'production') return
+    const keys = await this.state.storage.list()
+    const result = {}
+    for (const key of keys.keys()) {
+      const value = keys.get(key)
+      //@ts-ignore
+      result[key] = value
+    }
+
+    return new Response(DebugWrapper.returnBigResult(result, 0) )
+
+  }
   async newHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
 

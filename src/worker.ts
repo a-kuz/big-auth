@@ -101,13 +101,19 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const title = (await chatStorage(this.env, chatId, chatId).chat(chatId) as Group | Dialog).name;
   
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO;
-
+    const sendTokens: string[] = [];
     for (let participant of participants) {
-      if (participant.id == userId) continue;
+      if(participant.id == userId) continue;
       const id = VOIP_TOKEN_DO.idFromName(participant.id);
       const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
       const deviceVoipToken = await voipTokenDO.getToken();
-      if (deviceVoipToken) {
+      console.log(`
+      participant.id : ${participant.id}
+      deviceVoipToken: ${deviceVoipToken}
+      `);
+      
+      if (deviceVoipToken && !sendTokens.includes(deviceVoipToken)) {
+        sendTokens.push(deviceVoipToken);
         const push: VoipPushNotification = {
           voip: true,
           deviceToken: deviceVoipToken,

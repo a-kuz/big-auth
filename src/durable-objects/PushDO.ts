@@ -12,7 +12,12 @@ export class PushDO extends DebugWrapper {
   async setToken(fingerprint: string, tokenType: TokenType, deviceToken: string) {
     await this.ctx.storage.put(`token-${tokenType}`, deviceToken)
   }
-
+  async setUserId(userId: string) {
+    await this.ctx.storage.put('userId', userId);
+  }
+  async getUserId() {
+    await this.ctx.storage.get<string>('userId');
+  }
   async getToken(tokenType: TokenType = 'ios-notification') {
     return this.ctx.storage.get<string>(`token-${tokenType}`)
   }

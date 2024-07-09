@@ -7,7 +7,6 @@ interface Delivering {
   dlvrd?: number
   read?: number
 }
-
 export interface DialogMessage {
   messageId: number
   clientMessageId: string

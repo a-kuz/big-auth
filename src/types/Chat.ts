@@ -1,7 +1,6 @@
 import { Profile } from '~/db/models/User'
 import { AttachmentType } from './Attachment'
 import { MessageStatus } from './ChatList'
-
 // Meta can be either DialogMeta or GroupMeta
 type Meta = DialogMeta | GroupMeta
 
@@ -17,8 +16,7 @@ export interface Chat<T extends ChatType> {
   lastMessageStatus?: MessageStatus
   missed: number
   isMine?: boolean
-  callId?: string
-  startCallAt?: number
+  call?: Call
   attachmentType?: AttachmentType
   meta: T extends 'dialog'
     ? DialogMeta
@@ -28,7 +26,10 @@ export interface Chat<T extends ChatType> {
         ? AiMeta
         : never
 }
-
+export interface Call {
+  callId: string
+  createdAt: number
+}
 export interface Dialog extends Chat<'dialog'> {}
 export interface Group extends Chat<'group'> {}
 export interface DialogAI extends Chat<'ai'> {}

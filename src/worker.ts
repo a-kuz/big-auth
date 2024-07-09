@@ -97,21 +97,9 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     userId: string,
     type: string = 'new'
   ) {
-    const _isGroup = isGroup(chatId);
-    let title = "";
-    try {
-      let _user2 = userId;
-      if (!_isGroup) {
-        _user2 = participants.filter(p => p.id != userId)[0].id;
-        //@ts-ignore
-        title = (await chatStorage(this.env, chatId, userId).chat(_user2)).name;
-      } else {
-        //@ts-ignore
-        title = (await chatStorage(this.env, chatId, userId).chat(_user2)).name;
-      }
-    } catch (e) {
-      console.log(e);
-    }
+
+    const title = (await chatStorage(this.env, chatId, chatId).chat(chatId) as Group | Dialog).name;
+  
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO;
 
     for (let participant of participants) {
@@ -131,7 +119,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
             chatId,
             title,
             isVideo: false,
-            isGroup: _isGroup,
+            isGroup: isGroup(chatId),
             type
           },
           title

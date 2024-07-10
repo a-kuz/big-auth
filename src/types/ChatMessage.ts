@@ -8,6 +8,7 @@ interface Delivering {
   read?: number
 }
 
+
 export interface StoredDialogMessage {
   messageId: number
   clientMessageId: string
@@ -19,6 +20,7 @@ export interface StoredDialogMessage {
   updatedAt?: number
   deletedAt?: number
 }
+
 export interface DialogMessage {
   messageId: number
   clientMessageId: string

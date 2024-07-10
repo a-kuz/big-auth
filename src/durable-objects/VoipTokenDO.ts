@@ -13,7 +13,9 @@ export class VoipTokenDO extends DebugWrapper {
   async setToken(deviceToken: string) {
     await this.ctx.storage.put('token', deviceToken)
   }
-
+  async setFingerPrint(fingerPrint: string) {
+    await this.ctx.storage.put('fingerPrint', fingerPrint)
+  }
   async getToken() {
     return this.ctx.storage.get<string>(`token`)
   }

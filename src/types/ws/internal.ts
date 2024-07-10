@@ -38,9 +38,9 @@ export interface NewChatEvent extends Chat<'group'> {
   chatId: string
 }
 export interface NewCallEvent {
+  chatId: string
   callId: string
-  startCallAt: number
-  userId: string
+  createdAt: number
 }
 export interface DeleteChatEvent {
   chatId: string

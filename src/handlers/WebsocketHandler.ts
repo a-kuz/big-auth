@@ -9,22 +9,27 @@ export const WebsocketHandler = async (request: Request, env: Env, ..._args: any
     const mDO = userStorage(env, user.id)
 
     const fingerprint = request.headers.get('fingerprint')
-
     if (fingerprint) {
+      const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO
+      const id = VOIP_TOKEN_DO.idFromName(user.id)
+      const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
+      await voipTokenDO.setFingerPrint(fingerprint)
+
       const tokenStorage = fingerprintDO(env, fingerprint)
+      await tokenStorage.setUserId(user.id)
+
       const deviceToken = await tokenStorage.getToken()
-      await mDO.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/client/request/setDeviceToken`, {
-          method: 'POST',
-          body: JSON.stringify({ fingerprint, deviceToken }),
-        }),
-      )
-      const deviceTokenVoip = await tokenStorage.getToken('ios-voip');
+      if(deviceToken){
+        await mDO.fetch(
+          new Request(`${env.ORIGIN}/${user.id}/client/request/setDeviceToken`, {
+            method: 'POST',
+            body: JSON.stringify({ fingerprint, deviceToken }),
+          }),
+        )
+      }
+      const deviceTokenVoip = await tokenStorage.getToken('ios-voip')
       if (deviceTokenVoip) {
-        const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO;
-        const id = VOIP_TOKEN_DO.idFromName(user.id);
-        const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
-        voipTokenDO.setToken(deviceTokenVoip);
+        await voipTokenDO.setToken(deviceTokenVoip)
       }
     }
     return mDO.fetch(new Request(`${env.ORIGIN}/${user.id}/client/connect/websocket`, request))

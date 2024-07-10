@@ -2,7 +2,7 @@ import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
-import { Group } from '~/types/Chat'
+import { Call, Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
@@ -46,8 +46,7 @@ export class GroupChatsDO extends DebugWrapper {
   #id: string = ''
   #counter = 0
   #users: Profile[] = []
-  #callId?: string
-  #startCallAt?: number
+  #call?: Call
   #storage!: DurableObjectStorage
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
@@ -210,8 +209,7 @@ export class GroupChatsDO extends DebugWrapper {
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
     this.#counter = -1
     const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
-    this.#callId = await this.#storage.get<string>('callId');
-    this.#startCallAt = await this.#storage.get<number>('startCallAt');
+    this.#call = await this.#storage.get<Call>('call');
     for (const chunk of keyChunks) {
       const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
       for (const key of messagesChunk.keys()) {
@@ -272,8 +270,7 @@ export class GroupChatsDO extends DebugWrapper {
       lastMessageStatus: this.messageStatus(lastMessage),
       isMine: userId === lastMessage?.sender,
       name: this.group?.name,
-      startCallAt: this.#startCallAt,
-      callId: this.#callId
+      call: this.#call
     }
 
     return chat
@@ -292,17 +289,18 @@ export class GroupChatsDO extends DebugWrapper {
   counter() {
     return this.#messages.length
   }
-  async newCall(callId: string,userId:string) {
-    this.#callId = callId;
-    this.#startCallAt = Date.now();
-    await this.#storage.put('callId', callId);
-    await this.#storage.put('startCallAt', this.#startCallAt);
-    const _newCall: NewCallEvent = {
+  async newCall(callId: string,ownerCallId:string) {
+    this.#call = {
       callId,
-      startCallAt: this.#startCallAt,
-      userId
+      createdAt: Date.now()
+    };
+    await this.#storage.put('call', this.#call);
+    const _newCall: NewCallEvent = {
+      chatId: this.#id,
+      callId,
+      createdAt: this.#call.createdAt,
     }
-    await this.broadcastEvent('newCall', { ..._newCall }, userId)
+    await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
   }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }

@@ -147,7 +147,7 @@ export class UserMessagingDO implements DurableObject {
           case 'newChat':
             return this.newChatEventHandler(request)
           case 'newCall':
-              return this.newCallEventHandler(request)
+            return this.newCallEventHandler(request)
           case 'deleteChat':
             return this.newChatEventHandler(request)
           case 'new':
@@ -256,29 +256,7 @@ export class UserMessagingDO implements DurableObject {
   }
   async newCallEventHandler(request: Request) {
     const eventData = await request.json<NewCallEvent>()
-    console.log(eventData)
-    /*
-    const { chatId, name, meta } = eventData
-    const { owner } = meta
-    const chat = this.cl.toTop(chatId, {
-      id: chatId,
-      photoUrl: eventData.photoUrl,
-      lastMessageStatus: 'undelivered',
-      lastMessageText: 'chat created',
-      lastMessageTime: this.timestamp(),
-      name: name,
-      type: 'group',
-      verified: false,
-      lastMessageAuthor: owner,
-      isMine: owner === this.#userId,
-    })
-    chat.missed = 0
-    this.cl.chatList.unshift(chat)
-    await this.cl.save()
-    if (this.onlineService.isOnline()) {
-      await this.wsService.toBuffer('chats', this.cl.chatList)
-    }
-  */
+    await this.wsService.toBuffer('newCall', eventData)
     return new Response()
   }
   async updateChatEventHandler(request: Request) {

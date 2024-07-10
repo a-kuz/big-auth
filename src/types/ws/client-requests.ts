@@ -42,15 +42,20 @@ export interface NewMessageRequest {
   message: string
   attachments?: Attachment[]
   clientMessageId: string
-	replyTo?: number
+  replyTo?: number
 }
 
 export interface ReplyTo {
-	messageId: number
-	clientMessageId: string
-	message?: string
-	sender: string
-	createdAt: number
+  messageId: number
+  clientMessageId: string
+  message?: string
+  sender: string
+  createdAt: number
+}
+export interface ForwardedFrom {
+  chatId: string
+  messageId: number
+  author: Profile
 }
 export interface GetChatRequest {
   chatId: string

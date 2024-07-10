@@ -1,6 +1,6 @@
 import { Attachment } from './Attachment'
 import { MessageStatus } from './ChatList'
-import { ReplyTo } from './ws/client-requests'
+import { ForwardedFrom, ReplyTo } from './ws/client-requests'
 
 interface Delivering {
   userId: string
@@ -8,14 +8,20 @@ interface Delivering {
   read?: number
 }
 
+type MessageType = 'new' | 'edit' | 'delete' | 'call'
 
 export interface StoredDialogMessage {
   messageId: number
-  clientMessageId: string
+  clientMessageId?: string
   message?: string
   sender: string
-	replyTo?: ReplyTo
   attachments?: Attachment[]
+
+	replyTo?: ReplyTo
+	forwardedFrom?: ForwardedFrom
+
+  type: MessageType 
+
   createdAt: number
   updatedAt?: number
   deletedAt?: number

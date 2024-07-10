@@ -8,6 +8,17 @@ interface Delivering {
   read?: number
 }
 
+export interface StoredDialogMessage {
+  messageId: number
+  clientMessageId: string
+  message?: string
+  sender: string
+	replyTo?: ReplyTo
+  attachments?: Attachment[]
+  createdAt: number
+  updatedAt?: number
+  deletedAt?: number
+}
 export interface DialogMessage {
   messageId: number
   clientMessageId: string

@@ -1,13 +1,9 @@
-import { beforeAll, describe, expect, it, Context, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-
-import { BlinkHandler } from '../handlers/BlinkHandler'
-import { Env } from '../types/Env'
 import { User } from '../db/models/User'
 import { ChatList } from '../types/ChatList'
-import { DataOf } from '@cloudflare/itty-router-openapi'
+import { Env } from '../types/Env'
 
-import { infer } from 'zod'
 import { GetMessagesResponse } from '../types/ws/client-requests'
 
 async function delay(ms: number) {
@@ -139,7 +135,6 @@ describe('Message Status Tests', () => {
   )
 })
 
-
 async function verifyCode(phoneNumber: string, code: string) {
   const response = await fetch(`${baseUrl}/verify-code`, {
     method: 'POST',
@@ -149,7 +144,6 @@ async function verifyCode(phoneNumber: string, code: string) {
   const data = await response.json()
   return { accessToken: data.accessToken, id: data.profile.id }
 }
-
 
 async function getChatList(jwt: string): Promise<ChatList> {
   const response = await fetch(`${baseUrl}/chats`, {
@@ -165,5 +159,5 @@ async function getMessages(jwt: string, chatId: string): Promise<any[]> {
     method: 'GET',
     headers: { Authorization: `Bearer ${jwt}` },
   })
-  return (await response.json() as GetMessagesResponse).messages
+  return ((await response.json()) as GetMessagesResponse).messages
 }

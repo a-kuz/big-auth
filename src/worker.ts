@@ -97,9 +97,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     userId: string,
     type: string = 'new'
   ) {
-
-    const title = (await chatStorage(this.env, chatId, chatId).chat(chatId) as Group | Dialog).name;
-  
+    const title = (await chatStorage(this.env, chatId, userId).chat(chatId) as Group | Dialog).name;
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO;
     const sendTokens: string[] = [];
     for (let participant of participants) {

@@ -41,7 +41,7 @@ import { env } from 'process'
 import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
 export { WorkerBigAuth } from './worker'
 
-export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
+export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { VoipTokenDO } from './durable-objects/VoipTokenDO'

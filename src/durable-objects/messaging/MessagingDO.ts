@@ -55,7 +55,7 @@ import { captureRejectionSymbol } from 'events'
 import { stat } from 'fs'
 import { DebugWrapper } from '../DebugWrapper'
 
-export class UserMessagingDO implements DurableObject {
+export class MessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
   #timestamp = Date.now()
   #deviceToken = ''

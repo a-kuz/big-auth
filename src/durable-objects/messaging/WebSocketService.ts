@@ -5,7 +5,7 @@ import { ClientRequestPayload, ServerEventPayload } from '~/types/ws/payload-typ
 import { ServerEvent } from '~/types/ws/server-events'
 import { WebsocketServerResponse } from '~/types/ws/websocket-server-response'
 import { writeErrorLog } from '~/utils/serialize-error'
-import { UserMessagingDO } from './MessagingDO'
+import { MessagingDO } from './MessagingDO'
 import { OnlineStatusService } from './OnlineStatusService'
 import { nanoid } from 'nanoid'
 import { timeStamp } from 'console'
@@ -70,7 +70,7 @@ export class WebSocketGod {
   async handlePacket(
     ws: WebSocket,
     message: string | ArrayBuffer,
-    doo: UserMessagingDO,
+    doo: MessagingDO,
   ): Promise<void> {
     if (this.ping(message)) {
       ws.send(`{"event":"pong"}`)

@@ -323,6 +323,28 @@ export class GroupChatsDO extends DebugWrapper {
     return { messages, authors }
   }
 
+  async deleteMessage(request: DeleteMessageRequest): Promise<DeleteMessageResponse> {
+    const { messageId } = request;
+    const messageIndex = this.#messages.findIndex(m => m.messageId === messageId);
+    if (messageIndex === -1) {
+      throw new Error(`Message with ID ${messageId} does not exist`);
+    }
+    const message = this.#messages[messageIndex];
+    message.deletedAt = this.timestamp();
+    message.message = undefined;
+    message.attachments = undefined;
+    await this.#storage.put(`message-${messageId}`, message);
+
+    const deleteMessageEvent = {
+      type: 'delete',
+      payload: { originalMessageId: messageId },
+    };
+
+    await this.broadcastEvent('delete', deleteMessageEvent, request.chatId);
+
+    return { messageId, timestamp: message.deletedAt };
+  }
+
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
     const timestamp = this.timestamp()
     const messageId = await this.newId()

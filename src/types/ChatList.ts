@@ -19,7 +19,7 @@ export interface ChatListItem {
   isMine: boolean
   attachmentType?: AttachmentType
 	lastSeen?: number
-	callStatus?: 'active' | 'missed' | 'incoming' | 'outgoing'
+	
 }
 
 export type ChatList = ChatListItem[]

@@ -3,12 +3,19 @@
 export interface NewMessageResponse {
   messageId: number
   timestamp: number
+  
   clientMessageId: string
 }
 
-export interface EditMessageResponse {}
+export interface EditMessageResponse {
+  messageId: number
+  timestamp: number
+}
 
-export interface DeleteMessageResponse {}
+export interface DeleteMessageResponse {
+  messageId: number
+  timestamp: number
+}
 
 export interface MarkReadResponse {
   chatId: string

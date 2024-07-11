@@ -1,6 +1,7 @@
 import { ChatMessage } from '~/types/ChatMessage'
 import { ClientEventType, ClientRequestType, ServerEventType } from '~/types/ws'
 import {
+  DeleteRequest,
   GetChatRequest,
   GetChatsRequest,
   GetMessagesRequest,
@@ -16,6 +17,7 @@ import {
   ServerResponsePayload,
 } from '~/types/ws/payload-types'
 import {
+  DeleteEvent,
   MarkDeliveredEvent,
   MarkReadEvent,
   NewMessageEvent,
@@ -129,6 +131,8 @@ export class UserMessagingDO implements DurableObject {
                 return this.messagesHandler(request)
               case 'new':
                 return this.newHandler(request)
+              case 'delete':
+                return this.deleteHandler(request)
               case 'setDeviceToken':
                 return this.setDeviceTokenHandler(request)
               case 'updateProfile':
@@ -158,6 +162,8 @@ export class UserMessagingDO implements DurableObject {
             return this.dlvrdEventHandler(request)
           case 'updateChat':
             return this.updateChatEventHandler(request)
+          case 'delete':
+            return this.deleteEventHandler(request)
         }
       }
       case 'dialog': {
@@ -170,6 +176,8 @@ export class UserMessagingDO implements DurableObject {
             return this.readEventHandler(request)
           case 'updateChat':
             return this.updateChatEventHandler(request)
+          case 'delete':
+            return this.deleteEventHandler(request)
         }
       }
 
@@ -196,7 +204,7 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async debugHandler(request: Request) {
-    if (this.env.ENV === 'production') return
+    if (this.env.ENV === 'production') return new Response('Not found', { status: 404 })
     const keys = await this.state.storage.list()
     const result = {}
     for (const key of keys.keys()) {
@@ -218,6 +226,13 @@ export class UserMessagingDO implements DurableObject {
 
       return response
     }
+  }
+  async deleteHandler(request: Request) {
+    const eventData = await request.json<DeleteRequest>()
+
+    const response = new Response(JSON.stringify(await this.deleteRequest(eventData)))
+
+    return response
   }
 
   async newEventHandler(request: Request) {
@@ -265,6 +280,11 @@ export class UserMessagingDO implements DurableObject {
     await this.wsService.toBuffer('chats', this.cl.chatList)
     await this.cl.save()
 
+    return new Response()
+  }
+  async deleteEventHandler(request: Request) {
+    const eventData = await request.json<DeleteEvent>()
+    await this.wsService.toBuffer('delete', eventData)
     return new Response()
   }
   async dlvrdEventHandler(request: Request) {
@@ -353,7 +373,7 @@ export class UserMessagingDO implements DurableObject {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
         lastMessageText: messagePreview(eventData.message),
-        
+
         name: chatData.name,
         type: chatType(chatId),
         verified: false,
@@ -581,6 +601,9 @@ export class UserMessagingDO implements DurableObject {
       case 'read':
         response = await this.readRequest(request as MarkReadRequest, this.timestamp())
         return response
+      case 'delete':
+        response = await this.deleteRequest(request as DeleteRequest)
+        return response
       case 'chats':
         response = await this.getChatsRequest(request as GetChatsRequest)
         return response
@@ -664,6 +687,9 @@ export class UserMessagingDO implements DurableObject {
 
   async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
     return this.chatStorage(payload.chatId).dlvrd(this.#userId, payload, timestamp)
+  }
+  async deleteRequest(payload: DeleteRequest) {
+    return this.chatStorage(payload.chatId).deleteMessage(this.#userId, payload)
   }
 
   async readRequest(payload: MarkReadRequest, timestamp: number) {

@@ -18,9 +18,10 @@ export interface EditMessageEvent {
   message: string
 }
 
-export interface DeleteMessageEvent {
+export interface DeleteEvent {
   chatId: string
   messageId: number
+  originalMessageId: number  
 }
 
 export interface OnlineEvent {

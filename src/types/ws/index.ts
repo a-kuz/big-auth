@@ -16,4 +16,4 @@ import {
 
 export type ClientRequestType = nw | edit | read | dlvrd | dlt | chats | chat | messages
 export type ClientEventType = typing | offline
-export type ServerEventType = nw | edit | read | dlvrd | typing | online | offline | chats | newChat | newCall
+export type ServerEventType = nw | edit | read | dlvrd | typing | online | offline | chats | newChat | newCall | dlt

@@ -16,7 +16,7 @@ export interface ClientRequest<Type extends ClientRequestType = ClientRequestTyp
     : Type extends edit
       ? EditMessageRequest
       : Type extends dlt
-        ? DeleteMessageRequest
+        ? DeleteRequest
         : Type extends dlvrd
           ? MarkDeliveredRequest
           : Type extends read
@@ -47,6 +47,7 @@ export interface NewMessageRequest {
 
 export interface ReplyTo {
   messageId: number
+  deletedAt?: number
   clientMessageId: string
   message?: string
   sender: string
@@ -81,14 +82,15 @@ export interface TypingClientEvent {
 
 export interface EditMessageRequest {
   chatId: string
-  messageId: number
+  originalMessageId: number
+  clientMessageId: string
   message: string
   attachments?: Attachment[]
 }
 
-export interface DeleteMessageRequest {
+export interface DeleteRequest {
   chatId: string
-  messageId: number
+  originalMessageId: number
 }
 
 export interface MarkReadRequest {

@@ -1,6 +1,7 @@
 import { Attachment } from './Attachment'
 import { MessageStatus } from './ChatList'
 import { ForwardedFrom, ReplyTo } from './ws/client-requests'
+import { dlt, edit, nw } from './ws/event-literals'
 
 interface Delivering {
   userId: string
@@ -12,27 +13,26 @@ type MessageType = 'new' | 'edit' | 'delete' | 'call'
 
 type EditPayload = {
   originalMessageId: number
-  message: string
-  attachments?: Attachment[]
 }
-type DeletePayload = {
+
+type DeletionPayload = {
   originalMessageId: number
 }
 
-export interface StoredDialogMessage<T extends MessageType = 'new'> {
+export interface StoredDialogMessage {
   messageId: number
-  clientMessageId?: string
-  message?: string
+  clientMessageId: string
   sender: string
+  
+  message?: string
   attachments?: Attachment[]
-
+  
   replyTo?: ReplyTo
   forwardedFrom?: ForwardedFrom
-
-  type?: T
-
-  payload?: T extends 'edit' ? EditPayload : T extends 'delete' ? DeletePayload : undefined
-
+  
+  type?: nw | edit | dlt
+  payload?:  DeletionPayload
+  
   createdAt: number
   updatedAt?: number
   deletedAt?: number
@@ -42,13 +42,18 @@ export interface DialogMessage {
   messageId: number
   clientMessageId: string
   message?: string
+  attachments?: Attachment[]
   sender: string
+  
   replyTo?: ReplyTo
   forwardedFrom?: ForwardedFrom
-  attachments?: Attachment[]
+  
   read?: number // deprecated
   dlvrd?: number // depracted
+  
   status?: MessageStatus
+  type?: nw | dlt | edit
+
   createdAt: number
   updatedAt?: number
 }

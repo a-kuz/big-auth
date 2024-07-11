@@ -167,7 +167,9 @@ export class WebSocketGod {
   }
 
   async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100) {
+    if (!this.onlineService.isOnline()) return
     const id = newId(10)
+
     const packet: ServerEvent = {
       eventType,
       payload: event,

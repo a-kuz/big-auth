@@ -381,6 +381,7 @@ export class UserMessagingDO implements DurableObject {
         isMine: false,
         lastMessageId: chatData.lastMessageId,
         missed: chatData.missed,
+        firstMissed: chatData.firstMissed,
         lastMessageTime: chatData.lastMessageTime,
       }
       const chat = this.cl.toTop(chatId, chatChanges)
@@ -397,8 +398,7 @@ export class UserMessagingDO implements DurableObject {
         await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toBuffer('new', {
-        ...eventData,
-        ...{ missed: eventData.missed },
+        ...eventData,        
         sender: eventData.sender ?? eventData.chatId,
       })
       dlvrd = true

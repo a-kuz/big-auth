@@ -77,6 +77,7 @@ export class ChatGptDO extends DebugWrapper {
           clientMessageId: message.clientMessageId,
           timestamp: message.createdAt,
           missed: 1,
+          firstMissed: message.clientMessageId 
         }
         this.#messages.push(message)
         await this.ctx.storage.put<StoredDialogMessage>(`message-${message.messageId}`, message)
@@ -104,6 +105,7 @@ export class ChatGptDO extends DebugWrapper {
       clientMessageId: message.clientMessageId,
       timestamp,
       missed: 1,
+      firstMissed: message.clientMessageId
     }
 
     const reqBody = JSON.stringify(event)
@@ -161,6 +163,7 @@ export class ChatGptDO extends DebugWrapper {
     }
 
     const lastMessage = this.#messages.slice(-1)[0]
+    const missed = this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0
     const chat: ChatListItem | DialogAI = {
       chatId: 'AI',
       id: 'AI',
@@ -168,7 +171,8 @@ export class ChatGptDO extends DebugWrapper {
       lastMessageId: this.#messages.length ? this.#messages.length - 1 : 0,
       photoUrl: this.env.AI_AVATAR_URL,
       type: 'ai',
-      missed: this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0,
+      missed,
+      firstMissed: missed ? lastMessage.clientMessageId : undefined,
       lastMessageText: lastMessage?.message ?? '',
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,

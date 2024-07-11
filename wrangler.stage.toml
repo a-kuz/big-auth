@@ -8,6 +8,15 @@ tail_consumers = [{ service = "big-auth-tail" }]
 [placement]
 mode = "off"
 
+
+[[d1_databases]]
+binding = "DB"
+database_name = "iambig-stage"
+database_id = "3140a7dc-6938-4399-8f0c-1ce2a934e8c6"
+migrations_table = "migrations"
+migrations_dir = "src/db/migrations"
+
+
 [[r2_buckets]]
 binding = 'USER_FILES'
 bucket_name = 'user-files'
@@ -18,11 +27,6 @@ preview_bucket_name = 'user-files-preview'
 workers_dev = true
 route = "https://dev.iambig.ai/*"
 vars = { ENV = "dev", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', ORIGIN = "https://dev.iambig.ai", AI_AVATAR_URL = "https://dev.iambig.ai/public/23d6658a2a06538a1b04c56aeb1f1874815f6a7f3853481a29609ca46de57bef" }
-
-
-d1_databases = [
-	{ binding = "DB", database_name = "imbig", database_id = "50a83409-8f4f-49ad-af14-573f33b0b91d", migrations_table = "migrations", migrations_dir = "src/db/migrations" },
-]
 
 
 durable_objects = { bindings = [
@@ -59,14 +63,11 @@ durable_objects = { bindings = [
 	{ name = "DIALOG_DO", class_name = "DialogsDO" },
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
-	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" }
+	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" },
 ] }
 vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0" }
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
-]
-d1_databases = [
-	{ binding = "DB", database_name = "iambig-stage", database_id = "3140a7dc-6938-4399-8f0c-1ce2a934e8c6", migrations_table = "migrations", migrations_dir = "src/db/migrations" },
 ]
 r2_buckets = [
 	{ binding = "USER_FILES", bucket_name = "user-files", preview_bucket_name = "user-files-preview" },
@@ -84,5 +85,5 @@ deleted_classes = ["PushDO"]
 tag = "v3"               # Should be unique for each entry
 new_classes = ["PushDO"]
 [[migrations]]
-tag = "v4"               # Should be unique for each entry
+tag = "v4"                    # Should be unique for each entry
 new_classes = ["VoipTokenDO"]

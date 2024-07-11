@@ -32,6 +32,7 @@ export interface NewGroupMessageEvent {
   messageId: number
   timestamp: number
   missed: number
+  firstMissed?: string
 }
 
 export interface NewChatEvent extends Chat<'group'> {

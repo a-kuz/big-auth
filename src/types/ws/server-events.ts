@@ -53,6 +53,7 @@ export interface NewMessageEvent<A extends AttachmentType | never = never> {
   messageId: number
   clientMessageId: string
   missed?: number
+  firstMissed?: string
 }
 export interface NewVOIPEvent<A extends AttachmentType | never = never> {
   appId: string

@@ -15,6 +15,7 @@ export interface Chat<T extends ChatType> {
   lastMessageAuthor?: string
   lastMessageStatus?: MessageStatus
   missed: number
+  firstMissed?: string
   isMine?: boolean
   call?: Call
   attachmentType?: AttachmentType

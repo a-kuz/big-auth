@@ -13,6 +13,7 @@ import {
 	NewMessageRequest,
 } from '~/types/ws/client-requests'
 import {
+  CloseCallEvent,
 	InternalEvent,
 	InternalEventType,
 	MarkDeliveredInternalEvent,
@@ -301,6 +302,15 @@ export class GroupChatsDO extends DebugWrapper {
       createdAt: this.#call.createdAt,
     }
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
+  }
+  async closeCall(callId: string,ownerCallId:string) {
+    this.#call = undefined
+    await this.#storage.put('call', this.#call)
+    const _closeCall: CloseCallEvent = {
+      chatId: this.#id,
+      callId
+    }
+    await this.broadcastEvent('closeCall', { ..._closeCall }, ownerCallId)
   }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }

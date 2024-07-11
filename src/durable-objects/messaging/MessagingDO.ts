@@ -31,6 +31,7 @@ import { Env } from '../../types/Env'
 import { Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
+  CloseCallEvent,
   InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
@@ -152,6 +153,8 @@ export class UserMessagingDO implements DurableObject {
             return this.newChatEventHandler(request)
           case 'newCall':
             return this.newCallEventHandler(request)
+          case 'closeCall':
+            return this.newCallEventHandler(request)
           case 'deleteChat':
             return this.newChatEventHandler(request)
           case 'new':
@@ -269,6 +272,11 @@ export class UserMessagingDO implements DurableObject {
   async newCallEventHandler(request: Request) {
     const eventData = await request.json<NewCallEvent>()
     await this.wsService.toBuffer('newCall', eventData)
+    return new Response()
+  }
+  async closeCallEventHandler(request: Request) {
+    const eventData = await request.json<CloseCallEvent>()
+    await this.wsService.toBuffer('closeCall', eventData)
     return new Response()
   }
   async updateChatEventHandler(request: Request) {

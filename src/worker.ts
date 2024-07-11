@@ -144,6 +144,10 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }
   }
   async closeCall(data: CloseCallRequest) {
-
+    if (isGroup(data.chatId)) {
+      const group = await groupStorage(this.env, data.chatId);
+      await group.closeCall(data.callId, data.userIdCreateCall);
+    }
+    
   }
 }

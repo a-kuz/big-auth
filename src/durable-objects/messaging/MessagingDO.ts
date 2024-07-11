@@ -259,10 +259,9 @@ export class UserMessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
-    await this.cl.save()
-    if (this.onlineService.isOnline()) {
-      await this.wsService.toBuffer('chats', this.cl.chatList)
-    }
+    await this.cl.save()    
+    await this.wsService.toBuffer('chats', this.cl.chatList)
+    
 
     return new Response()
   }

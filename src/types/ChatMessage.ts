@@ -9,13 +9,13 @@ interface Delivering {
   read?: number
 }
 
-type MessageType = 'new' | 'edit' | 'delete' | 'call'
+export type MessageType = 'new' | 'edit' | 'delete' | 'call'
 
-type EditPayload = {
+export type EditPayload = {
   originalMessageId: number
 }
 
-type DeletionPayload = {
+export type DeletionPayload = {
   originalMessageId: number
 }
 
@@ -30,8 +30,9 @@ export interface StoredDialogMessage {
   replyTo?: ReplyTo
   forwardedFrom?: ForwardedFrom
   
-  type?: nw | edit | dlt
-  payload?:  DeletionPayload
+  type?: MessageType
+  payload?:  EditPayload | DeletionPayload
+  
   
   createdAt: number
   updatedAt?: number
@@ -48,10 +49,9 @@ export interface DialogMessage {
   replyTo?: ReplyTo
   forwardedFrom?: ForwardedFrom
   
-  read?: number // deprecated
-  dlvrd?: number // depracted
-  
   status?: MessageStatus
+  
+  
   type?: nw | dlt | edit
 
   createdAt: number

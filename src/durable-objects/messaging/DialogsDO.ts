@@ -581,6 +581,8 @@ messages in storage: ${this.#counter},
       clientMessageId: message.clientMessageId,
       timestamp,
       missed: this.missedFor(receiverId),
+      replyTo: message.replyTo,
+      forwardedFrom: message.forwardedFrom
     }
     const body = JSON.stringify(event)
     const resp = await receiverDO.fetch(

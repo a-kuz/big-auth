@@ -178,5 +178,8 @@ nfs
 smol-specs
 .aider*
 log.txt
-# docs
+
 env
+.DS_Store
+*.DS_Store
+src/types/.DS_Store

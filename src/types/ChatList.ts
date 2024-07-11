@@ -2,12 +2,12 @@ import { AttachmentType } from './Attachment'
 
 export type ChatType = 'dialog' | 'group' | 'channel' | 'favorites' | 'ai'
 
-export type MessageStatus = 'read' | 'unread' | 'undelivered' | 'deleted'
+.
 
 export interface ChatListItem {
   type: ChatType
   id: string
-  photoUrl?: string // необязательное поле
+  photoUrl?: string // optional field
   name: string
   lastMessageId: number
   lastMessageText?: string

@@ -15,7 +15,14 @@ export class FindContactsHandler extends Route {
     summary: 'Find contacts by phone numbers',
     tags: ['contacts'],
     requestBody: z.object({
-      phoneNumbers: z.array(z.string().startsWith('+').openapi({ example: '+99990123443' })),
+      contacts: z.array(
+        z.object({
+          phoneNumber: new Str({ example: '+79333333333' }),
+
+          firstName: new Str({ required: false, example: 'Aleksandr' }),
+          lastName: new Str({ required: false, example: 'Ivanov' }),
+        }),
+      ),
     }),
     responses: {
       '200': {
@@ -54,7 +61,7 @@ export class FindContactsHandler extends Route {
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
         headers: { 'Cache-Control': 'max-age=20', ...request.headers },
-				method: 'GET'
+        method: 'GET',
       })
       const resp = await cache.match(cacheKey)
       if (resp) return resp
@@ -70,10 +77,9 @@ export class FindContactsHandler extends Route {
           'Content-Type': 'application/json',
         },
       })
-			await putContacts(env.user, phoneNumbers, contacts, env)
+      await putContacts(env.user, phoneNumbers, contacts, env)
       context.waitUntil(
         Promise.all([
-
           cache.put(
             cacheKey,
             new Response(responseBody, {
@@ -85,7 +91,6 @@ export class FindContactsHandler extends Route {
           ),
         ]),
       )
-
 
       return response
     } catch (error) {

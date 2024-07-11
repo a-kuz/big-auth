@@ -348,13 +348,12 @@ export class UserMessagingDO implements DurableObject {
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
 
-    this.toQ(eventData, chatData.name, chatData.photoUrl)
     if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
         lastMessageText: messagePreview(eventData.message),
-
+        
         name: chatData.name,
         type: chatType(chatId),
         verified: false,
@@ -368,6 +367,7 @@ export class UserMessagingDO implements DurableObject {
       const chat = this.cl.toTop(chatId, chatChanges)
       if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
       this.cl.chatList.unshift(chat)
+      this.toQ(eventData, chatData.name, chatData.photoUrl)
       await this.cl.save()
     }
 

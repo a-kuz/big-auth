@@ -196,8 +196,6 @@ export class UserMessagingDO implements DurableObject {
   }
 
   async debugHandler(request: Request) {
-    
-    
     if (this.env.ENV === 'production') return
     const keys = await this.state.storage.list()
     const result = {}
@@ -207,8 +205,7 @@ export class UserMessagingDO implements DurableObject {
       result[key] = value
     }
 
-    return new Response(DebugWrapper.returnBigResult(result, 0) )
-
+    return new Response(DebugWrapper.returnBigResult(result, 0))
   }
   async newHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
@@ -420,7 +417,10 @@ export class UserMessagingDO implements DurableObject {
     if (!eventData.message) return
 
     // Count the number of chats with missed messages > 0
-    const missedCount = this.cl.chatList.reduce<number>((p, c, i, a) => p + (c.missed ?? 0), 0)
+    const missedCount = this.cl.chatList.reduce<number>(
+      (p, c, i, a) => p + Math.max(c.missed ?? 0, 0),
+      0,
+    )
 
     const push: PushNotification = {
       event: eventData,

@@ -15,19 +15,20 @@ async function delay(ms: number) {
       Date.now() > ex
     },
     {
-      timeout: ms + 500, // default is 1000
+      timeout: ms, // default is 1000
       interval: 20, // default is 50
     },
   )
 
   return new Promise(resolve => setTimeout(resolve, ms))
 }
-const s = ''
-const domain = 'localhost:8787'
+const s = 's'
+// const domain = 'localhost:8787'
+const domain = 'dev.iambig.ai'
 const baseUrl = `http${s}://${domain}`
 const wsUrl = `ws${s}://${domain}/websocket`
 
-describe('Chat Missed Tests', () => {
+describe('Chat Missed Tests', { timeout: 30000 }, () => {
   const randomPhoneNumber1 = `+999${Math.floor(Math.random() * 1000000)}`
   const randomPhoneNumber2 = `+999${Math.floor(Math.random() * 1000000)}`
 
@@ -41,23 +42,28 @@ describe('Chat Missed Tests', () => {
   let ws2: WebSocket
 
   beforeAll(async () => {
-
-    const { accessToken, id } = await verifyCode(randomPhoneNumber2, '000000')
+    const vcResp1 = await verifyCode(randomPhoneNumber1, '000000');
+    const vcResp2 = await verifyCode(randomPhoneNumber2, '000000');
+    console.log('vcResp', vcResp1, vcResp2);
+    const { accessToken, id } = vcResp2
     user2Jwt = accessToken
     user2Id = id
-    const { accessToken: acc1, id: id1 } = await verifyCode(randomPhoneNumber1, '000000')
+    const { accessToken: acc1, id: id1 } = vcResp1
     user1Jwt = acc1
     user1Id = id1
+    await delay(1000) // wait for user to be created in db
     ws1 = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${user1Jwt}` } })
     ws2 = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${user2Jwt}` } })
     await new Promise(resolve => ws1.on('open', resolve))
     await new Promise(resolve => ws2.on('open', resolve))
+    ws1.on('message', (m)=>console.log(m.toString()))
+    ws2.on('message', (m)=>console.log(m.toString()))
     env = {
       ORIGIN: baseUrl,
       user: new User(user1Id, randomPhoneNumber1),
       // other env variables
     }
-  })
+  }, 60000)
 
   afterAll(() => {
     ws1.close()
@@ -70,18 +76,18 @@ describe('Chat Missed Tests', () => {
     async () => {
       await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
       expect((await getChatList(user1Jwt)).find(chat => chat.id === user2Id)?.missed).toBe(0)
-      
+
       await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(1)
-      
+
       await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(2)
-      
+
       await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(3)
 
-      ws2.send(JSON.stringify({ id: nanoid(), type: "request", payloadType: 'read', payload: { chatId: user1Id } }))
-      await delay(200)
+      read(ws2, user1Id)
+      await delay(2000)
 
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(0)
 
@@ -96,9 +102,30 @@ describe('Chat Missed Tests', () => {
       expect((await getChatList(user1Jwt)).find(chat => chat.id === user2Id)?.missed).toBe(2)
       
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(0)
+      read(ws1, user2Id)
+      await delay(2000)
+      expect((await getChatList(user1Jwt)).find(chat => chat.id === user2Id)?.missed).toBe(0)
+      await sendMessage(user2Jwt, user1Id, 'Hello, User1!')
+      await sendMessage(user2Jwt, user1Id, 'Hello, User1!')
+      await sendMessage(user2Jwt, user1Id, 'Hello, User1!')
+      await sendMessage(user2Jwt, user1Id, 'Hello, User1!')
+      expect((await getChatList(user1Jwt)).find(chat => chat.id === user2Id)?.missed).toBe(4)
+      await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
+      expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(1)
     },
   )
 })
+
+function read(ws: WebSocket, chatId: string) {
+  ws.send(
+    JSON.stringify({
+      id: nanoid(),
+      type: 'request',
+      payloadType: 'read',
+      payload: { chatId },
+    })
+  )
+}
 
 async function verifyCode(phoneNumber: string, code: string) {
   const response = await fetch(`${baseUrl}/verify-code`, {

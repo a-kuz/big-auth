@@ -118,4 +118,5 @@ export interface CloseCallRequest {
   userIdCreateCall: string
   participantsInvited: string[]
   participantsConnected: string[]
+  callDuration: number
 }

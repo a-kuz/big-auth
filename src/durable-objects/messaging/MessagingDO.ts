@@ -33,6 +33,7 @@ import { Dialog, Group } from '~/types/Chat'
 import { encrypt } from '~/utils/crypto'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
+  CloseCallEvent,
   InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
@@ -181,6 +182,8 @@ export class MessagingDO extends DurableObject {
             return this.newChatEventHandler(request)
           case 'newCall':
             return this.newCallEventHandler(request)
+          case 'closeCall':
+            return this.newCallEventHandler(request)
           case 'deleteChat':
             return this.newChatEventHandler(request)
           case 'new':
@@ -296,6 +299,11 @@ export class MessagingDO extends DurableObject {
   async newCallEventHandler(request: Request) {
     const eventData = await request.json<NewCallEvent>()
     await this.wsService.toBuffer('newCall', eventData)
+    return new Response()
+  }
+  async closeCallEventHandler(request: Request) {
+    const eventData = await request.json<CloseCallEvent>()
+    await this.wsService.toBuffer('closeCall', eventData)
     return new Response()
   }
   async updateChatEventHandler(request: Request) {

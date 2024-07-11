@@ -14,14 +14,15 @@ import {
   NewMessageRequest,
 } from '~/types/ws/client-requests'
 import {
-  InternalEvent,
-  InternalEventType,
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  NewCallEvent,
-  NewGroupMessageEvent,
-  Timestamp,
-  UserId,
+  CloseCallEvent,
+	InternalEvent,
+	InternalEventType,
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	NewCallEvent,
+	NewGroupMessageEvent,
+	Timestamp,
+	UserId
 } from '~/types/ws/internal'
 import { DeleteResponse, MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { writeErrorLog } from '~/utils/serialize-error'
@@ -312,6 +313,15 @@ export class GroupChatsDO extends DebugWrapper {
       createdAt: this.#call.createdAt,
     }
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
+  }
+  async closeCall(callId: string,ownerCallId:string) {
+    this.#call = undefined
+    await this.#storage.put('call', this.#call)
+    const _closeCall: CloseCallEvent = {
+      chatId: this.#id,
+      callId
+    }
+    await this.broadcastEvent('closeCall', { ..._closeCall }, ownerCallId)
   }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }

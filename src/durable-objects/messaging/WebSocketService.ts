@@ -139,7 +139,7 @@ export class WebSocketGod {
   async handleClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     console.log(JSON.stringify({ f: 'webSocketClose', code, reason, wasClean }))
 
-    await this.onlineService.offline()
+    this.state.waitUntil(this.onlineService.offline())
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {

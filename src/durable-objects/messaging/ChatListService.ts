@@ -19,11 +19,13 @@ export class ChatListService {
   ) {
     this.#storage = state.storage
 
-    state.blockConcurrencyWhile(async () => this.initialize())
+    // state.blockConcurrencyWhile(async () => this.initialize())
   }
 
-  private async initialize() {
+  async initialize() {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
+    await this.contacts.initialize();
+    await this.contacts.loadChatList();
   }
 
   async save() {

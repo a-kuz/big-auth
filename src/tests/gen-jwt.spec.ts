@@ -6,11 +6,11 @@ import { describe, mock } from 'node:test'
 
 describe('JWT Generation by Phone Number', () => {
   const secret = 'secret'
-  const phoneNumber = '+381628236325'
+  const phoneNumber = '+79220700340'
 
   it('should generate a valid JWT token', async () => {
     const data = {
-      id: 'r2fFDpR0nQgqfRJLKvyMU',
+      id: 'KpQy-we5yBKYxYP0UJG6T',
       phoneNumber: phoneNumber,
     }
 

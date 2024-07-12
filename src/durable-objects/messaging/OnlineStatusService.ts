@@ -202,7 +202,7 @@ export class OnlineStatusService {
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
     
-    await this.processOutgoingStatusQueue()
+    await this.processOutgoingStatusQueue(100)
   }
 
   async setUserId(id: string) {

@@ -22,7 +22,8 @@ export class ContactsManager {
     private cl: ChatListService,
     private onlineService: OnlineStatusService,
   ) {
-    state.blockConcurrencyWhile(() => this.initialize())
+    // state.blockConcurrencyWhile(() => this.initialize())
+    // INIT FROM CHATLISTSERVICEs
   }
 
   async initialize(): Promise<void> {
@@ -32,10 +33,8 @@ export class ContactsManager {
     for (const chat of this.cl.chatList) {
       if (chatType(chat.id) === 'dialog') {
         if (this.#contacts.some(c => c.id === chat.id)) continue
-        const contact = await getUserById(this.env.DB, chat.id)
-        if (contact) {
-          this.#contacts.push(contact)
-        }
+        const contact = await this.contact(chat.id)
+        
       }
     }
   }
@@ -96,6 +95,7 @@ export class ContactsManager {
 
   async patchChat(chatId: string, chat: Group | Dialog) {
     let result = chat
+    if (chatId === 'AI') return chat 
     if (isGroup(chatId)) {
       ;(result.meta as GroupMeta).participants = await Promise.all(
         (result.meta as GroupMeta).participants.map((e: Profile) => this.patchProfile(e)),
@@ -108,14 +108,16 @@ export class ContactsManager {
   }
 
   async updateContacts(contacts: Profile[]): Promise<void> {
+    if (!contacts) return
     const updatedContacts = contacts
       .map(contact => {
-        const prevContact = this.#contacts.find(c => c.phoneNumber === contact.phoneNumber)
+        const prevContact = this.#contacts.find(c => c.phoneNumber === contact.phoneNumber && c.id) || this.#contacts.find(c => c.phoneNumber === contact.phoneNumber )
         return { ...contact, prevContact }
       })
       .filter(
-        ({ lastName, firstName, prevContact, avatarUrl }) =>
+        ({ lastName, firstName, prevContact, avatarUrl, id }) =>
           !prevContact ||
+          !id ||
           prevContact.lastName !== lastName ||
           prevContact.firstName !== firstName ||
           prevContact.avatarUrl !== avatarUrl,
@@ -127,6 +129,7 @@ export class ContactsManager {
           firstName: contact.firstName || prevContact?.firstName,
           lastName: contact.lastName || prevContact?.lastName,
           avatarUrl: contact.avatarUrl || prevContact?.avatarUrl,
+          id: prevContact?.id || contact.id,
         }
       })
 
@@ -203,7 +206,20 @@ export class ContactsManager {
   }
   private async load() {
     this.#contacts = [
-      ...((await this.state.storage.list<Profile[]>({ prefix: 'contact-' })).values() || []),
-    ].flat()
+      ...([...(await this.state.storage.list<Profile[]>({ prefix: 'contact-' })).values()] || []),
+    ]
+      .flat()
+      .filter(c => {
+        if (!c.id && this.#contacts.find(c2 => c2.phoneNumber === c.phoneNumber && c2.id)) {
+          return false
+        }
+        if (
+          c.id &&
+          this.#contacts.findLast(c2 => c2.id === c.id && c2.phoneNumber === c.phoneNumber) !== c
+        ) {
+          return false
+        }
+        return true
+      })
   }
 }

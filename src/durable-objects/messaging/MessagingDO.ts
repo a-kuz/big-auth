@@ -52,6 +52,7 @@ import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export class MessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -62,6 +63,7 @@ export class MessagingDO implements DurableObject {
   private cl!: ChatListService
   private wsService!: WebSocketGod
   private contacts!: ContactsManager
+  #messageCounter: any
 
   constructor(
     private readonly state: DurableObjectState,
@@ -74,11 +76,15 @@ export class MessagingDO implements DurableObject {
       this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
       this.wsService.onlineService = this.onlineService
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
-      this.contacts = new ContactsManager(this.env, this.state, this.profileService, this.cl, this.onlineService)
+      this.contacts = new ContactsManager(
+        this.env,
+        this.state,
+        this.profileService,
+        this.cl,
+        this.onlineService,
+      )
       this.cl.contacts = this.contacts
-    })
-    this.state.blockConcurrencyWhile(async () => {
-      await this.contacts.loadChatList()
+      await this.cl.initialize()
     })
   }
 
@@ -280,7 +286,9 @@ export class MessagingDO implements DurableObject {
     return new Response()
   }
   async updateChatEventHandler(request: Request) {
-    return new Response(JSON.stringify(this.cl.updateChat((await request.json() as UpdateChatInternalEvent))))
+    return new Response(
+      JSON.stringify(this.cl.updateChat((await request.json()) as UpdateChatInternalEvent)),
+    )
   }
   async deleteEventHandler(request: Request) {
     const eventData = await request.json<DeleteEvent>()
@@ -394,8 +402,8 @@ export class MessagingDO implements DurableObject {
       this.cl.chatList.unshift(chat)
       if (isGroup(chatId)) {
         const contact = await this.contacts.contact(eventData.sender)
-        
-        eventData.senderName = displayName(contact) 
+
+        eventData.senderName = displayName(contact)
       }
       this.toQ(eventData, name, chatData.photoUrl)
       await this.cl.save()
@@ -425,10 +433,14 @@ export class MessagingDO implements DurableObject {
 
   private async updateContactsHandler(request: Request) {
     const updatedContacts = await request.json<Profile[]>()
-    await this.contacts.updateContacts(updatedContacts)
+    try {
+      await this.contacts.updateContacts(updatedContacts)
+    } catch (e) {
+      await writeErrorLog(e)
+    }
     return new Response()
   }
-  private async contactsHandler(request: Request) {    
+  private async contactsHandler(request: Request) {
     const contacts = await this.contacts.bigUsers()
     return new Response(JSON.stringify(contacts))
   }
@@ -460,14 +472,14 @@ export class MessagingDO implements DurableObject {
       (prev, curr) => prev + Math.max(curr.missed ?? 0, 0),
       0,
     )
-    
+
     const push: PushNotification = {
       event: eventData,
       deviceToken: this.#deviceToken,
       body: eventData.message,
       title,
       imgUrl,
-      subtitle:eventData.senderName,
+      subtitle: eventData.senderName,
       badge: missedCount,
       threadId: eventData.chatId,
       category: 'message',
@@ -583,8 +595,9 @@ export class MessagingDO implements DurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    console.log(message)
-    
+    if (this.#messageCounter++ % 100 === 0)
+      console.log(`user ${this.#userId} take ${this.#messageCounter} messages`)
+
     this.wsService.handlePacket(ws, message, this)
   }
 
@@ -615,7 +628,6 @@ export class MessagingDO implements DurableObject {
 
   async wsRequest(type: ClientRequestType, request: ClientRequestPayload): Promise<void | Object> {
     let response: ServerResponsePayload = {}
-    console.log('wsRequest: ', JSON.stringify({ type, request }))
 
     switch (type) {
       case 'new':
@@ -633,13 +645,20 @@ export class MessagingDO implements DurableObject {
         response = await this.getChatsRequest(request as GetChatsRequest)
         return response
       case 'chat':
-        response = await this.chatStorage((request as GetChatRequest).chatId).chat(this.#userId)
+        response = await this.chatRequest(response, request)
         return response
 
       case 'messages':
         response = await this.getMessagesRequest(request as GetMessagesRequest)
         return response
     }
+  }
+
+  private async chatRequest(response: ServerResponsePayload, request: ClientRequestPayload) {
+    const chat = (await this.chatStorage((request as GetChatRequest).chatId).chat(this.#userId)) as
+      | Dialog
+      | Group
+    return await this.contacts.patchChat(chat.chatId, chat)
   }
 
   async getChatsRequest(payload: GetChatsRequest): Promise<ChatList> {

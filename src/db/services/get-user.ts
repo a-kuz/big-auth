@@ -5,6 +5,7 @@ import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
 import { CustomError } from '~/errors/CustomError'
 import { serializeError } from 'serialize-error'
+import { PhoneBook } from '../../types/PhoneBook'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -51,8 +52,6 @@ export const getUserById = async (
     throw error
   }
 }
-export type PhoneBookItem = { phoneNumber: string; firstName?: string; lastName?: string }
-export type PhoneBook = PhoneBookItem[]
 export const getUsersByPhoneNumbers = async (
   d1: D1Database,
   phoneBook: PhoneBook,

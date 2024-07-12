@@ -1,9 +1,10 @@
 import { Profile, ProfileWithLastSeen, User, UserDB } from '~/db/models/User'
-import { PhoneBook } from '~/db/services/get-user'
+
 import { OnlineStatus, UNKNOWN_LAST_SEEN } from '~/durable-objects/messaging/OnlineStatusService'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
+import { PhoneBook, PhoneBookItem } from '~/types/PhoneBook'
 import { digest } from '~/utils/digest'
 import { ObjectSnakeToCamelCase, fromSnakeToCamel } from '~/utils/name-сases'
 import { newId } from '~/utils/new-id'
@@ -28,17 +29,23 @@ type pRow = {
   row_fingerprint: string
 }
 
-export async function putContacts(
-  user: User,
-  phoneNumbers: PhoneBook,
-  contacts: Profile[],
-  env: Env,
-) {
+export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Profile[], env: Env) {
+  const phoneBookWithIds: Profile[] = phoneNumbers
+    .map((pn: PhoneBookItem) => {
+      const contact = users.find(c => c.phoneNumber === pn.phoneNumber)
+      if (!contact) return undefined
+      return {
+        ...contact,
+        ...pn,
+      }
+    })
+    .filter(e => !!e)
+
   const userMessagingDO = userStorage(env, user.id)
   await userMessagingDO.fetch(
     new Request(`${env.ORIGIN}/${user.id}/client/request/updateContacts`, {
       method: 'POST',
-      body: JSON.stringify(phoneNumbers),
+      body: JSON.stringify(phoneBookWithIds),
     }),
   )
 
@@ -54,18 +61,22 @@ export async function putContacts(
     existing = []
   }
 
-  const updatedNumbers = phoneNumbers.filter(
-    pn => !existing.some(e => e.row_fingerprint === pn.phoneNumber + pn.firstName + pn.lastName),
+  const changed = phoneNumbers.filter(pn =>
+    existing.some(e => e.row_fingerprint !== contactFingerprint(pn) && e.phone_number2 = pn.phoneNumber),
   )
 
-  const existingNumbers = phoneNumbers.filter(pn =>
-    existing.find(e => e.phone_number2 === pn.phoneNumber),
+  const newNumbers = phoneNumbers.filter(pn =>
+    !existing.find(
+      e => e.phone_number2 === pn.phoneNumber
+    ),
   )
+
+  
   const chunkSize = 10
-  for (let i = 0; i < existingNumbers.length; i += chunkSize) {
-    const chunk = existingNumbers.slice(i, i + chunkSize)
+  for (let i = 0; i < changed.length; i += chunkSize) {
+    const chunk = changed.slice(i, i + chunkSize)
     const deleteQuery = `
-      DELETE FROM phone_numbers
+      UPDATE phone_numbers 
       WHERE phone_number1 = ? AND phone_number2 IN (${chunk.map(() => '?').join(', ')})
     `
     try {
@@ -78,15 +89,14 @@ export async function putContacts(
       throw error
     }
   }
-  for (let i = 0; i < updatedNumbers.length; i += chunkSize) {
-    const chunk = updatedNumbers.slice(i, i + chunkSize)
+  for (let i = 0; i < changed.length; i += chunkSize) {
+    const chunk = changed.slice(i, i + chunkSize)
     const values = chunk
       .map(
         pn =>
           `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}', '${(pn.phoneNumber ?? '') + (pn.firstName ?? '') + (pn.lastName ?? '')}')`,
       )
       .join(', ')
-    
 
     const chunkInsertQuery = `
       INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name, row_fingerprint)
@@ -100,6 +110,10 @@ export async function putContacts(
       throw error
     }
   }
+}
+
+function contactFingerprint(pn: PhoneBookItem) {
+  return pn.phoneNumber + (pn.firstName ?? '') + (pn.lastName ?? '') + (pn.avatar_url ?? '')
 }
 
 export async function createContact(env: Env, contact: any) {
@@ -169,7 +183,7 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
     SELECT u.id,
            CASE WHEN COALESCE(pn.first_name, '') = '' THEN u.first_name ELSE pn.first_name END AS first_name,
            CASE WHEN COALESCE(pn.last_name, '') = '' THEN u.last_name ELSE pn.last_name END AS last_name,
-           u.avatar_url,
+           CASE WHEN COALESCE(pn.avatar_url, '') = '' THEN u.avatar_url ELSE pn.avatar_url END AS avatar_url,
            u.phone_number,
            u.username,
            u.created_at,

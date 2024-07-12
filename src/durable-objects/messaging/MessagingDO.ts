@@ -282,7 +282,9 @@ export class MessagingDO implements DurableObject {
     this.cl.chatList[index].photoUrl = photoUrl
     await this.wsService.toBuffer('chats', this.cl.chatList)
     await this.cl.save()
-
+    if (!isGroup(chatId)) {
+      this.contacts.invalidateCache(chatId)
+    }
     return new Response()
   }
   async deleteEventHandler(request: Request) {

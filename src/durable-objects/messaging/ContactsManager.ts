@@ -1,14 +1,12 @@
 import { DurableObjectState } from '@cloudflare/workers-types'
-import { Contact } from '~/services/contacts'
 import { Profile } from '~/db/models/User'
-import { displayName } from '~/services/display-name'
 import { getUserById } from '~/db/services/get-user'
-import { env } from 'process'
 import { Env } from '~/types/Env'
 
 export class ContactsManager {
   #contacts: Profile[] = []
   #usersCache = new Map<string, Profile>()
+  #profileCache = new Map<string, Profile>()
 
   constructor(
     private env: Env,
@@ -38,7 +36,6 @@ export class ContactsManager {
       await this.updateContacts([contact])
     }
 
-    
     return contact as Profile
   }
 
@@ -49,11 +46,20 @@ export class ContactsManager {
       id: profile.id || contact.id,
     }
   }
+
+  invalidateCache(userId: string) {
+    this.#usersCache.delete(userId)
+    this.#profileCache.delete(userId)
+  }
   async patch(profile: Profile) {
+    const alreaydCached = this.#profileCache.get(profile.id)
+    if (alreaydCached) {
+      return alreaydCached
+    }
+
     let contact = this.#contacts.find(contact => contact.phoneNumber === profile.phoneNumber)
     if (contact) {
       return this.merge(profile, contact)
-    
     }
     contact = await this.contact(profile.id)
     if (contact) {
@@ -61,16 +67,18 @@ export class ContactsManager {
       await this.updateContacts([contact])
       return this.merge(profile, contact)
     }
+
+    return profile
   }
 
   async getContacts(): Promise<Profile[]> {
     const contacts: Profile[] = []
-    const stored = await this.state.storage.list<Profile[]>({ prefix: 'contact-' })
-
-    for (const [, chunk] of stored) {
-      contacts.push(...chunk)
+    for (let i = 0; i < 10; i++) {
+      const chunk = await this.state.storage.get<Profile[]>(`contact-${i}`)
+      if (chunk) {
+        contacts.push(...chunk)
+      }
     }
-
     return contacts
   }
 
@@ -81,22 +89,33 @@ export class ContactsManager {
 
     const newContacts = this.#contacts.map(contact => {
       const updatedContact = updatedContactsMap.get(contact.phoneNumber)
+      for (const contact of updatedContacts) {
+        this.invalidateCache(contact.id);
+      }
       return updatedContact ? { ...contact, ...updatedContact } : contact
-    })
+    });
+
+    const contactsByBlock = new Map<number, Profile[]>()
+    for (const contact of newContacts) {
+      const block = this.getBlock(contact.phoneNumber)
+      if (!contactsByBlock.has(block)) {
+        contactsByBlock.set(block, [])
+      }
+      contactsByBlock.get(block)!.push(contact)
+    }
 
     await this.state.storage.transaction(async () => {
-      await this.state.storage.delete([
-        ...(await this.state.storage.list({ prefix: 'contact-' })).keys(),
-      ])
-
-      const CHUNK_SIZE = 100
-      for (let i = 0; i < newContacts.length; i += CHUNK_SIZE) {
-        const chunk = newContacts.slice(i, i + CHUNK_SIZE)
-        const key = `contact-${Math.floor(i / CHUNK_SIZE)}`
-        await this.state.storage.put(key, chunk)
+      for (const [block, contacts] of contactsByBlock) {
+        const key = `contact-${block}`
+        await this.state.storage.put(key, contacts)
       }
-
       this.#contacts = newContacts
     })
+  }
+  private getBlock(phoneNumber: string): number {
+    const hash = Array.from(phoneNumber).reduce((hash, char) => {
+      return hash + char.charCodeAt(0)
+    }, 0)
+    return hash % 10
   }
 }

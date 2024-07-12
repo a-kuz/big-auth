@@ -46,6 +46,7 @@ import { OnlineStatusService } from './OnlineStatusService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, fingerprintDO, userStorage } from './utils/mdo'
 import { ProfileService } from './ProfileService'
+import { ContactsManager } from './ContactsManager'
 import { Profile } from '~/db/models/User'
 import { ChatListService } from './ChatListService'
 import { messagePreview } from './utils/message-preview'
@@ -63,6 +64,8 @@ export class MessagingDO implements DurableObject {
   private onlineService!: OnlineStatusService
   private profileService!: ProfileService
   private cl!: ChatListService
+  private contacts!: ContactsManager;
+
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
@@ -75,6 +78,7 @@ export class MessagingDO implements DurableObject {
       this.wsService.onlineService = this.onlineService
 
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
+      this.contacts = new ContactsManager(this.env, this.state);
     })
   }
 

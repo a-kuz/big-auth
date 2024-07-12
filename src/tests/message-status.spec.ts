@@ -1,14 +1,12 @@
-import { beforeAll, describe, expect, it, Context, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-
-import { BlinkHandler } from '../handlers/BlinkHandler'
-import { Env } from '../types/Env'
 import { User } from '../db/models/User'
 import { ChatList } from '../types/ChatList'
-import { DataOf } from '@cloudflare/itty-router-openapi'
+import { Env } from '../types/Env'
 
-import { infer } from 'zod'
 import { GetMessagesResponse } from '../types/ws/client-requests'
+import { nanoid } from 'nanoid'
+import { WebSocket } from 'ws'
 
 async function delay(ms: number) {
   const ex = Date.now() + ms
@@ -24,7 +22,11 @@ async function delay(ms: number) {
 
   return new Promise(resolve => setTimeout(resolve, ms))
 }
-const baseUrl = 'https://dev.iambig.ai'
+const s = ''
+const domain = 'localhost:8787'
+// const domain = 'dev.iambig.ai'
+const baseUrl = `http${s}://${domain}`
+const wsUrl = `ws${s}://${domain}/websocket`
 
 describe('Message Status Tests', () => {
   const randomPhoneNumber1 = `+999${Math.floor(Math.random() * 1000000)}`
@@ -36,6 +38,10 @@ describe('Message Status Tests', () => {
   let user1Id: string
   let user2Id: string
 
+  let ws1: WebSocket
+  let ws2: WebSocket
+
+  
   beforeAll(async () => {
     // Get JWTs for user1 and user2
 
@@ -45,9 +51,9 @@ describe('Message Status Tests', () => {
     const { accessToken: acc1, id: id1 } = await verifyCode(randomPhoneNumber1, '000000')
     user1Jwt = acc1
     user1Id = id1
-    // Extract user IDs from JWTs
+    
 
-    // Initialize environment
+  
     env = {
       ORIGIN: baseUrl,
       user: new User(user1Id, randomPhoneNumber1),
@@ -116,13 +122,13 @@ describe('Message Status Tests', () => {
         body: JSON.stringify(messageBody2),
       })
 
-      // User1 marks delivery
-      env.user!.id = user1Id
-      await fetch(`${baseUrl}/blink`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${user1Jwt}` },
-      })
-      // await delay(1000)
+      ws1 = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${user1Jwt}` } })
+      ws2 = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${user2Jwt}` } })
+      await new Promise(resolve => ws1.on('open', resolve))
+      await new Promise(resolve => ws2.on('open', resolve))
+      ws1.on('message', (m)=>console.log(m.toString()))
+      ws2.on('message', (m)=>console.log(m.toString()))
+      await delay(1000)
 
       // Check status on User1 side in chat list
       chatList = await getChatList(user1Jwt)
@@ -131,14 +137,25 @@ describe('Message Status Tests', () => {
       // Check status on User2 side in chat list
       chatList = await getChatList(user2Jwt)
       expect(chatList.find(chat => chat.id === user1Id)?.lastMessageStatus).toBe('unread')
-
+      await delay(1000)
       // Check status on User1 side in messages
       messages = await getMessages(user2Jwt, user1Id)
+      
       expect(messages[1].status).toBe('unread')
+      read(ws2, user1Id)
+      
+      await delay(4000)
+      
+      messages = await getMessages(user1Jwt, user2Id)
+      console.log(messages)
+      expect(messages[0].status).toBe('read')
+      read(ws1, user2Id)
+      messages = await getMessages(user2Jwt, user1Id)
+      console.log(messages)
+      expect(messages[1].status).toBe('read')
     },
   )
 })
-
 
 async function verifyCode(phoneNumber: string, code: string) {
   const response = await fetch(`${baseUrl}/verify-code`, {
@@ -149,7 +166,6 @@ async function verifyCode(phoneNumber: string, code: string) {
   const data = await response.json()
   return { accessToken: data.accessToken, id: data.profile.id }
 }
-
 
 async function getChatList(jwt: string): Promise<ChatList> {
   const response = await fetch(`${baseUrl}/chats`, {
@@ -165,5 +181,16 @@ async function getMessages(jwt: string, chatId: string): Promise<any[]> {
     method: 'GET',
     headers: { Authorization: `Bearer ${jwt}` },
   })
-  return (await response.json() as GetMessagesResponse).messages
+  return ((await response.json()) as GetMessagesResponse).messages
+}
+
+function read(ws: WebSocket, chatId: string) {
+  ws.send(
+    JSON.stringify({
+      id: nanoid(),
+      type: 'request',
+      payloadType: 'read',
+      payload: { chatId },
+    })
+  )
 }

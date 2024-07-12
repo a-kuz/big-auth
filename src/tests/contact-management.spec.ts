@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import axios from 'axios'
 
-const baseUrl = 'https://dev.iambig.ai'
+const s = ''
+const domain = 'localhost:8787'
+const baseUrl = `http${s}://${domain}`
+const wsUrl = `ws${s}://${domain}/websocket`
 let accessToken: string
 
 beforeAll(async () => {

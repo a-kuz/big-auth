@@ -2,24 +2,25 @@ import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
-import { Group } from '~/types/Chat'
+import { Call, Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
-	GetMessagesRequest,
-	GetMessagesResponse,
-	MarkDeliveredRequest,
-	MarkReadRequest,
-	NewMessageRequest,
+  GetMessagesRequest,
+  GetMessagesResponse,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
 } from '~/types/ws/client-requests'
 import {
-	InternalEvent,
-	InternalEventType,
-	MarkDeliveredInternalEvent,
-	MarkReadInternalEvent,
-	NewGroupMessageEvent,
-	Timestamp,
-	UserId
+  InternalEvent,
+  InternalEventType,
+  MarkDeliveredInternalEvent,
+  MarkReadInternalEvent,
+  NewCallEvent,
+  NewGroupMessageEvent,
+  Timestamp,
+  UserId,
 } from '~/types/ws/internal'
 import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { writeErrorLog } from '~/utils/serialize-error'
@@ -45,7 +46,7 @@ export class GroupChatsDO extends DebugWrapper {
   #id: string = ''
   #counter = 0
   #users: Profile[] = []
-
+  #call?: Call
   #storage!: DurableObjectStorage
   #lastRead = new Map<string, number>()
   #outgoingEvets: OutgoingEvent[] = []
@@ -208,7 +209,7 @@ export class GroupChatsDO extends DebugWrapper {
     const keys = [...Array(this.#counter).keys()].map(i => `message-${i}`)
     this.#counter = -1
     const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
-
+    this.#call = await this.#storage.get<Call>('call')
     for (const chunk of keyChunks) {
       const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
       for (const key of messagesChunk.keys()) {
@@ -262,16 +263,28 @@ export class GroupChatsDO extends DebugWrapper {
       photoUrl: this.group?.photoUrl,
       type: 'group',
       meta: { ...this.group.meta, participants: this.#users },
-      missed: Math.max(this.#counter - (this.#lastRead.get(userId) || 0) - 1, 0),
+      ...this.missedFor(userId),
       lastMessageText: lastMessage?.message,
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,
       lastMessageStatus: this.messageStatus(lastMessage),
       isMine: userId === lastMessage?.sender,
       name: this.group?.name,
+      call: this.#call,
     }
 
     return chat
+  }
+
+  private missedFor(userId: string) {
+    const missed = Math.max(this.#counter - (this.#lastRead.get(userId) || 0) - 1, 0)
+    if (!missed) {
+      return { missed }
+    }
+    const lastMessage = this.#messages.length ? this.#messages.slice(-1)[0] : undefined
+    if (!lastMessage) return { missed }
+    const firstMissed = this.#messages[lastMessage.messageId - missed + 1].clientMessageId
+    return { missed, firstMissed }
   }
 
   private messageStatus(lastMessage?: GroupChatMessage): MessageStatus {
@@ -287,7 +300,19 @@ export class GroupChatsDO extends DebugWrapper {
   counter() {
     return this.#messages.length
   }
-
+  async newCall(callId: string, ownerCallId: string) {
+    this.#call = {
+      callId,
+      createdAt: Date.now(),
+    }
+    await this.#storage.put('call', this.#call)
+    const _newCall: NewCallEvent = {
+      chatId: this.#id,
+      callId,
+      createdAt: this.#call.createdAt,
+    }
+    await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
 
@@ -307,6 +332,28 @@ export class GroupChatsDO extends DebugWrapper {
     const senderIds = new Set(messages.map(m => m.sender))
     const authors = this.#users.filter(u => senderIds.has(u.id))
     return { messages, authors }
+  }
+
+  async deleteMessage(request: DeleteMessageRequest): Promise<DeleteMessageResponse> {
+    const { messageId } = request
+    const messageIndex = this.#messages.findIndex(m => m.messageId === messageId)
+    if (messageIndex === -1) {
+      throw new Error(`Message with ID ${messageId} does not exist`)
+    }
+    const message = this.#messages[messageIndex]
+    message.deletedAt = this.timestamp()
+    message.message = undefined
+    message.attachments = undefined
+    await this.#storage.put(`message-${messageId}`, message)
+
+    const deleteMessageEvent = {
+      type: 'delete',
+      payload: { originalMessageId: messageId },
+    }
+
+    await this.broadcastEvent('delete', deleteMessageEvent, request.chatId)
+
+    return { messageId, timestamp: message.deletedAt }
   }
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
@@ -335,7 +382,7 @@ export class GroupChatsDO extends DebugWrapper {
         clientMessageId: request.clientMessageId,
         messageId: message.messageId,
         timestamp,
-        missed: Math.max(this.#counter - (this.#lastRead.get(receiver) || 0), 0),
+        ...this.missedFor(receiver),
       }
       this.#outgoingEvets.push({
         event,
@@ -479,7 +526,7 @@ export class GroupChatsDO extends DebugWrapper {
       chatId: request.chatId,
       messageId,
       timestamp,
-			clientMessageId,
+      clientMessageId,
       missed: Math.max(this.#counter - (this.#lastRead.get(sender) || 0) - 1, 0),
     }
   }
@@ -560,7 +607,6 @@ export class GroupChatsDO extends DebugWrapper {
 
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
   }
-
 
   async updateProfile(profile: Profile) {
     if (!this.#users) return

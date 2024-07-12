@@ -192,34 +192,25 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
     return acc
   }, [])
 
-  const lastSeens: Map<string, number | undefined> = new Map()
-  const promises = []
-  for (const contact of uniqueResults) {
+  
+  const promises = uniqueResults.filter(u=>u.first_name || u.last_name || u.username).map(async contact => {
     const contactFromChatList = chatList.find(chat => chat.id === contact.id)
     if (contactFromChatList) {
-      contact.lastSeen = contactFromChatList.lastSeen;
-      contact.status = contactFromChatList.lastSeen ? 'offline' : 'online';
+      contact.lastSeen = contactFromChatList.lastSeen
+      contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
     } else {
-      
-        const mdo = userStorage(env, contact.id)
-        const lastSeenResponse = await mdo.fetch(
-          new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
-            method: 'POST',
-          }),
-        )
-
-        const lastSeen = await lastSeenResponse.json<OnlineStatus>()
-        if (lastSeen.status === 'offline') {
-          contact.lastSeen = lastSeen.lastSeen
-          contact.status = lastSeen.status
-
-        }
-      
+      const mdo = userStorage(env, contact.id)
+      const lastSeenResponse = await mdo.fetch(
+        new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
+          method: 'POST',
+        }),
+      )
+      const lastSeen = await lastSeenResponse.json<OnlineStatus>()
+      if (lastSeen.status === 'offline') {
+        contact.lastSeen = lastSeen.lastSeen
+        contact.status = lastSeen.status
+      }
     }
-  }
-  // await Promise.all(promises)
-
-  const results = uniqueResults.map(contact => {
     return {
       id: contact.id,
       phoneNumber: contact.phone_number,
@@ -229,11 +220,11 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
       avatarUrl: contact.avatar_url || undefined,
       verified: !!(contact.verified || false),
       lastSeen: contact.lastSeen,
-      staus: contact.status,
-    }
+      status: contact.status,
+    } as ProfileWithLastSeen
   })
 
-  return results.filter(u => u.firstName || u.lastName || u.username)
+  return Promise.all(promises)
 }
 
 export async function getContactById(env: Env, id: string, ownerId: string) {

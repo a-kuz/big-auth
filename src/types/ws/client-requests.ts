@@ -16,7 +16,7 @@ export interface ClientRequest<Type extends ClientRequestType = ClientRequestTyp
     : Type extends edit
       ? EditMessageRequest
       : Type extends dlt
-        ? DeleteMessageRequest
+        ? DeleteRequest
         : Type extends dlvrd
           ? MarkDeliveredRequest
           : Type extends read
@@ -42,15 +42,21 @@ export interface NewMessageRequest {
   message: string
   attachments?: Attachment[]
   clientMessageId: string
-	replyTo?: number
+  replyTo?: number
 }
 
 export interface ReplyTo {
-	messageId: number
-	clientMessageId: string
-	message?: string
-	sender: string
-	createdAt: number
+  messageId: number
+  deletedAt?: number
+  clientMessageId: string
+  message?: string
+  sender: string
+  createdAt: number
+}
+export interface ForwardedFrom {
+  chatId: string
+  messageId: number
+  author: Profile
 }
 export interface GetChatRequest {
   chatId: string
@@ -76,14 +82,15 @@ export interface TypingClientEvent {
 
 export interface EditMessageRequest {
   chatId: string
-  messageId: number
+  originalMessageId: number
+  clientMessageId: string
   message: string
   attachments?: Attachment[]
 }
 
-export interface DeleteMessageRequest {
+export interface DeleteRequest {
   chatId: string
-  messageId: number
+  originalMessageId: number
 }
 
 export interface MarkReadRequest {
@@ -101,4 +108,17 @@ export interface CreateChatRequest {
   name: string
   imgUrl: string
   participants: string[]
+}
+export interface NewCallRequest {
+  chatId: string
+  callId: string
+  userId: string
+  participantsInvited: string[]
+}
+export interface CloseCallRequest {
+  chatId: string
+  callId: string
+  userIdCreateCall: string
+  participantsInvited: string[]
+  participantsConnected: string[]
 }

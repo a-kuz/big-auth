@@ -1,12 +1,13 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { getUserByToken } from "./services/get-user-by-token";
 import { Env } from "./types/Env";
-import { chatStorage, dialogStorage, isGroup, userStorage } from "./durable-objects/messaging/utils/mdo";
+import { chatStorage, dialogStorage, groupStorage, isGroup, userStorage } from "./durable-objects/messaging/utils/mdo";
 import { getUserById } from "./db/services/get-user";
 import { digest } from "./utils/digest";
 import { NotFoundError } from "./errors/NotFoundError";
 import { Group, Dialog } from "./types/Chat";
 import { VoipPushNotification } from "./types/queue/PushNotification";
+import { NewCallRequest, CloseCallRequest } from "./types/ws/client-requests";
 
 export class WorkerBigAuth extends WorkerEntrypoint {
   constructor(
@@ -86,7 +87,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
   }
   async voipPush(
     callId: string,
-    chatId:string,
+    chatId: string,
     participants: {
       id: string,
       uid: number,
@@ -96,28 +97,21 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     userId: string,
     type: string = 'new'
   ) {
-    const _isGroup = isGroup(chatId);
-    let title = "";
-    try{ 
-      let _user2 = userId;
-      if(!_isGroup){
-        _user2 = participants.filter(p=>p.id != userId)[0].id;
-        //@ts-ignore
-        title = (await chatStorage(this.env, chatId, userId).chat(_user2)).name;
-      }else{
-        //@ts-ignore
-        title = (await chatStorage(this.env, chatId, userId).chat(_user2)).name;
-      }
-    }catch(e){
-      console.log(e);
-    }
+    const title = (await chatStorage(this.env, chatId, userId).chat(chatId) as Group | Dialog).name;
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO;
-  
+    const sendTokens: string[] = [];
     for (let participant of participants) {
+      if(participant.id == userId) continue;
       const id = VOIP_TOKEN_DO.idFromName(participant.id);
       const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
       const deviceVoipToken = await voipTokenDO.getToken();
-      if (deviceVoipToken) {
+      console.log(`
+      participant.id : ${participant.id}
+      deviceVoipToken: ${deviceVoipToken}
+      `);
+      
+      if (deviceVoipToken && !sendTokens.includes(deviceVoipToken)) {
+        sendTokens.push(deviceVoipToken);
         const push: VoipPushNotification = {
           voip: true,
           deviceToken: deviceVoipToken,
@@ -129,7 +123,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
             chatId,
             title,
             isVideo: false,
-            isGroup: _isGroup,
+            isGroup: isGroup(chatId),
             type
           },
           title
@@ -140,5 +134,14 @@ export class WorkerBigAuth extends WorkerEntrypoint {
       }
     }
     return;
+  }
+  async startCall(data: NewCallRequest) {
+    if (isGroup(data.chatId)) {
+      const group = await groupStorage(this.env, data.chatId);
+      await group.newCall(data.callId, data.userId);
+    }
+  }
+  async closeCall(data: CloseCallRequest) {
+
   }
 }

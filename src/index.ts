@@ -41,7 +41,7 @@ import { env } from 'process'
 import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
 export { WorkerBigAuth } from './worker'
 
-export { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from './durable-objects/messaging'
+export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { VoipTokenDO } from './durable-objects/VoipTokenDO'
@@ -65,8 +65,10 @@ router.registry.registerComponent('securitySchemes', 'BearerAuth', {
 router.original.options('*', CORS) // TODO: add security CORS
 
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
-router.original.get('/rNAs9NggcY8L6pQhymboT/:userId/:doType/:doName/:prefix', DebugListKeysHandler)
+// router.original.get('/rNAs9NggcY8L6pQhymboT/:userId/:doType/:doName/:prefix', DebugListKeysHandler)
 router.original.get('/rNAs9NggcY8L6pQhymboM*', DebugMemoryHandler)
+router.original.get('/rNAs9NggcY8L6pQhymboT*', DebugListKeysHandler)
+router.original.get('/rNAs9NggcY8L6pQhymboT/*', DebugListKeysHandler)
 
 router.post('/send-code', SendCodeHandler)
 router.post('/verify-code', VerifyCodeHandler)

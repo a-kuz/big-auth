@@ -1,6 +1,7 @@
 import { Attachment } from './Attachment'
 import { MessageStatus } from './ChatList'
-import { ReplyTo } from './ws/client-requests'
+import { ForwardedFrom, ReplyTo } from './ws/client-requests'
+import { dlt, edit, nw } from './ws/event-literals'
 
 interface Delivering {
   userId: string
@@ -8,16 +9,51 @@ interface Delivering {
   read?: number
 }
 
+export type MessageType = 'new' | 'edit' | 'delete' | 'call'
+
+export type EditPayload = {
+  originalMessageId: number
+}
+
+export type DeletionPayload = {
+  originalMessageId: number
+}
+
+export interface StoredDialogMessage {
+  messageId: number
+  clientMessageId: string
+  sender: string
+  
+  message?: string
+  attachments?: Attachment[]
+  
+  replyTo?: ReplyTo
+  forwardedFrom?: ForwardedFrom
+  
+  type?: MessageType
+  payload?:  EditPayload | DeletionPayload
+  
+  
+  createdAt: number
+  updatedAt?: number
+  deletedAt?: number
+}
+
 export interface DialogMessage {
   messageId: number
   clientMessageId: string
   message?: string
-  sender: string
-	replyTo?: ReplyTo
   attachments?: Attachment[]
-  read?: number // deprecated
-  dlvrd?: number // depracted
-	status?: MessageStatus
+  sender: string
+  
+  replyTo?: ReplyTo
+  forwardedFrom?: ForwardedFrom
+  
+  status?: MessageStatus
+  
+  
+  type?: nw | dlt | edit
+
   createdAt: number
   updatedAt?: number
 }
@@ -27,7 +63,7 @@ export interface GroupChatMessage {
   clientMessageId: string
   message?: string
   sender: string
-	replyTo?: ReplyTo
+  replyTo?: ReplyTo
   attachments?: Attachment[]
   delivering?: Delivering[]
   createdAt: number

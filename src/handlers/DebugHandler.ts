@@ -21,7 +21,7 @@ export const DebugListKeysHandler = async (request: Request, env: Env, ..._args:
     let stub //: DurableObjectStub<DebugWrapper>
     if (doType === 'user') {
       stub = userStorage(env, userId)
-      return stub.fetch(`http://www.ru/${userId}/client/request/chats`)
+      return stub.fetch(`http://www.ru/${userId}/client/request/debug`)
     } else if (doType === 'chat') {
       stub = chatStorage(env, name, userId)
       return new Response(await stub.listKeys({ prefix }), {
@@ -44,6 +44,9 @@ export const DebugListKeysHandler = async (request: Request, env: Env, ..._args:
           break
       }
 			stub = doNamespace.get(doNamespace.idFromName(name))
+      return new Response(await stub.listKeys({ prefix }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
   } catch (error) {
     console.error(error)

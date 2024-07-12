@@ -1,14 +1,13 @@
-import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, Str } from '@cloudflare/itty-router-openapi'
+import { z } from 'zod'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { Route } from '~/utils/route'
-import { instanceToPlain } from 'class-transformer'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { getOrCreateUserByPhone } from '../db/services/get-user'
 import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
-import { infer, z } from 'zod'
-import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { errorResponse } from '../utils/error-response'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string

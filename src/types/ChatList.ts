@@ -15,11 +15,12 @@ export interface ChatListItem {
   lastMessageAuthor?: string
   lastMessageStatus: MessageStatus
   missed: number
+  firstMissed?: string
   verified?: boolean
   isMine: boolean
   attachmentType?: AttachmentType
 	lastSeen?: number
-	callStatus?: 'active' | 'missed' | 'incoming' | 'outgoing'
+	
 }
 
 export type ChatList = ChatListItem[]

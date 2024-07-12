@@ -9,7 +9,7 @@ import { ChatList } from '../ChatList'
 import {
   NewMessageRequest,
   EditMessageRequest,
-  DeleteMessageRequest,
+  DeleteRequest,
   MarkDeliveredRequest,
   MarkReadRequest,
   TypingClientEvent,
@@ -17,7 +17,7 @@ import {
 import {
   NewMessageEvent,
   EditMessageEvent,
-  DeleteMessageEvent,
+  DeleteEvent,
   OnlineEvent,
   OfflineEvent,
   TypingServerEvent,
@@ -28,7 +28,7 @@ import {
 export type ClientRequestPayload =
   | NewMessageRequest
   | EditMessageRequest
-  | DeleteMessageRequest
+  | DeleteRequest
   | MarkDeliveredRequest
   | MarkReadRequest
 export type ServerResponsePayload =
@@ -37,10 +37,11 @@ export type ServerResponsePayload =
   | DeleteMessageResponse
   | MarkReadResponse
   | MarkDlvrdResponse
+  | {}
 export type ServerEventPayload =
   | NewMessageEvent
   | EditMessageEvent
-  | DeleteMessageEvent
+  | DeleteEvent
   | OnlineEvent
   | OfflineEvent
   | TypingServerEvent

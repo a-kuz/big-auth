@@ -1,6 +1,6 @@
 import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
-import { getUserByPhoneNumbers } from '../db/services/get-user'
+import { getUsersByPhoneNumbers } from '../db/services/get-user'
 import { getUserByToken } from '../services/get-user-by-token'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
@@ -50,14 +50,13 @@ export class FindContactsHandler extends Route {
     { body }: DataOf<typeof FindContactsHandler.schema>,
   ) {
     try {
-      let phoneNumbers = body.phoneNumbers.map(normalizePhoneNumber)
+      let phoneBook: typeof body.contacts = body.contacts
+        .map(e => ({ ...e, phoneNumber: normalizePhoneNumber(e.phoneNumber) }))
+        .filter((e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i)
+        .filter(u => u.phoneNumber !== env.user.phoneNumber)
+        .toSorted(({ phoneNumber: a }, { phoneNumber: b }) => a.localeCompare(b))
 
-      phoneNumbers = phoneNumbers
-        .filter((phoneNumber, i) => phoneNumbers.indexOf(phoneNumber) === i)
-        .filter(u => u !== env.user.phoneNumber)
-        .toSorted((a, b) => a.localeCompare(b))
-
-      const hash = await digest(JSON.stringify(phoneNumbers))
+      const hash = await digest(JSON.stringify(phoneBook))
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
         headers: { 'Cache-Control': 'max-age=20', ...request.headers },
@@ -66,8 +65,9 @@ export class FindContactsHandler extends Route {
       const resp = await cache.match(cacheKey)
       if (resp) return resp
 
-      const contacts = (await getUserByPhoneNumbers(env.DB, phoneNumbers)).filter(
-        u => u.id !== env.user.id,
+      const contacts = await getUsersByPhoneNumbers(
+        env.DB,
+        phoneBook
       )
       const responseBody = JSON.stringify({ contacts })
 
@@ -77,7 +77,7 @@ export class FindContactsHandler extends Route {
           'Content-Type': 'application/json',
         },
       })
-      await putContacts(env.user, phoneNumbers, contacts, env)
+      await putContacts(env.user, phoneBook, contacts, env)
       context.waitUntil(
         Promise.all([
           cache.put(

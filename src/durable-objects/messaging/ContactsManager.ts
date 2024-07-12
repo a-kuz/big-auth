@@ -1,7 +1,9 @@
 import { DurableObjectState } from '@cloudflare/workers-types'
 import { Profile } from '~/db/models/User'
 import { getUserById } from '~/db/services/get-user'
+import { Dialog, Group, GroupMeta } from '~/types/Chat'
 import { Env } from '~/types/Env'
+import { isGroup } from './utils/mdo'
 
 export class ContactsManager {
   #contacts: Profile[] = []
@@ -71,6 +73,16 @@ export class ContactsManager {
     return profile
   }
 
+  async patchChatMeta(chatId: string, chat: Group | Dialog) {
+    let result = chat
+    if (isGroup(chatId)) {
+      (result.meta as GroupMeta).participants = await Promise.all((result.meta as GroupMeta).participants.map((e: Profile)=>(this.patch(e))))
+    } else {
+      result.meta = await this.patch(result.meta as Profile)
+  }
+  return result
+  }
+
   async getContacts(): Promise<Profile[]> {
     const contacts: Profile[] = []
     for (let i = 0; i < 10; i++) {
@@ -89,11 +101,14 @@ export class ContactsManager {
 
     const newContacts = this.#contacts.map(contact => {
       const updatedContact = updatedContactsMap.get(contact.phoneNumber)
-      for (const contact of updatedContacts) {
-        this.invalidateCache(contact.id);
-      }
       return updatedContact ? { ...contact, ...updatedContact } : contact
-    });
+    }).concat(
+      updatedContacts.filter(contact => !this.#contacts.some(c => c.phoneNumber === contact.phoneNumber))
+    );
+
+    for (const contact of updatedContacts) {
+      this.invalidateCache(contact.id);
+    }
 
     const contactsByBlock = new Map<number, Profile[]>()
     for (const contact of newContacts) {

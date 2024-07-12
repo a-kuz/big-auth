@@ -28,7 +28,7 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Dialog, DialogAI, Group, GroupChat } from '~/types/Chat'
+import { Dialog, DialogAI, Group, GroupChat, GroupMeta } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
@@ -64,7 +64,7 @@ export class MessagingDO implements DurableObject {
   private onlineService!: OnlineStatusService
   private profileService!: ProfileService
   private cl!: ChatListService
-  private contacts!: ContactsManager;
+  private contacts!: ContactsManager
 
   constructor(
     private readonly state: DurableObjectState,
@@ -78,7 +78,7 @@ export class MessagingDO implements DurableObject {
       this.wsService.onlineService = this.onlineService
 
       this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
-      this.contacts = new ContactsManager(this.env, this.state);
+      this.contacts = new ContactsManager(this.env, this.state)
     })
   }
 
@@ -141,8 +141,8 @@ export class MessagingDO implements DurableObject {
                 return this.setDeviceTokenHandler(request)
               case 'updateProfile':
                 return this.updateProfileHandler(request)
-              case 'blink':
-                return this.blinkHandler(request)
+              case 'updateContacts':
+                return this.updateContactsHandler(request)
               case 'lastSeen':
                 return this.lastSeenHandler(request)
               case 'debug':
@@ -263,9 +263,8 @@ export class MessagingDO implements DurableObject {
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
-    await this.cl.save()    
+    await this.cl.save()
     await this.wsService.toBuffer('chats', this.cl.chatList)
-    
 
     return new Response()
   }
@@ -372,14 +371,18 @@ export class MessagingDO implements DurableObject {
     const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
-
+    let name = chatData.name
+    if (!isGroup(chatId)) {
+      const contact = await this.contacts.contact(chatId)
+      if (contact) name = displayName(contact)
+    }
     if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
         lastMessageText: messagePreview(eventData.message),
 
-        name: chatData.name,
+        name,
         type: chatType(chatId),
         verified: false,
         lastMessageAuthor: chatData.lastMessageAuthor,
@@ -404,7 +407,7 @@ export class MessagingDO implements DurableObject {
         await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toBuffer('new', {
-        ...eventData,        
+        ...eventData,
         sender: eventData.sender ?? eventData.chatId,
       })
       dlvrd = true
@@ -416,6 +419,12 @@ export class MessagingDO implements DurableObject {
   private async updateProfileHandler(request: Request) {
     const profile = await request.json<Profile>()
     await this.profileService.broadcastProfile(profile)
+    return new Response()
+  }
+
+  private async updateContactsHandler(request: Request) {
+    const updatedContacts = await request.json<Profile[]>()
+    await this.contacts.updateContacts(updatedContacts)
     return new Response()
   }
 
@@ -484,23 +493,25 @@ export class MessagingDO implements DurableObject {
 
   async chatHandler(request: Request) {
     const { chatId } = await request.json<GetChatRequest>()
-    let result: Dialog
+    let result: Dialog | Group
     const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
     if (chatItem) {
       const chat = this.chatStorage(chatId)
 
       result = await chat.chat(this.#userId)
+      result = await this.contacts.patchChatMeta(chatId, result)
     } else {
       const user = (await getUserById(this.env.DB, chatId)).profile()
+      const patchedUser = await this.contacts.patch(user)
       result = {
         chatId,
         type: 'dialog',
-        name: displayName(user),
-        photoUrl: user.avatarUrl,
+        name: displayName(patchedUser),
+        photoUrl: patchedUser.avatarUrl,
         isMine: false,
         lastMessageId: 0,
         meta: {
-          ...user,
+          ...patchedUser,
         },
         missed: 0,
       }
@@ -663,6 +674,11 @@ export class MessagingDO implements DurableObject {
     )
 
     const dialog = (await storage.chat(this.#userId)) as Dialog | Group
+    let name = dialog.name
+    if (!isGroup(chatId)) {
+      const contact = await this.contacts.contact(chatId)
+      if (contact) name = displayName(contact)
+    }
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
       lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
@@ -670,7 +686,7 @@ export class MessagingDO implements DurableObject {
       lastMessageTime: timestamp,
       lastMessageAuthor: '',
       missed: 0,
-      name: dialog.name,
+      name,
       type: chatType(chatId),
       verified: dialog.meta.verified || false,
       photoUrl: dialog.photoUrl,

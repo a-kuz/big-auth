@@ -1,4 +1,5 @@
 import { Profile, ProfileWithLastSeen, User, UserDB } from '~/db/models/User'
+import { PhoneBook } from '~/db/services/get-user'
 import { OnlineStatus, UNKNOWN_LAST_SEEN } from '~/durable-objects/messaging/OnlineStatusService'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 import { ChatList } from '~/types/ChatList'
@@ -28,10 +29,18 @@ type pRow = {
 
 export async function putContacts(
   user: User,
-  phoneNumbers: string[],
+  phoneNumbers: PhoneBook,
   contacts: Profile[],
   env: Env,
 ) {
+  const userMessagingDO = userStorage(env, user.id)
+  await userMessagingDO.fetch(
+    new Request(`${env.ORIGIN}/${user.id}/client/request/updateContacts`, {
+      method: 'POST',
+      body: JSON.stringify(phoneNumbers),
+    }),
+  )
+
   const DB = env.DB
   const query = 'SELECT * FROM phone_numbers WHERE phone_number1 = ?'
   let existing: pRow[]
@@ -43,23 +52,21 @@ export async function putContacts(
     existing = []
   }
 
-  const newNumbers = phoneNumbers.filter(pn => !existing.find(e => e.phone_number2 === pn))
+  const newNumbers = phoneNumbers.filter(pn => !existing.find(e => e.phone_number2 === pn.phoneNumber))
 
-  const insertQuery = 'INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES (?, ?)'
-  const chunkSize = 20;
+  
+  const chunkSize = 10
   for (let i = 0; i < newNumbers.length; i += chunkSize) {
-    const chunk = newNumbers.slice(i, i + chunkSize);
-    const values = chunk.map(pn => `('${user.phoneNumber}', '${pn}')`).join(', ');
-    const chunkInsertQuery = `INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES ${values}`;
+    const chunk = newNumbers.slice(i, i + chunkSize)
+    const values = chunk.map(pn => `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}')`).join(', ')
+    const chunkInsertQuery = `INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name) VALUES ${values}`
     try {
-      await DB.prepare(chunkInsertQuery).run();
+      await DB.prepare(chunkInsertQuery).run()
     } catch (error) {
       // Handle error
-      console.error(error);
-      throw error;
+      console.error(error)
+      throw error
     }
-
-
   }
 }
 
@@ -156,6 +163,7 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
     .all<Required<UserDB>>()
 
   const userMessagingDO = userStorage(env, env.user.id)
+
   const chatListResponse = await userMessagingDO.fetch(
     new Request(`${env.ORIGIN}/${env.user.id}/client/request/chats`, {
       method: 'POST',
@@ -183,46 +191,60 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
   }
 
   const combinedResults = [...contacts.results, ...chatListUsers.results]
-  type UserDBWithStatus = Required<UserDB> & { status: 'online' | 'offline' | 'unknown' , lastSeen?: number}
-  const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>((acc, current) => {
-    const x = acc.find(item => item.id === current.id)
-    if (!x) {
-      acc.push({...current, status: 'unknown'})
-    }
-    return acc
-  }, [])
+  type UserDBWithStatus = Required<UserDB> & {
+    status: 'online' | 'offline' | 'unknown'
+    lastSeen?: number
+  }
+  const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>(
+    (acc, current) => {
+      const x = acc.find(item => item.id === current.id)
+      if (!x) {
+        acc.push({ ...current, status: 'unknown' })
+      }
+      return acc
+    },
+    [],
+  )
 
-  
-  const promises = uniqueResults.filter(u=>u.first_name || u.last_name || u.username).map(async contact => {
-    const contactFromChatList = chatList.find(chat => chat.id === contact.id)
-    if (contactFromChatList) {
-      contact.lastSeen = contactFromChatList.lastSeen
-      contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
-    } else {
+  const promises = uniqueResults
+    .filter(u => u.first_name || u.last_name || u.username)
+    .map(async contact => {
       const mdo = userStorage(env, contact.id)
-      const lastSeenResponse = await mdo.fetch(
-        new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
+      await mdo.fetch(
+        new Request(`${env.ORIGIN}/${contact.id}/client/request/updateContacts`, {
           method: 'POST',
+          body: JSON.stringify([contact]),
         }),
       )
-      const lastSeen = await lastSeenResponse.json<OnlineStatus>()
-      if (lastSeen.status === 'offline') {
-        contact.lastSeen = lastSeen.lastSeen
-        contact.status = lastSeen.status
+      const contactFromChatList = chatList.find(chat => chat.id === contact.id)
+      if (contactFromChatList) {
+        contact.lastSeen = contactFromChatList.lastSeen
+        contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
+      } else {
+        const mdo = userStorage(env, contact.id)
+        const lastSeenResponse = await mdo.fetch(
+          new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
+            method: 'POST',
+          }),
+        )
+        const lastSeen = await lastSeenResponse.json<OnlineStatus>()
+        if (lastSeen.status === 'offline') {
+          contact.lastSeen = lastSeen.lastSeen
+          contact.status = lastSeen.status
+        }
       }
-    }
-    return {
-      id: contact.id,
-      phoneNumber: contact.phone_number,
-      firstName: contact.first_name || undefined,
-      lastName: contact.last_name || undefined,
-      username: contact.username || undefined,
-      avatarUrl: contact.avatar_url || undefined,
-      verified: !!(contact.verified || false),
-      lastSeen: contact.lastSeen,
-      status: contact.status,
-    } as ProfileWithLastSeen
-  })
+      return {
+        id: contact.id,
+        phoneNumber: contact.phone_number,
+        firstName: contact.first_name || undefined,
+        lastName: contact.last_name || undefined,
+        username: contact.username || undefined,
+        avatarUrl: contact.avatar_url || undefined,
+        verified: !!(contact.verified || false),
+        lastSeen: contact.lastSeen,
+        status: contact.status,
+      } as ProfileWithLastSeen
+    })
 
   return Promise.all(promises)
 }

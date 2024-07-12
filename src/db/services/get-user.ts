@@ -15,7 +15,8 @@ export const getOrCreateUserByPhone = async (
     const existingUser = await d1.prepare(query).bind(phoneNumber).first<UserDB>()
 
     if (!existingUser) {
-      const insertQuery = 'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
+      const insertQuery =
+        'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
       const id = newId()
       const createdAt = Math.floor(Date.now() / 1000)
       const verified = false
@@ -50,16 +51,14 @@ export const getUserById = async (
     throw error
   }
 }
-
-export const getUserByPhoneNumbers = async (
+export type PhoneBookItem = { phoneNumber: string; firstName?: string; lastName?: string }
+export type PhoneBook = PhoneBookItem[]
+export const getUsersByPhoneNumbers = async (
   d1: D1Database,
-  phoneNumbersBig: string[],
+  phoneBook: PhoneBook,
 ): Promise<User[]> => {
-  const normalized = phoneNumbersBig.map(normalizePhoneNumber)
-  const chunks = splitArray(
-    normalized.filter((e, i) => normalized.indexOf(e) === i),
-    10,
-  )
+  const phoneNumbers = phoneBook.map(e => e.phoneNumber)
+  const chunks = splitArray(phoneNumbers, 10)
   const result: User[] = []
   const promises: Promise<User[]>[] = []
   for (const phoneNumbers of chunks) {

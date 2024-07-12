@@ -10,7 +10,7 @@ export interface MarkDeliveredInternalEvent {
   clientMessageId: string
   timestamp: number
 }
-export type UpdateChatInternalEvent = Dialog | Group
+export type UpdateChatInternalEvent =Partial<Dialog | Group>
 export interface MarkReadInternalEvent {
   chatId: string
   userId?: string

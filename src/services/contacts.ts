@@ -25,6 +25,7 @@ export type Contact = ObjectSnakeToCamelCase<ContactDB>
 type pRow = {
   phone_number1: string
   phone_number2: string
+  row_fingerprint: string
 }
 
 export async function putContacts(
@@ -42,7 +43,8 @@ export async function putContacts(
   )
 
   const DB = env.DB
-  const query = 'SELECT * FROM phone_numbers WHERE phone_number1 = ?'
+  const query =
+    'SELECT row_fingerprint, phone_number1, phone_number2 FROM phone_numbers pn WHERE pn.phone_number1 = ?'
   let existing: pRow[]
   try {
     existing = (await DB.prepare(query).bind(user.phoneNumber).all<pRow>()).results
@@ -52,14 +54,44 @@ export async function putContacts(
     existing = []
   }
 
-  const newNumbers = phoneNumbers.filter(pn => !existing.find(e => e.phone_number2 === pn.phoneNumber))
+  const updatedNumbers = phoneNumbers.filter(
+    pn => !existing.some(e => e.row_fingerprint === pn.phoneNumber + pn.firstName + pn.lastName),
+  )
 
-  
+  const existingNumbers = phoneNumbers.filter(pn =>
+    existing.find(e => e.phone_number2 === pn.phoneNumber),
+  )
   const chunkSize = 10
-  for (let i = 0; i < newNumbers.length; i += chunkSize) {
-    const chunk = newNumbers.slice(i, i + chunkSize)
-    const values = chunk.map(pn => `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}')`).join(', ')
-    const chunkInsertQuery = `INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name) VALUES ${values}`
+  for (let i = 0; i < existingNumbers.length; i += chunkSize) {
+    const chunk = existingNumbers.slice(i, i + chunkSize)
+    const deleteQuery = `
+      DELETE FROM phone_numbers
+      WHERE phone_number1 = ? AND phone_number2 IN (${chunk.map(() => '?').join(', ')})
+    `
+    try {
+      await DB.prepare(deleteQuery)
+        .bind(user.phoneNumber, ...chunk.map(pn => pn.phoneNumber))
+        .run()
+    } catch (error) {
+      // Handle error
+      console.error(error)
+      throw error
+    }
+  }
+  for (let i = 0; i < updatedNumbers.length; i += chunkSize) {
+    const chunk = updatedNumbers.slice(i, i + chunkSize)
+    const values = chunk
+      .map(
+        pn =>
+          `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}', '${(pn.phoneNumber ?? '') + (pn.firstName ?? '') + (pn.lastName ?? '')}')`,
+      )
+      .join(', ')
+    
+
+    const chunkInsertQuery = `
+      INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name, row_fingerprint)
+      VALUES ${values}
+    `
     try {
       await DB.prepare(chunkInsertQuery).run()
     } catch (error) {
@@ -135,32 +167,18 @@ export async function getContacts(env: Env, ownerId: string) {
 export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
   const query = `
     SELECT u.id,
-           CASE WHEN COALESCE(c.first_name, '') = '' THEN u.first_name ELSE c.first_name END AS first_name,
-           CASE WHEN COALESCE(c.last_name, '') = '' THEN u.last_name ELSE c.last_name END AS last_name,
-           CASE WHEN COALESCE(c.avatar_url, '') = '' THEN u.avatar_url ELSE c.avatar_url END AS avatar_url,
-           u.phone_number,
-           u.username,
-           u.created_at,
-           u.verified
-    FROM contacts c
-    JOIN users u ON u.id = c.user_id
-    WHERE c.owner_id = ?
-    UNION
-    SELECT u.id,
-           u.first_name,
-           u.last_name,
+           CASE WHEN COALESCE(pn.first_name, '') = '' THEN u.first_name ELSE pn.first_name END AS first_name,
+           CASE WHEN COALESCE(pn.last_name, '') = '' THEN u.last_name ELSE pn.last_name END AS last_name,
            u.avatar_url,
            u.phone_number,
            u.username,
            u.created_at,
-					 u.verified
+           u.verified
     FROM phone_numbers pn
     JOIN users u ON pn.phone_number2 = u.phone_number
     WHERE pn.phone_number1 = ?
   `
-  const contacts = await env.DB.prepare(query)
-    .bind(env.user.id, env.user.phoneNumber)
-    .all<Required<UserDB>>()
+  const contacts = await env.DB.prepare(query).bind(env.user.phoneNumber).all<Required<UserDB>>()
 
   const userMessagingDO = userStorage(env, env.user.id)
 
@@ -209,13 +227,6 @@ export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]
   const promises = uniqueResults
     .filter(u => u.first_name || u.last_name || u.username)
     .map(async contact => {
-      const mdo = userStorage(env, contact.id)
-      await mdo.fetch(
-        new Request(`${env.ORIGIN}/${contact.id}/client/request/updateContacts`, {
-          method: 'POST',
-          body: JSON.stringify([contact]),
-        }),
-      )
       const contactFromChatList = chatList.find(chat => chat.id === contact.id)
       if (contactFromChatList) {
         contact.lastSeen = contactFromChatList.lastSeen

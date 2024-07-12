@@ -52,7 +52,7 @@ export class FindContactsHandler extends Route {
     try {
       let phoneBook: typeof body.contacts = body.contacts
         .map(e => ({ ...e, phoneNumber: normalizePhoneNumber(e.phoneNumber) }))
-        .filter((e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i)
+      phoneBook = phoneBook.filter((e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i)
         .filter(u => u.phoneNumber !== env.user.phoneNumber)
         .toSorted(({ phoneNumber: a }, { phoneNumber: b }) => a.localeCompare(b))
 

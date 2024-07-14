@@ -4,8 +4,9 @@ import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
-import { DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
+import { CallOnMessage, CallPayload, DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
+  CallNewMessageRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -208,20 +209,36 @@ messages in storage: ${this.#counter},
     this.#storage.put('counter', this.#counter, {})
     return this.#counter - 1
   }
-
+  prepareCallFor(message: StoredDialogMessage, userId: string): DialogMessage {
+    if (message.type != 'call') return message
+    if (message.payload) {
+      const payload: CallPayload = message.payload as CallPayload
+      const call: CallOnMessage = {
+        callType: payload.callType,
+        status: payload.participants?.includes(userId) ? 'received' : 'missed',
+        direction: payload.caller == userId ? 'outcoming' : 'incoming'
+      }
+      const preparadMessageOnCall: DialogMessage = {
+        ...message,
+        call
+      }
+      return preparadMessageOnCall
+    }
+    return message
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = endIndex >= portion ? endIndex - portion + 1 : 0
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
       return { messages, authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
       const endIndex = startIndex + portion - 1
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
       return { messages, authors: [] }
     }
   }
@@ -349,7 +366,29 @@ messages in storage: ${this.#counter},
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
+  async callNewMessage(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+    const timestamp = this.timestamp()
+    const messageId = await this.newId()
+    const message: StoredDialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      clientMessageId: request.clientMessageId,
+      type: 'call',
+      payload: request.payload
+    }
+    this.#messages[messageId] = message
+    const prevMessage = this.#lastMessage
+    this.#lastMessage = message
+    await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
+      await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      this.#lastMessageOfPreviousAuthor = prevMessage
+    }
+    await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
   async dlvrd(
     sender: string,
     request: MarkDeliveredRequest,

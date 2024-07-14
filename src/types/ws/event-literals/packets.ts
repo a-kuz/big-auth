@@ -1,6 +1,7 @@
 export type nw = 'new'
 export type edit = 'edit'
 export type read = 'read'
+export type call = 'call'
 export type dlvrd = 'dlvrd' // delivered
 export type dlt = 'delete'
 export type online = 'online'

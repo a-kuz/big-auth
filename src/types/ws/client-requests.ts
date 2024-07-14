@@ -3,7 +3,7 @@ import { dlt, dlvrd, edit, nw, read, typing } from './event-literals'
 
 import { Profile } from '~/db/models/User'
 import { Attachment } from '../Attachment'
-import { ChatMessage } from '../ChatMessage'
+import { CallPayload, CallType, ChatMessage, MessageType } from '../ChatMessage'
 import { UserId } from './internal'
 
 export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
@@ -44,8 +44,13 @@ export interface NewMessageRequest {
   clientMessageId: string
   replyTo?: number
   forwarded?: boolean
+  type?: MessageType
 }
-
+export interface CallNewMessageRequest {
+  chatId: string
+  clientMessageId: string
+  payload: CallPayload
+}
 export interface ReplyTo {
   messageId: number
   deletedAt?: number
@@ -116,7 +121,7 @@ export interface CloseCallRequest {
   chatId: string
   callId: string
   userIdCreateCall: string
-  participantsInvited: string[]
   participantsConnected: string[]
   callDuration: number
+  typeCall: CallType
 }

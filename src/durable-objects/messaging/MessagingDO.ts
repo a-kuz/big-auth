@@ -183,7 +183,7 @@ export class MessagingDO extends DurableObject {
           case 'newCall':
             return this.newCallEventHandler(request)
           case 'closeCall':
-            return this.newCallEventHandler(request)
+            return this.closeCallEventHandler(request)
           case 'deleteChat':
             return this.newChatEventHandler(request)
           case 'new':

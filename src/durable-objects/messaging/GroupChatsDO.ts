@@ -470,18 +470,10 @@ export class GroupChatsDO extends DebugWrapper {
     }
     this.#messages[messageId] = message
     await this.#storage.put<GroupChatMessage>(`message-${messageId}`, message)
-
     for (const receiver of this.#users.filter(m => m.id !== sender)) {
-      const event: NewGroupMessageEvent = {
+      const event: CloseCallEvent = {
         chatId: this.group.chatId,
-        message: message.message,
-        attachments: message.attachments,
-        sender: message.sender,
-        senderName: displayName(this.#users.find(u => u.id === message.sender)!),
-        clientMessageId: request.clientMessageId,
-        messageId: message.messageId,
-        timestamp,
-        ...this.missedFor(receiver.id),
+        callId: request.payload.callId
       }
       this.#outgoingEvets.push({
         event,

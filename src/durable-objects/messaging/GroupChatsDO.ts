@@ -315,20 +315,11 @@ export class GroupChatsDO extends DebugWrapper {
     }
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
   }
-  async closeCall(callId: string,ownerCallId:string) {
-    this.#call = undefined
-    await this.#storage.put('call', this.#call)
-    const _closeCall: CloseCallEvent = {
-      chatId: this.#id,
-      callId
-    }
-    await this.broadcastEvent('closeCall', { ..._closeCall }, ownerCallId)
-  }
   prepareCallFor(message: StoredGroupMessage, userId: string): GroupChatMessage {
     if (message.type != 'call') return message
     if (message.payload) {
       const payload: CallPayload = message.payload as CallPayload
-      const call: CallOnMessage= {
+      const call: CallOnMessage = {
         callType: payload.callType,
         status: payload.participants?.includes(userId) ? 'received' : 'missed',
         direction: payload.caller == userId ? 'outcoming' : 'incoming'
@@ -455,7 +446,9 @@ export class GroupChatsDO extends DebugWrapper {
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  async callNewMessage(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+  async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+    this.#call = undefined
+    await this.#storage.put('call', this.#call)
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     console.log(messageId)
@@ -473,13 +466,16 @@ export class GroupChatsDO extends DebugWrapper {
     for (const receiver of this.#users.filter(m => m.id !== sender)) {
       const event: CloseCallEvent = {
         chatId: this.group.chatId,
-        callId: request.payload.callId
+        callId: request.payload.callId,
+        callType: request.payload.callType,
+        status: request.payload.participants?.includes(receiver.id) ? 'received' : 'missed',
+        direction: request.payload.caller == receiver.id ? 'outcoming' : 'incoming'
       }
       this.#outgoingEvets.push({
         event,
         sender: this.#users.find(u => u.id === sender)!,
         receiver: receiver.id,
-        type: 'new',
+        type: 'closeCall',
         timestamp,
       })
     }

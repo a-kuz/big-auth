@@ -1,6 +1,7 @@
 import { Attachment } from '../Attachment'
 import { Chat, Dialog, Group, GroupChat } from '../Chat'
 import { ChatListItem } from '../ChatList'
+import { CallType, CallDirectionType, CallStatusType } from '../ChatMessage'
 import { chats, deleteChat, dlvrd, newChat, newCall, nw, read, typing, dlt, closeCall } from './event-literals'
 import { DeleteEvent } from './server-events'
 
@@ -47,6 +48,9 @@ export interface NewCallEvent {
 export interface CloseCallEvent {
   chatId: string
   callId: string
+  callType: CallType,
+  status: CallStatusType,
+  direction: CallDirectionType
 }
 export interface DeleteChatEvent {
   chatId: string

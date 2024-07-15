@@ -10,16 +10,16 @@ interface Delivering {
 }
 
 export type MessageType = 'new' | 'edit' | 'delete' | call
-export type DirectionCallType = 'incoming' | 'outcoming' 
-export type StatusCallType = 'missed' | 'received' 
+export type CallDirectionType = 'incoming' | 'outcoming' 
+export type CallStatusType = 'missed' | 'received' 
 export type CallType = 'video' | 'audio' 
 
 export type EditPayload = {
   originalMessageId: number
 }
 export type CallOnMessage = {
-  direction: DirectionCallType
-  status?: StatusCallType
+  direction: CallDirectionType
+  status?: CallStatusType
   callType: CallType
 }
 export type CallPayload = {

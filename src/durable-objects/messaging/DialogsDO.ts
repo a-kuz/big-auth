@@ -16,6 +16,7 @@ import {
   ReplyTo,
 } from '~/types/ws/client-requests'
 import {
+  CloseCallEvent,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   MessageId,
@@ -366,7 +367,7 @@ messages in storage: ${this.#counter},
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  async callNewMessage(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+  async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     const message: StoredDialogMessage = {
@@ -385,9 +386,28 @@ messages in storage: ${this.#counter},
       await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       this.#lastMessageOfPreviousAuthor = prevMessage
     }
-    await this.sendNewEventToReceiver(request.chatId, message, timestamp)
+
+    //await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
+  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload){
+    const receiverDO = userStorage(this.env, receiverId)
+    const senderId = this.chatIdFor(receiverId)
+    const event: CloseCallEvent = {
+      chatId: senderId,
+      callId: payload.callId,
+      callType: payload.callType,
+      status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
+      direction: payload.caller == receiverId ? 'outcoming' : 'incoming'
+    }
+    const body = JSON.stringify(event)
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/closeCall`, {
+        method: 'POST',
+        body,
+      }),
+    )
   }
   async dlvrd(
     sender: string,

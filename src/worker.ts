@@ -144,10 +144,12 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }
   }
   async closeCall(data: CloseCallRequest) {
+    /*
     if (isGroup(data.chatId)) {
       const group = await groupStorage(this.env, data.chatId)
       await group.closeCall(data.callId, data.userIdCreateCall)
     }
+    */
     const request:CallNewMessageRequest = {
       chatId: data.chatId,
       clientMessageId: data.userIdCreateCall,
@@ -159,6 +161,6 @@ export class WorkerBigAuth extends WorkerEntrypoint {
         callType: data.typeCall
       }
     }
-    await chatStorage(this.env,data.chatId,data.userIdCreateCall).callNewMessage(data.userIdCreateCall,request)
+    await chatStorage(this.env,data.chatId,data.userIdCreateCall).closeCall(data.userIdCreateCall,request)
   }
 }

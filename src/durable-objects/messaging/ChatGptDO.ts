@@ -282,7 +282,7 @@ export class ChatGptDO extends DebugWrapper {
     await this.ctx.storage.setAlarm(new Date(Date.now() + 50))
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  callNewMessage(sender: string, request: CallNewMessageRequest) {
+  closeCall(sender: string, request: CallNewMessageRequest) {
     return
   }
   async dlvrd(

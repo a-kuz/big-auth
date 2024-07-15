@@ -8,7 +8,7 @@ import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { z } from 'zod'
 import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
-import { putContacts } from '~/services/contacts'
+import { getMergedContacts, putContacts } from '~/services/contacts'
 
 export class FindContactsHandler extends Route {
   static schema = {
@@ -78,8 +78,9 @@ export class FindContactsHandler extends Route {
         },
       })
       await putContacts(env.user, phoneBook, contacts, env)
+      
       context.waitUntil(
-        Promise.all([
+        Promise.all([getMergedContacts(env),
           cache.put(
             cacheKey,
             new Response(responseBody, {

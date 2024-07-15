@@ -69,7 +69,7 @@ export class CreateContactHandler extends Route {
         avatarUrl,
         ownerId,
       }
-      const newContact = fromSnakeToCamel(await createContact(env, contact))
+      const newContact = (await createContact(env, contact))
       return new Response(
         JSON.stringify({ result: true, profile: await getUserById(env.DB, newContact.userId) }),
         {

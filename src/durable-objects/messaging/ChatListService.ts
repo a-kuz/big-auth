@@ -7,6 +7,7 @@ import { ContactsManager } from './ContactsManager'
 import { chatStorage, isGroup } from './utils/mdo'
 import { WebSocketGod } from './WebSocketService'
 import { getUserById } from '~/db/services/get-user'
+import { User } from '~/db/models/User'
 
 export class ChatListService {
   public chatList: ChatList = [] // memory access optimization
@@ -52,12 +53,12 @@ export class ChatListService {
     return currentChat
   }
 
-  async updateChat(eventData: UpdateChatInternalEvent) {
+  async updateChat(eventData: UpdateChatInternalEvent, noPatch = false) {
     const { chatId } = eventData
     let name = eventData.name!
     const index = this.chatList.findIndex(chat => chat.id === chatId)
     if (index === -1) return
-    if (!isGroup(chatId!)) {
+    if (!isGroup(chatId!) && !noPatch) {
       const contact = await this.contacts.contact(chatId!)
       if (contact) {
         name = displayName(contact)
@@ -73,12 +74,13 @@ export class ChatListService {
     const userId = this.env.userId!
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
-    if (chatItem && chatItem.lastMessageTime) {
+    if ((chatItem && chatItem.lastMessageTime)|| chatId.toLowerCase() === 'ai') {
       const chatStub = this.chatStorage(chatId)
       const chatData = await chatStub.chat(userId)
       result = await this.contacts.patchChat(chatId, chatData)
     } else {
-      const user = (await getUserById(this.env.DB, chatId)).profile()
+      
+      const user = chatId !== 'ai' ? new User('AI', "") : (await getUserById(this.env.DB, chatId)).profile()
       const patchedUser = await this.contacts.patchProfile(user)
       result = {
         chatId,

@@ -113,6 +113,7 @@ export class MessagingDO implements DurableObject {
         | 'setDeviceToken'
         | 'updateProfile'
         | 'updateContacts'
+        | 'replaceContacts'
         | 'contacts'
         | 'updateChat'
         | 'blink'
@@ -129,6 +130,7 @@ export class MessagingDO implements DurableObject {
     console.log(JSON.stringify({ from, type, action }, null, 2))
     if (!this.env.user) {
       this.env.user = new User(this.#userId, '')
+      this.env.userId = this.#userId
     }
     switch (from) {
       case 'client':
@@ -153,6 +155,8 @@ export class MessagingDO implements DurableObject {
                 return this.updateProfileHandler(request)
               case 'updateContacts':
                 return this.updateContactsHandler(request)
+              case 'replaceContacts':
+                return this.replaceContactsHandler(request)
               case 'contacts':
                 return this.contactsHandler(request)
               case 'lastSeen':
@@ -442,6 +446,15 @@ export class MessagingDO implements DurableObject {
     }
     return new Response()
   }
+  private async replaceContactsHandler(request: Request) {
+    const updatedContacts = await request.json<Profile[]>()
+    try {
+      await this.contacts.replaceContacts(updatedContacts)
+    } catch (e) {
+      await writeErrorLog(e)
+    }
+    return new Response()
+  }
   private async contactsHandler(request: Request) {
     const contacts = await this.contacts.bigUsers()
     return new Response(JSON.stringify(contacts))
@@ -465,11 +478,7 @@ export class MessagingDO implements DurableObject {
       }
     }
   }
-  private toQ(
-    eventData: NewGroupMessageEvent | NewMessageEvent,
-    title: string,
-    imgUrl?: string,
-  ) {
+  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, title: string, imgUrl?: string) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
@@ -479,31 +488,33 @@ export class MessagingDO implements DurableObject {
       0,
     )
 
-    this.state.waitUntil((async () => {
-      const push: PushNotification = {
-        event: {
-          ...eventData,
-          confirmationUrl: await this.confirmationUrl(
-            this.#userId,
-            eventData.chatId,
-            eventData.messageId,
-          ),
-          userId: this.#userId,
-        },
-        deviceToken: this.#deviceToken,
-        body: eventData.message!,
-        title,
-        imgUrl,
-        subtitle: eventData.senderName,
-        badge: missedCount,
-        threadId: eventData.chatId,
-        category: 'message',
-      }
-      await this.env.PUSH_QUEUE.send(push, { contentType: 'json' })
-    })())
+    this.state.waitUntil(
+      (async () => {
+        const push: PushNotification = {
+          event: {
+            ...eventData,
+            confirmationUrl: await this.confirmationUrl(
+              this.#userId,
+              eventData.chatId,
+              eventData.messageId,
+            ),
+            userId: this.#userId,
+          },
+          deviceToken: this.#deviceToken,
+          body: eventData.message!,
+          title,
+          imgUrl,
+          subtitle: eventData.senderName,
+          badge: missedCount,
+          threadId: eventData.chatId,
+          category: 'message',
+        }
+        await this.env.PUSH_QUEUE.send(push, { contentType: 'json' })
+      })(),
+    )
   }
 
-  private async confirmationUrl(userId: string, chatId: string, messageId: number): string {
+  private async confirmationUrl(userId: string, chatId: string, messageId: number): Promise<string> {
     // return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)})}`
     return `${this.env.ORIGIN}/blink/${userId}`
   }
@@ -530,7 +541,8 @@ export class MessagingDO implements DurableObject {
   }
 
   async chatHandler(request: Request) {
-    const { chatId } = await request.json<GetChatRequest>()
+    let { chatId } = await request.json<GetChatRequest>()
+    if (chatId === 'ai') chatId = 'AI'
     const result = await this.cl.chatHandler(chatId)
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
@@ -703,13 +715,10 @@ export class MessagingDO implements DurableObject {
     let dialog = (await storage.chat(this.#userId)) as Dialog | Group
     dialog = await this.contacts.patchChat(chatId, dialog)
     let name = dialog.name
-    if (!isGroup(chatId)) {
-      const contact = await this.contacts.contact(chatId)
-      if (contact) name = displayName(contact)
-    }
+    
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
+      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ?  'undelivered' : 'unread',
       lastMessageText: payload.message,
       lastMessageTime: timestamp,
       lastMessageAuthor: '',

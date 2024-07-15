@@ -102,7 +102,7 @@ export class ContactsManager {
   }
 
   async patchChat(chatId: string, chat: Group | Dialog) {
-    if (chatId === 'AI') return chat
+    if (chatId === 'AI' || chatId === 'ai') return chat
     let result = chat
   
     if (isGroup(chatId)) {
@@ -116,6 +116,8 @@ export class ContactsManager {
     return result
   }
 
+  async replaceContacts(contacts: Profile[]): Promise<void> {
+  }
   async updateContacts(contacts: Profile[]): Promise<void> {
     if (!contacts) return
     const updatedContacts = contacts
@@ -144,15 +146,17 @@ export class ContactsManager {
         }
       })
 
+    console.log(JSON.stringify({updatedContacts}, null, 2))
     for (const contact of updatedContacts) {
       if (contact.id) {
-        this.invalidateCache(contact.id)
         await this.cl.updateChat({
           chatId: contact.id,
           name: displayName(contact),
           meta: contact,
           type: 'dialog',
-        })
+        
+        }, true)
+        this.invalidateCache(contact.id)
       }
     }
 

@@ -36,6 +36,7 @@ import { Mark, MarkPointer, Marks } from '../../types/Marks'
 import { DebugWrapper } from '../DebugWrapper'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
+import { messagePreview } from './utils/message-preview'
 
 export type Missed = { missed: number; first?: string }
 export class DialogsDO extends DebugWrapper {
@@ -187,7 +188,7 @@ messages in storage: ${this.#counter},
       type: 'dialog',
       meta: user2,
       ...(await this.missedFor(userId)),
-      lastMessageText: this.#lastMessage?.message,
+      lastMessageText: messagePreview(this.#lastMessage?.message),
       lastMessageTime: this.#lastMessage?.createdAt,
       lastMessageAuthor: this.#lastMessage?.sender,
       lastMessageStatus,

@@ -39,8 +39,8 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
           id: contact.id,
           phoneNumber: pn.phoneNumber,
           avatarUrl: pn.avatarUrl || contact.avatarUrl,
-          firstName: pn.firstName || contact.firstName,
-          lastName: pn.lastName || contact.lastName,
+          firstName: pn.firstName,
+          lastName: pn.lastName,
           username: contact.username,
         }
       })
@@ -51,7 +51,7 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
 
   const userMessagingDO = userStorage(env, user.id)
   await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${user.id}/client/request/updateContacts`, {
+    new Request(`${env.ORIGIN}/${user.id}/client/request/replaceContacts`, {
       method: 'POST',
       body: JSON.stringify(phoneBookWithIds),
     }),
@@ -147,6 +147,8 @@ export async function createContact(env: Env, contact: any) {
       cause: 'USER_IS_NOT_REGISTERED',
     })
   }
+
+  await putContacts(env.user, [contact], [new User(userId, phoneNumber).profile()], env)
   const existingContactQuery = 'SELECT * FROM contacts WHERE phone_number = ? AND owner_id = ?'
 
   const existingContact = await env.DB.prepare(existingContactQuery)

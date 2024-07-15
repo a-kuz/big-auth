@@ -11,12 +11,12 @@ export class VoipTokenDO extends DebugWrapper {
   }
 
   async setToken(deviceToken: string) {
-    await this.ctx.storage.put('token', deviceToken)
+    await this.state.storage.put('token', deviceToken)
   }
   async setFingerPrint(fingerPrint: string) {
-    await this.ctx.storage.put('fingerPrint', fingerPrint)
+    await this.state.storage.put('fingerPrint', fingerPrint)
   }
   async getToken() {
-    return this.ctx.storage.get<string>(`token`)
+    return this.state.storage.get<string>(`token`)
   }
 }

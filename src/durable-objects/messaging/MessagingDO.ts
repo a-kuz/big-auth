@@ -27,10 +27,10 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Profile } from '~/db/models/User'
-import { getUserById } from '~/db/services/get-user'
+import { Profile, User } from '~/db/models/User'
 import { displayName } from '~/services/display-name'
 import { Dialog, Group } from '~/types/Chat'
+import { encrypt } from '~/utils/crypto'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
@@ -43,6 +43,7 @@ import {
   UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { DebugWrapper } from '../DebugWrapper'
 import { ChatListService } from './ChatListService'
 import { ContactsManager } from './ContactsManager'
@@ -52,7 +53,6 @@ import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
-import { writeErrorLog } from '~/utils/serialize-error'
 
 export class MessagingDO implements DurableObject {
   readonly ['__DURABLE_OBJECT_BRAND']!: never
@@ -67,33 +67,33 @@ export class MessagingDO implements DurableObject {
 
   constructor(
     private readonly state: DurableObjectState,
-    private readonly env: Env,
+    private env: Env,
   ) {
-    this.state.blockConcurrencyWhile(async () => {
-      this.wsService = new WebSocketGod(state, env)
-      this.profileService = new ProfileService(this.state, this.env)
-      this.cl = new ChatListService(this.state, this.env, this.wsService)
-      this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
-      this.wsService.onlineService = this.onlineService
-      this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
-      this.contacts = new ContactsManager(
-        this.env,
-        this.state,
-        this.profileService,
-        this.cl,
-        this.onlineService,
-      )
-      this.cl.contacts = this.contacts
-      await this.cl.initialize()
-    })
+    this.state.blockConcurrencyWhile(async () => this.initialize())
   }
 
+  async initialize() {
+    this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
+    this.wsService = new WebSocketGod(this.state, this.env)
+    this.profileService = new ProfileService(this.state, this.env)
+    this.cl = new ChatListService(this.state, this.env, this.wsService)
+    this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
+    this.wsService.onlineService = this.onlineService
+    this.contacts = new ContactsManager(
+      this.env,
+      this.state,
+      this.profileService,
+      this.cl,
+      this.onlineService,
+    )
+    this.cl.contacts = this.contacts
+    await this.cl.initialize()
+  }
   async alarm(): Promise<void> {
     await this.wsService.alarm()
   }
 
   async fetch(request: Request) {
-    // */userId/internal|client/(event|request)/(request or event name); example: /EiuOGJcrQoY0LjL2-FbtG/internal/event/new', '/EiuOGJcrQoY0LjL2-FbtG/client/request/new''
     const url = new URL(request.url)
     const paths = url.pathname
       .split('/')
@@ -127,7 +127,9 @@ export class MessagingDO implements DurableObject {
       }
     }
     console.log(JSON.stringify({ from, type, action }, null, 2))
-
+    if (!this.env.user) {
+      this.env.user = new User(this.#userId, '')
+    }
     switch (from) {
       case 'client':
         switch (type) {
@@ -463,7 +465,11 @@ export class MessagingDO implements DurableObject {
       }
     }
   }
-  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, title: string, imgUrl?: string) {
+  private toQ(
+    eventData: NewGroupMessageEvent | NewMessageEvent,
+    title: string,
+    imgUrl?: string,
+  ) {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
@@ -473,18 +479,33 @@ export class MessagingDO implements DurableObject {
       0,
     )
 
-    const push: PushNotification = {
-      event: eventData,
-      deviceToken: this.#deviceToken,
-      body: eventData.message,
-      title,
-      imgUrl,
-      subtitle: eventData.senderName,
-      badge: missedCount,
-      threadId: eventData.chatId,
-      category: 'message',
-    }
-    this.state.waitUntil(this.env.PUSH_QUEUE.send(push, { contentType: 'json' }))
+    this.state.waitUntil((async () => {
+      const push: PushNotification = {
+        event: {
+          ...eventData,
+          confirmationUrl: await this.confirmationUrl(
+            this.#userId,
+            eventData.chatId,
+            eventData.messageId,
+          ),
+          userId: this.#userId,
+        },
+        deviceToken: this.#deviceToken,
+        body: eventData.message!,
+        title,
+        imgUrl,
+        subtitle: eventData.senderName,
+        badge: missedCount,
+        threadId: eventData.chatId,
+        category: 'message',
+      }
+      await this.env.PUSH_QUEUE.send(push, { contentType: 'json' })
+    })())
+  }
+
+  private async confirmationUrl(userId: string, chatId: string, messageId: number): string {
+    // return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)})}`
+    return `${this.env.ORIGIN}/blink/${userId}`
   }
 
   async blinkHandler(request: Request) {
@@ -510,29 +531,7 @@ export class MessagingDO implements DurableObject {
 
   async chatHandler(request: Request) {
     const { chatId } = await request.json<GetChatRequest>()
-    let result: Dialog | Group
-    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
-    if (chatItem) {
-      const chat = this.chatStorage(chatId)
-
-      result = await chat.chat(this.#userId)
-      result = await this.contacts.patchChat(chatId, result)
-    } else {
-      const user = (await getUserById(this.env.DB, chatId)).profile()
-      const patchedUser = await this.contacts.patchProfile(user)
-      result = {
-        chatId,
-        type: 'dialog',
-        name: displayName(patchedUser),
-        photoUrl: patchedUser.avatarUrl,
-        isMine: false,
-        lastMessageId: 0,
-        meta: {
-          ...patchedUser,
-        },
-        missed: 0,
-      }
-    }
+    const result = await this.cl.chatHandler(chatId)
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     })

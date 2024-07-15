@@ -29,6 +29,8 @@ export interface Env {
 
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string
+  readonly DLVRD_BASE_URL: string
   readonly TASK_MANAGER: TaskManager
   user: User
+  userId?: string
 }

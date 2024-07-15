@@ -40,7 +40,7 @@ export class WebSocketGod {
     if (sockets.length) {
       this.sendBuffer()
       const alarm = await this.state.storage.getAlarm()
-      if (!alarm)
+      if (!alarm )
         await this.state.storage.setAlarm(Date.now() + 5000, {
           allowConcurrency: true,
           allowUnconfirmed: true,

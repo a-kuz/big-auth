@@ -34,11 +34,13 @@ export class ContactsManager {
       if (chatType(chat.id) === 'dialog') {
         if (this.#contacts.some(c => c.id === chat.id)) continue
         const contact = await this.contact(chat.id)
-        
+        if (!chat.photoUrl && contact?.avatarUrl) {
+          chat.photoUrl = contact.avatarUrl
+        }
       }
     }
   }
-  async contact(userId: string): Promise<Profile | undefined> {
+  async contact(userId: string): Promise<Profile> {
     let contact = this.#contacts.find(contact => contact.id === userId)
     if (contact) {
       return contact
@@ -62,9 +64,13 @@ export class ContactsManager {
 
   private merge(profile: Profile, contact: Profile): Profile {
     return {
-      ...profile,
-      ...contact,
       id: profile.id || contact.id,
+      phoneNumber: profile.phoneNumber || contact.phoneNumber,
+      firstName: contact.firstName || profile.firstName,
+      lastName: contact.lastName || profile.lastName,
+      username: contact.username || profile.username,
+      avatarUrl: contact.avatarUrl || profile.avatarUrl,
+      verified: profile.verified,
     }
   }
 
@@ -74,6 +80,7 @@ export class ContactsManager {
   }
 
   async patchProfile(profile: Profile) {
+    if (profile.id === 'AI') return profile
     const alreaydCached = this.#profileCache.get(profile.id)
     if (alreaydCached) {
       return alreaydCached
@@ -86,6 +93,7 @@ export class ContactsManager {
     contact = await this.contact(profile.id)
     if (contact) {
       contact.phoneNumber = profile.phoneNumber
+      contact.id = profile.id
       await this.updateContacts([contact])
       return this.merge(profile, contact)
     }
@@ -94,8 +102,9 @@ export class ContactsManager {
   }
 
   async patchChat(chatId: string, chat: Group | Dialog) {
+    if (chatId === 'AI') return chat
     let result = chat
-    if (chatId === 'AI') return chat 
+  
     if (isGroup(chatId)) {
       ;(result.meta as GroupMeta).participants = await Promise.all(
         (result.meta as GroupMeta).participants.map((e: Profile) => this.patchProfile(e)),
@@ -111,7 +120,9 @@ export class ContactsManager {
     if (!contacts) return
     const updatedContacts = contacts
       .map(contact => {
-        const prevContact = this.#contacts.find(c => c.phoneNumber === contact.phoneNumber && c.id) || this.#contacts.find(c => c.phoneNumber === contact.phoneNumber )
+        const prevContact =
+          this.#contacts.find(c => c.phoneNumber === contact.phoneNumber && c.id) ||
+          this.#contacts.find(c => c.phoneNumber === contact.phoneNumber)
         return { ...contact, prevContact }
       })
       .filter(
@@ -178,7 +189,15 @@ export class ContactsManager {
 
   async bigUsers() {
     return Promise.all(
-      this.#contacts
+      [
+        ...this.#contacts,
+        ...(await Promise.all(
+          this.cl.chatList
+            .filter(chat => chat.type === 'dialog')
+            .filter(chat => !this.#contacts.some(contact => contact.id === chat.id))
+            .map(async chat => ({ ...(await this.contact(chat.id)) })),
+        )),
+      ]
         .filter(c => !!c.id)
         .map<Promise<ProfileWithLastSeen>>(async c => {
           const chat = this.cl.chatList.find(chat => chat.id === c.id)
@@ -207,19 +226,18 @@ export class ContactsManager {
   private async load() {
     this.#contacts = [
       ...([...(await this.state.storage.list<Profile[]>({ prefix: 'contact-' })).values()] || []),
-    ]
-      .flat()
-      .filter(c => {
-        if (!c.id && this.#contacts.find(c2 => c2.phoneNumber === c.phoneNumber && c2.id)) {
-          return false
-        }
-        if (
-          c.id &&
-          this.#contacts.findLast(c2 => c2.id === c.id && c2.phoneNumber === c.phoneNumber) !== c
-        ) {
-          return false
-        }
-        return true
-      })
+    ].flat()
+    this.#contacts = this.#contacts.filter(c => {
+      if (!c.id && this.#contacts.find(c2 => c2.phoneNumber === c.phoneNumber && c2.id)) {
+        return false
+      }
+      if (
+        c.id &&
+        this.#contacts.findLast(c2 => c2.id === c.id && c2.phoneNumber === c.phoneNumber) !== c
+      ) {
+        return false
+      }
+      return true
+    })
   }
 }

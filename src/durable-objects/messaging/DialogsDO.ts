@@ -264,20 +264,6 @@ messages in storage: ${this.#counter},
       message.status = this.messageStatus(message, message.sender)
       message.read = message.status === 'read' ? 1 : undefined
       message.dlvrd = message.status === 'read' || message.status === 'unread' ? 1 : undefined
-
-      // if (readMark) {
-      //   if (readMark[0] < message.messageId) {
-      //     readMark = readMarks[readMarks.indexOf(readMark) + 1] ?? undefined
-      //   }
-      // }
-      // if (dlvrdMark) {
-      //   if (dlvrdMark[0] < message.messageId) {
-      //     dlvrdMark = dlvrdMarks[dlvrdMarks.indexOf(dlvrdMark) + 1] ?? undefined
-      //   }
-      // }
-
-      // message.read = readMark ? readMark[1] : undefined
-      // message.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
     }
     return messages
   }
@@ -399,7 +385,18 @@ messages in storage: ${this.#counter},
       throw new Error(`messageId is not exists`)
     }
 
-    const messageId: MessageId = request.messageId ?? this.#lastMessage?.messageId ?? 0
+    const messageId: MessageId = request.messageId ?? this.#lastMessage?.messageId ?? -1
+    if (messageId < 0) {
+      return {
+        messageId,
+        timestamp,
+        chatId: request.chatId,
+        clientMessageId: messageId.toString(),
+        missed: 0,
+        // @ts-ignore
+        err: "shlem read v pustoy chat"
+      }
+    }
     const message = (await this.#message(messageId))!
     const clientMessageId = message.clientMessageId
     const readMark = await this.findMark(sender, messageId, 'read')

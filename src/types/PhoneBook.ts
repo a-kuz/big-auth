@@ -2,6 +2,7 @@ export type PhoneBookItem = {
   phoneNumber: string
   firstName?: string
   lastName?: string
-  avatar_url?: string
+  avatarUrl?: string
+  fingerprint?:string
 }
 export type PhoneBook = PhoneBookItem[]

@@ -30,16 +30,24 @@ type pRow = {
 }
 
 export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Profile[], env: Env) {
-  const phoneBookWithIds: Profile[] = phoneNumbers
-    .map((pn: PhoneBookItem) => {
-      const contact = users.find(c => c.phoneNumber === pn.phoneNumber)
-      if (!contact) return undefined
-      return {
-        ...contact,
-        ...pn,
-      }
-    })
-    .filter(e => !!e)
+  const phoneBookWithIds: (Profile & PhoneBookItem)[] = await Promise.all(
+    phoneNumbers
+      .map((pn: PhoneBookItem) => {
+        const contact = users.find(c => c.phoneNumber === pn.phoneNumber)
+        if (!contact) return undefined
+        return {
+          id: contact.id,
+          phoneNumber: pn.phoneNumber,
+          avatarUrl: pn.avatarUrl || contact.avatarUrl,
+          firstName: pn.firstName || contact.firstName,
+          lastName: pn.lastName || contact.lastName,
+          username: contact.username,
+        }
+      })
+
+      .filter(e => !!e)
+      .map(async e => ({ ...e, fingerprint: await contactFingerprint(e) })),
+  )
 
   const userMessagingDO = userStorage(env, user.id)
   await userMessagingDO.fetch(
@@ -61,45 +69,52 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
     existing = []
   }
 
-  const changed = phoneNumbers.filter(pn =>
-    existing.some(e => e.row_fingerprint !== contactFingerprint(pn) && e.phone_number2 = pn.phoneNumber),
+  const changedNumbers = phoneBookWithIds.filter(pn =>
+    existing.some(e => e.row_fingerprint !== pn.fingerprint && e.phone_number2 === pn.phoneNumber),
   )
 
-  const newNumbers = phoneNumbers.filter(pn =>
-    !existing.find(
-      e => e.phone_number2 === pn.phoneNumber
-    ),
+  const newNumbers = phoneBookWithIds.filter(
+    pn => !existing.some(e => e.phone_number2 === pn.phoneNumber),
   )
 
-  
   const chunkSize = 10
-  for (let i = 0; i < changed.length; i += chunkSize) {
-    const chunk = changed.slice(i, i + chunkSize)
-    const deleteQuery = `
+  for (let i = 0; i < changedNumbers.length; i += chunkSize) {
+    const chunk = changedNumbers.slice(i, i + chunkSize)
+    const updateQuery = `
       UPDATE phone_numbers 
-      WHERE phone_number1 = ? AND phone_number2 IN (${chunk.map(() => '?').join(', ')})
+      SET first_name = ?, last_name = ?, row_fingerprint = ?, avatar_url = ?
+      WHERE phone_number1 = ? AND phone_number2 = ?
     `
-    try {
-      await DB.prepare(deleteQuery)
-        .bind(user.phoneNumber, ...chunk.map(pn => pn.phoneNumber))
-        .run()
-    } catch (error) {
-      // Handle error
-      console.error(error)
-      throw error
+    for (const pn of chunk) {
+      try {
+        await DB.prepare(updateQuery)
+          .bind(
+            pn.firstName ?? '',
+            pn.lastName ?? '',
+            pn.fingerprint ?? '',
+            pn.avatarUrl ?? '',
+            user.phoneNumber,
+            pn.phoneNumber,
+          )
+          .run()
+      } catch (error) {
+        // Handle error
+        console.error(error)
+        throw error
+      }
     }
   }
-  for (let i = 0; i < changed.length; i += chunkSize) {
-    const chunk = changed.slice(i, i + chunkSize)
+  for (let i = 0; i < newNumbers.length; i += chunkSize) {
+    const chunk = newNumbers.slice(i, i + chunkSize)
     const values = chunk
       .map(
         pn =>
-          `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}', '${(pn.phoneNumber ?? '') + (pn.firstName ?? '') + (pn.lastName ?? '')}')`,
+          `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}', '${pn.fingerprint}', '${pn.avatarUrl ?? ''}')`,
       )
       .join(', ')
 
     const chunkInsertQuery = `
-      INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name, row_fingerprint)
+      INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name, row_fingerprint, avatar_url)
       VALUES ${values}
     `
     try {
@@ -112,8 +127,8 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
   }
 }
 
-function contactFingerprint(pn: PhoneBookItem) {
-  return pn.phoneNumber + (pn.firstName ?? '') + (pn.lastName ?? '') + (pn.avatar_url ?? '')
+async function contactFingerprint(pn: PhoneBookItem) {
+  return digest(pn.phoneNumber + (pn.firstName ?? '') + (pn.lastName ?? '') + (pn.avatarUrl ?? ''))
 }
 
 export async function createContact(env: Env, contact: any) {
@@ -179,99 +194,109 @@ export async function getContacts(env: Env, ownerId: string) {
 }
 
 export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
-  const query = `
-    SELECT u.id,
-           CASE WHEN COALESCE(pn.first_name, '') = '' THEN u.first_name ELSE pn.first_name END AS first_name,
-           CASE WHEN COALESCE(pn.last_name, '') = '' THEN u.last_name ELSE pn.last_name END AS last_name,
-           CASE WHEN COALESCE(pn.avatar_url, '') = '' THEN u.avatar_url ELSE pn.avatar_url END AS avatar_url,
-           u.phone_number,
-           u.username,
-           u.created_at,
-           u.verified
-    FROM phone_numbers pn
-    JOIN users u ON pn.phone_number2 = u.phone_number
-    WHERE pn.phone_number1 = ?
-  `
-  const contacts = await env.DB.prepare(query).bind(env.user.phoneNumber).all<Required<UserDB>>()
-
   const userMessagingDO = userStorage(env, env.user.id)
 
-  const chatListResponse = await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${env.user.id}/client/request/chats`, {
+  const response = await userMessagingDO.fetch(
+    new Request(`${env.ORIGIN}/${env.user.id}/client/request/contacts`, {
       method: 'POST',
       body: '{}',
     }),
   )
+  return response.json<ProfileWithLastSeen[]>()
 
-  const chatList = await chatListResponse.json<ChatList>()
-  const chatListIds = chatList.filter(chat => chat.type === 'dialog').map(chat => chat.id)
+  // const query = `
+  //   SELECT u.id,
+  //          CASE WHEN COALESCE(pn.first_name, '') = '' THEN u.first_name ELSE pn.first_name END AS first_name,
+  //          CASE WHEN COALESCE(pn.last_name, '') = '' THEN u.last_name ELSE pn.last_name END AS last_name,
+  //          CASE WHEN COALESCE(pn.avatar_url, '') = '' THEN u.avatar_url ELSE pn.avatar_url END AS avatar_url,
+  //          u.phone_number,
+  //          u.username,
+  //          u.created_at,
+  //          u.verified
+  //   FROM phone_numbers pn
+  //   JOIN users u ON pn.phone_number2 = u.phone_number
+  //   WHERE pn.phone_number1 = ?
+  // `
+  // const contacts = await env.DB.prepare(query).bind(env.user.phoneNumber).all<Required<UserDB>>()
 
-  const chatListUsers = { results: [] as Required<UserDB>[] }
-  if (chatListIds.length > 0) {
-    for (let i = 0; i < chatListIds.length; i += 10) {
-      const chunk = chatListIds.slice(i, i + 10)
-      const chatListUsersQuery = `
-        SELECT u.*
-        FROM users u
-        WHERE id IN (${chunk.map(() => '?').join(',')})
-      `
-      const chunkResults = await env.DB.prepare(chatListUsersQuery)
-        .bind(...chunk)
-        .all<Required<UserDB>>()
-      chatListUsers.results.push(...chunkResults.results)
-    }
-  }
+  // const userMessagingDO1 = userStorage(env, env.user.id)
 
-  const combinedResults = [...contacts.results, ...chatListUsers.results]
-  type UserDBWithStatus = Required<UserDB> & {
-    status: 'online' | 'offline' | 'unknown'
-    lastSeen?: number
-  }
-  const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>(
-    (acc, current) => {
-      const x = acc.find(item => item.id === current.id)
-      if (!x) {
-        acc.push({ ...current, status: 'unknown' })
-      }
-      return acc
-    },
-    [],
-  )
+  // const chatListResponse = await userMessagingDO.fetch(
+  //   new Request(`${env.ORIGIN}/${env.user.id}/client/request/chats`, {
+  //     method: 'POST',
+  //     body: '{}',
+  //   }),
+  // )
 
-  const promises = uniqueResults
-    .filter(u => u.first_name || u.last_name || u.username)
-    .map(async contact => {
-      const contactFromChatList = chatList.find(chat => chat.id === contact.id)
-      if (contactFromChatList) {
-        contact.lastSeen = contactFromChatList.lastSeen
-        contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
-      } else {
-        const mdo = userStorage(env, contact.id)
-        const lastSeenResponse = await mdo.fetch(
-          new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
-            method: 'POST',
-          }),
-        )
-        const lastSeen = await lastSeenResponse.json<OnlineStatus>()
-        if (lastSeen.status === 'offline') {
-          contact.lastSeen = lastSeen.lastSeen
-          contact.status = lastSeen.status
-        }
-      }
-      return {
-        id: contact.id,
-        phoneNumber: contact.phone_number,
-        firstName: contact.first_name || undefined,
-        lastName: contact.last_name || undefined,
-        username: contact.username || undefined,
-        avatarUrl: contact.avatar_url || undefined,
-        verified: !!(contact.verified || false),
-        lastSeen: contact.lastSeen,
-        status: contact.status,
-      } as ProfileWithLastSeen
-    })
+  // const chatList = await chatListResponse.json<ChatList>()
+  // const chatListIds = chatList.filter(chat => chat.type === 'dialog').map(chat => chat.id)
 
-  return Promise.all(promises)
+  // const chatListUsers = { results: [] as Required<UserDB>[] }
+  // if (chatListIds.length > 0) {
+  //   for (let i = 0; i < chatListIds.length; i += 10) {
+  //     const chunk = chatListIds.slice(i, i + 10)
+  //     const chatListUsersQuery = `
+  //       SELECT u.*
+  //       FROM users u
+  //       WHERE id IN (${chunk.map(() => '?').join(',')})
+  //     `
+  //     const chunkResults = await env.DB.prepare(chatListUsersQuery)
+  //       .bind(...chunk)
+  //       .all<Required<UserDB>>()
+  //     chatListUsers.results.push(...chunkResults.results)
+  //   }
+  // }
+
+  // const combinedResults = [...contacts.results, ...chatListUsers.results]
+  // type UserDBWithStatus = Required<UserDB> & {
+  //   status: 'online' | 'offline' | 'unknown'
+  //   lastSeen?: number
+  // }
+  // const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>(
+  //   (acc, current) => {
+  //     const x = acc.find(item => item.id === current.id)
+  //     if (!x) {
+  //       acc.push({ ...current, status: 'unknown' })
+  //     }
+  //     return acc
+  //   },
+  //   [],
+  // )
+
+  // const promises = uniqueResults
+  //   .filter(u => u.first_name || u.last_name || u.username)
+  //   .map(async contact => {
+  //     const contactFromChatList = chatList.find(chat => chat.id === contact.id)
+  //     if (contactFromChatList) {
+  //       contact.lastSeen = contactFromChatList.lastSeen
+  //       contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
+  //     } else {
+  //       const mdo = userStorage(env, contact.id)
+  //       const lastSeenResponse = await mdo.fetch(
+  //         new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
+  //           method: 'POST',
+  //         }),
+  //       )
+  //       const lastSeen = await lastSeenResponse.json<OnlineStatus>()
+  //       if (lastSeen.status === 'offline') {
+  //         contact.lastSeen = lastSeen.lastSeen
+  //         contact.status = lastSeen.status
+  //       }
+  //     }
+  //     return {
+  //       id: contact.id,
+  //       phoneNumber: contact.phone_number,
+  //       firstName: contact.first_name || undefined,
+  //       lastName: contact.last_name || undefined,
+  //       username: contact.username || undefined,
+  //       avatarUrl: contact.avatar_url || undefined,
+  //       verified: !!(contact.verified || false),
+  //       lastSeen: contact.lastSeen,
+  //       status: contact.status,
+  //     } as ProfileWithLastSeen
+  //   })
+
+  // return Promise.all(promises)
 }
 
 export async function getContactById(env: Env, id: string, ownerId: string) {

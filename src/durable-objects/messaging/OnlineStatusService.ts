@@ -73,14 +73,14 @@ export class OnlineStatusService {
         !chat.isMine &&
         chat.lastMessageStatus === 'undelivered',
     )) {
-      this.#outgoingDlvrdQueue.push({ chatId: chat.id })
+      //this.#outgoingDlvrdQueue.push({ chatId: chat.id })
       const receiverDO = chatStorage(this.env, chat.id, this.userId)
       await receiverDO.dlvrd(this.userId, { chatId: chat.id }, timestamp)
       chat.lastMessageStatus = 'unread'
       this.chatListService.save()
     }
-    await this.state.storage.put('outgoingDlvrdQueue', this.#outgoingDlvrdQueue)
-    await this.state.storage.setAlarm(Date.now() + 100)
+    // await this.state.storage.put('outgoingDlvrdQueue', this.#outgoingDlvrdQueue)
+    // await this.state.storage.setAlarm(Date.now() + 100)
   }
 
   async processOutgoingStatusQueue(eventsPerProcessing = 6): Promise<void> {

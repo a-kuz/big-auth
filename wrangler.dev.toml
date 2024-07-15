@@ -15,6 +15,7 @@ workers_dev = true
 [vars]
 TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c'
 ORIGIN = "https://dev.iambig.ai"
+DLVRD_BASE_URL = "https://dev.dlvrd.iambig.ai/"
 AI_AVATAR_URL = "https://dev.iambig.ai/public/23d6658a2a06538a1b04c56aeb1f1874815f6a7f3853481a29609ca46de57bef"
 ENV = "development"
 
@@ -51,11 +52,10 @@ bindings = [
 
 
 [[migrations]]
-tag = "v56"
-deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO"]
+tag = "v60"
+deleted_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
 [[migrations]]
-tag = "v57"
-new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO"]
-[[migrations]]
-tag = "v58"
-new_classes = [ "VoipTokenDO"]
+tag = "v62"
+new_classes = ["UserMessagingDO", "DialogsDO", "GroupChatsDO", "ChatGptDO"]
+
+

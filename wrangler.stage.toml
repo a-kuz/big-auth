@@ -53,6 +53,7 @@ migrations = [
 	] },
 ]
 
+vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0", DLVRD_BASE_URL = "https://stage.dlvrd.iambig.ai/" }
 queues = { producers = [
 	{ binding = "PUSH_QUEUE", queue = "push-queue-stage" },
 ] }
@@ -65,7 +66,6 @@ durable_objects = { bindings = [
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
 	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" },
 ] }
-vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0" }
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
 ]

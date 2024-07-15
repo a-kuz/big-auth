@@ -39,6 +39,7 @@ import { CORS } from './utils/cors'
 import { BlinkHandler } from './handlers/BlinkHandler'
 import { env } from 'process'
 import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
+import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
 export { WorkerBigAuth } from './worker'
 
 export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
@@ -83,6 +84,8 @@ router.get('/network', NetworkInfoHandler)
 router.original.get('/deviceTokens/:userId', GetDeviceTokensHandler) // tmp, only dev
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
+router.get('/blink/:userId', PublicBlinkHandler)
+router.post('/blink/:userId', PublicBlinkHandler)
 router.all('/*', authenticateUser)
 router.original.get('/websocket', WebsocketHandler)
 router.get('/contacts/merged', GetMergedContactsHandler)

@@ -448,7 +448,7 @@ export class GroupChatsDO extends DebugWrapper {
   }
   async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
     this.#call = undefined
-    await this.#storage.put('call', this.#call)
+    await this.#storage.delete('call')
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     console.log(messageId)
@@ -462,7 +462,7 @@ export class GroupChatsDO extends DebugWrapper {
       payload: request.payload
     }
     this.#messages[messageId] = message
-    await this.#storage.put<GroupChatMessage>(`message-${messageId}`, message)
+    await this.#storage.put<StoredGroupMessage>(`message-${messageId}`, message)
     for (const receiver of this.#users.filter(m => m.id !== sender)) {
       const event: CloseCallEvent = {
         chatId: this.group.chatId,

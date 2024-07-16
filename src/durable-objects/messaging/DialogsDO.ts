@@ -381,12 +381,19 @@ messages in storage: ${this.#counter},
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage
     this.#lastMessage = message
-    await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
     if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
       await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       this.#lastMessageOfPreviousAuthor = prevMessage
     }
-
+    if (request.payload.participants) {
+      await Promise.all(
+        [
+          this.sendCloseCallToReceiver(request.payload.caller, request.payload),
+          this.sendCloseCallToReceiver(request.chatId, request.payload)
+        ]
+      );
+    }
     //await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }

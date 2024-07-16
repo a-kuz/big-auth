@@ -389,8 +389,8 @@ messages in storage: ${this.#counter},
     if (request.payload.participants) {
       await Promise.all(
         [
-          this.sendCloseCallToReceiver(request.payload.caller, request.payload),
-          this.sendCloseCallToReceiver(request.chatId, request.payload)
+          this.sendCloseCallToReceiver(request.payload.caller, request.payload,messageId),
+          this.sendCloseCallToReceiver(request.chatId, request.payload,messageId)
         ]
       );
     }
@@ -398,7 +398,7 @@ messages in storage: ${this.#counter},
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload){
+  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload,messageId:number){
     const receiverDO = userStorage(this.env, receiverId)
     const senderId = this.chatIdFor(receiverId)
     const event: CloseCallEvent = {
@@ -406,7 +406,8 @@ messages in storage: ${this.#counter},
       callId: payload.callId,
       callType: payload.callType,
       status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
-      direction: payload.caller == receiverId ? 'outcoming' : 'incoming'
+      direction: payload.caller == receiverId ? 'outcoming' : 'incoming',
+      messageId
     }
     const body = JSON.stringify(event)
     const resp = await receiverDO.fetch(

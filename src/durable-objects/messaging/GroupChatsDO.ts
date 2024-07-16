@@ -469,7 +469,8 @@ export class GroupChatsDO extends DebugWrapper {
         callId: request.payload.callId,
         callType: request.payload.callType,
         status: request.payload.participants?.includes(receiver.id) ? 'received' : 'missed',
-        direction: request.payload.caller == receiver.id ? 'outcoming' : 'incoming'
+        direction: request.payload.caller == receiver.id ? 'outcoming' : 'incoming',
+        messageId
       }
       this.#outgoingEvets.push({
         event,

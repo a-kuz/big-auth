@@ -303,6 +303,28 @@ export class MessagingDO extends DurableObject {
   }
   async closeCallEventHandler(request: Request) {
     const eventData = await request.json<CloseCallEvent>()
+    const { chatId } = eventData
+    const text = eventData.status === 'missed' ?
+      `Missed ${eventData.callType == 'video' ?
+        'video' :
+        ''} call` :
+      `${eventData.direction == 'incoming' ?
+        'Incoming' :
+        'Outcoming'} ${eventData.callType == 'video' ?
+          'video' :
+          ''} call`
+    const chat = this.cl.toTop(chatId, {
+      id: chatId,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: text,
+      lastMessageTime: this.timestamp(),
+      lastMessageId: eventData.messageId,
+      type: chatType(chatId),
+      verified: false,
+    })
+    chat.missed = 0
+    this.cl.chatList.unshift(chat)
+    await this.cl.save()
     await this.wsService.toBuffer('closeCall', eventData)
     return new Response()
   }

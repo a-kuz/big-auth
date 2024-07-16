@@ -48,8 +48,9 @@ export interface NewCallEvent {
 export interface CloseCallEvent {
   chatId: string
   callId: string
-  callType: CallType,
-  status: CallStatusType,
+  callType: CallType
+  messageId: number
+  status: CallStatusType
   direction: CallDirectionType
 }
 export interface DeleteChatEvent {

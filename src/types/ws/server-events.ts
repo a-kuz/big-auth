@@ -1,6 +1,6 @@
 import { ServerEventType } from '.'
 import { Attachment, AttachmentType } from '../Attachment'
-import { ForwardedFrom, ReplyTo } from './client-requests'
+import { ReplyTo } from './client-requests'
 import { ServerEventPayload } from './payload-types'
 
 export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
@@ -44,7 +44,7 @@ export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
   sender: string
   replyTo?: ReplyTo
-  forwardedFrom?: ForwardedFrom
+  forwarded?: boolean
 
   message?: string
   senderName?: string

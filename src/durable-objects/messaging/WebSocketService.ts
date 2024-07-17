@@ -16,7 +16,7 @@ const PING = String.fromCharCode(0x9)
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
-  #eventBuffer = new Map<string, ServerEvent>()
+  #eventBuffer = new Map<string, ServerEvent & { key?: string }>()
   #lastCheck: number = 0
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
@@ -40,7 +40,7 @@ export class WebSocketGod {
     if (sockets.length) {
       this.sendBuffer()
       const alarm = await this.state.storage.getAlarm()
-      if (!alarm )
+      if (!alarm)
         await this.state.storage.setAlarm(Date.now() + 5000, {
           allowConcurrency: true,
           allowUnconfirmed: true,
@@ -55,11 +55,11 @@ export class WebSocketGod {
       return new Response('Expected WebSocket Upgrade', { status: 426 })
     }
     const webSocketPair = new WebSocketPair()
-    
+
     const [client, server] = Object.values(webSocketPair)
-    
+
     this.state.acceptWebSocket(server, ['user'])
-    
+
     this.refreshPing()
     this.clearBuffer()
 
@@ -166,7 +166,7 @@ export class WebSocketGod {
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
-  async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100) {
+  async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100, key?: string) {
     if (!this.onlineService.isOnline()) return
     const id = newId(10)
 
@@ -177,7 +177,17 @@ export class WebSocketGod {
       type: 'event',
       id,
     }
-    this.#eventBuffer.set(id, packet)
+
+    
+    if (this.env.ENV === 'dev') this.#eventBuffer.set(id, packet)
+    else
+      setTimeout(
+        () => {
+          this.#eventBuffer.set(id, { ...packet, ...(key ? { key } : {}) })
+        },
+        Math.max(0, after - 50),
+      ) // #costile against iOS chatlist doubling chats (race condition)
+
     const alarm = await this.state.storage.getAlarm()
     if (!alarm || alarm > Date.now() + after)
       await this.state.storage.setAlarm(Date.now() + after, {
@@ -185,7 +195,7 @@ export class WebSocketGod {
         allowUnconfirmed: true,
       })
   }
-  private sendPacket(packet: ServerEvent) {
+  sendPacket(packet: ServerEvent) {
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {
       ws.send(JSON.stringify(packet))
@@ -193,7 +203,11 @@ export class WebSocketGod {
   }
 
   private sendBuffer() {
-    for (const event of this.#eventBuffer.values()) {
+    let events = [...this.#eventBuffer.values()]
+    events.sort((a, b) => b.timestamp - a.timestamp)
+    events = events.filter(event => !event.key || events.find(e => e.key === event.key) === event)
+
+    for (const event of events) {
       this.sendPacket(event)
     }
   }

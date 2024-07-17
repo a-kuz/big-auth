@@ -1,10 +1,10 @@
 import { ClientEventType, ClientRequestType } from '.'
-import { dlt, edit, dlvrd, read, nw, typing } from './event-literals'
+import { dlt, dlvrd, edit, nw, read, typing } from './event-literals'
 
+import { Profile } from '~/db/models/User'
 import { Attachment } from '../Attachment'
-import { UserId } from './internal'
 import { ChatMessage } from '../ChatMessage'
-import { Profile, User } from '~/db/models/User'
+import { UserId } from './internal'
 
 export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
@@ -43,6 +43,7 @@ export interface NewMessageRequest {
   attachments?: Attachment[]
   clientMessageId: string
   replyTo?: number
+  forwarded?: boolean
 }
 
 export interface ReplyTo {
@@ -53,11 +54,7 @@ export interface ReplyTo {
   sender: string
   createdAt: number
 }
-export interface ForwardedFrom {
-  chatId: string
-  messageId: number
-  author: Profile
-}
+
 export interface GetChatRequest {
   chatId: string
 }

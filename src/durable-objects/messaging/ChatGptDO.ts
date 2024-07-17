@@ -1,13 +1,18 @@
 import { ChatMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
   DeleteRequest,
-	GetMessagesRequest,
-	GetMessagesResponse,
-	MarkDeliveredRequest,
-	MarkReadRequest,
-	NewMessageRequest,
+  GetMessagesRequest,
+  GetMessagesResponse,
+  MarkDeliveredRequest,
+  MarkReadRequest,
+  NewMessageRequest,
 } from '~/types/ws/client-requests'
-import { DeleteMessageResponse, MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import {
+  DeleteResponse,
+  MarkDlvrdResponse,
+  MarkReadResponse,
+  NewMessageResponse,
+} from '~/types/ws/responses'
 import { Env } from '../../types/Env'
 
 import { User } from '~/db/models/User'
@@ -39,7 +44,7 @@ export class ChatGptDO extends DebugWrapper {
     readonly env: Env,
   ) {
     super(ctx, env)
-    
+
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
@@ -49,7 +54,7 @@ export class ChatGptDO extends DebugWrapper {
     try {
       if (this.#messages.slice(-1)[0].sender === this.#id) {
         await this.read(
-          'AI',
+          'ai',
           { chatId: this.#id, messageId: this.#messages.slice(-1)[0].messageId },
           Date.now(),
         )
@@ -77,11 +82,12 @@ export class ChatGptDO extends DebugWrapper {
           clientMessageId: message.clientMessageId,
           timestamp: message.createdAt,
           missed: 1,
-          firstMissed: message.clientMessageId 
+          firstMissed: message.clientMessageId,
         }
         this.#messages.push(message)
         await this.ctx.storage.put<StoredDialogMessage>(`message-${message.messageId}`, message)
-        await this.sendNewEventToReceiver(this.#id, message, message.createdAt)
+        console.log('this.#id', this.#id)
+        await this.sendNewEventToReceiver(this.#user?.id!, message, message.createdAt)
       }
     } catch (e) {
       await writeErrorLog(e)
@@ -105,7 +111,7 @@ export class ChatGptDO extends DebugWrapper {
       clientMessageId: message.clientMessageId,
       timestamp,
       missed: 1,
-      firstMissed: message.clientMessageId
+      firstMissed: message.clientMessageId,
     }
 
     const reqBody = JSON.stringify(event)
@@ -132,7 +138,7 @@ export class ChatGptDO extends DebugWrapper {
       this.#user = await getUserById(
         this.env.DB,
         owner,
-        new NotFoundError(`user ${owner} is not exists`),
+        new NotFoundError(`user ${owner} is not exists (from ai)`),
       )
       const message: ChatMessage = {
         clientMessageId: newId(),
@@ -157,11 +163,12 @@ export class ChatGptDO extends DebugWrapper {
 
   chat(userId?: string): DialogAI {
     if (!this.#user) {
+      if (userId) {
+        this.#id = userId
+      }
+    } else {
+      this.#id = this.#user.id
     }
-    if (userId) {
-      this.#id = userId
-    }
-
     const lastMessage = this.#messages.slice(-1)[0]
     const missed = this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0
     const chat: ChatListItem | DialogAI = {
@@ -188,16 +195,16 @@ export class ChatGptDO extends DebugWrapper {
   counter() {
     return this.#messages.length
   }
-  async deleteMessage( sender: UserId, request: DeleteRequest): Promise<DeleteMessageResponse> {
-    const { originalMessageId, chatId } = request;
-    const message = this.#messages[originalMessageId];
+  async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteResponse> {
+    const { originalMessageId, chatId } = request
+    const message = this.#messages[originalMessageId]
     if (!message) {
-      throw new Error(`Message with ID ${originalMessageId} does not exist`);
+      throw new Error(`Message with ID ${originalMessageId} does not exist`)
     }
-    message.deletedAt = this.timestamp();
-    message.message = undefined;
-    message.attachments = undefined;
-    await this.state.storage.put(`message-${originalMessageId}`, message);
+    message.deletedAt = this.timestamp()
+    message.message = undefined
+    message.attachments = undefined
+    await this.state.storage.put(`message-${originalMessageId}`, message)
 
     const messageId = await this.newId()
     const clientMessageId = `dlt-${messageId}-${newId(3)}`
@@ -206,20 +213,20 @@ export class ChatGptDO extends DebugWrapper {
       clientMessageId,
       sender,
       type: 'delete',
-      payload: { originalMessageId},
+      payload: { originalMessageId },
       createdAt: message.deletedAt,
-    };
-    
-    this.#messages[serviceMessage.messageId] = serviceMessage;
-    await this.state.storage.put(`message-${serviceMessage.messageId}`, serviceMessage);
-    
+    }
+
+    this.#messages[serviceMessage.messageId] = serviceMessage
+    await this.state.storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+
     const deleteMessageEvent: DeleteEvent = {
-       originalMessageId, chatId, messageId      
-    };
-  
-    
-    
-    return { messageId, timestamp: message.deletedAt };
+      originalMessageId,
+      chatId,
+      messageId,
+    }
+
+    return { messageId, timestamp: message.deletedAt }
   }
   async newId() {
     this.#counter++

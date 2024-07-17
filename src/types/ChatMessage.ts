@@ -1,6 +1,6 @@
 import { Attachment } from './Attachment'
 import { MessageStatus } from './ChatList'
-import { ForwardedFrom, ReplyTo } from './ws/client-requests'
+import { ReplyTo } from './ws/client-requests'
 import { dlt, edit, nw } from './ws/event-literals'
 
 interface Delivering {
@@ -28,7 +28,7 @@ export interface StoredDialogMessage {
   attachments?: Attachment[]
   
   replyTo?: ReplyTo
-  forwardedFrom?: ForwardedFrom
+  forwarded?: boolean
   
   type?: MessageType
   payload?:  EditPayload | DeletionPayload
@@ -47,7 +47,7 @@ export interface DialogMessage {
   sender: string
   
   replyTo?: ReplyTo
-  forwardedFrom?: ForwardedFrom
+  forwarded?: boolean
   
   status?: MessageStatus
   
@@ -64,6 +64,8 @@ export interface GroupChatMessage {
   message?: string
   sender: string
   replyTo?: ReplyTo
+  type?: MessageType
+  payload?:  EditPayload | DeletionPayload
   attachments?: Attachment[]
   delivering?: Delivering[]
   createdAt: number

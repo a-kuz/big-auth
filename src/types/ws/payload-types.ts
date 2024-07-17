@@ -1,7 +1,7 @@
 import {
   NewMessageResponse,
   EditMessageResponse,
-  DeleteMessageResponse,
+  DeleteResponse,
   MarkReadResponse,
   MarkDlvrdResponse,
 } from './responses'
@@ -34,7 +34,7 @@ export type ClientRequestPayload =
 export type ServerResponsePayload =
   | NewMessageResponse
   | EditMessageResponse
-  | DeleteMessageResponse
+  | DeleteResponse
   | MarkReadResponse
   | MarkDlvrdResponse
   | {}

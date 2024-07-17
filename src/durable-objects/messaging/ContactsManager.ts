@@ -66,8 +66,8 @@ export class ContactsManager {
     return {
       id: profile.id || contact.id,
       phoneNumber: profile.phoneNumber || contact.phoneNumber,
-      firstName: contact.firstName || profile.firstName,
-      lastName: contact.lastName || profile.lastName,
+      firstName: contact ? contact.firstName : profile.firstName,
+      lastName: contact ? contact.lastName : profile.lastName,
       username: contact.username || profile.username,
       avatarUrl: contact.avatarUrl || profile.avatarUrl,
       verified: profile.verified,
@@ -80,7 +80,7 @@ export class ContactsManager {
   }
 
   async patchProfile(profile: Profile) {
-    if (profile.id === 'AI') return profile
+    if (profile.id === 'AI' || profile.id === 'ai') return profile
     const alreaydCached = this.#profileCache.get(profile.id)
     if (alreaydCached) {
       return alreaydCached
@@ -116,8 +116,8 @@ export class ContactsManager {
     return result
   }
 
-  async replaceContacts(contacts: Profile[]): Promise<void> {
-  }
+
+
   async updateContacts(contacts: Profile[]): Promise<void> {
     if (!contacts) return
     const updatedContacts = contacts
@@ -138,9 +138,9 @@ export class ContactsManager {
       .map(c => {
         const { prevContact, ...contact } = c
         return {
-          ...(prevContact || contact),
-          firstName: contact.firstName || prevContact?.firstName,
-          lastName: contact.lastName || prevContact?.lastName,
+          ...(contact || prevContact),
+          firstName: contact.firstName ?? '',
+          lastName: contact.lastName ?? '', 
           avatarUrl: contact.avatarUrl || prevContact?.avatarUrl,
           id: prevContact?.id || contact.id,
         }
@@ -243,5 +243,35 @@ export class ContactsManager {
       }
       return true
     })
+  }
+
+  async replaceContacts(contacts: Profile[]): Promise<void> {
+    const contactsToRemove = this.#contacts.filter(
+      existingContact => !contacts.some(contact => contact.phoneNumber === existingContact.phoneNumber)
+    );
+
+    for (const contact of contactsToRemove) {
+      const block = this.getBlock(contact.phoneNumber);
+      const key = `contact-${block}`;
+      const existingContacts = this.#contacts.filter(c => this.getBlock(c.phoneNumber) === block);
+      this.#contacts = this.#contacts.filter(c => c.phoneNumber !== contact.phoneNumber);
+      this.invalidateCache(contact.id)
+      let user = this.#usersCache.get(contact.id)
+      if (!user) {
+        user = await getUserById(this.env.DB, contact.id)
+        
+        this.#usersCache.set(contact.id, user)
+      }
+      await this.cl.updateChat({
+        chatId: contact.id,
+        name: displayName(user),
+        meta: user,
+        type: 'dialog',
+      }, true);
+
+      await this.state.storage.put(key, existingContacts.filter(c => c.phoneNumber !== contact.phoneNumber));
+    }
+
+    await this.updateContacts(contacts);
   }
 }

@@ -6,6 +6,7 @@ import { Call, Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { GroupChatMessage } from '~/types/ChatMessage'
 import {
+  DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
   MarkDeliveredRequest,
@@ -22,13 +23,14 @@ import {
   Timestamp,
   UserId,
 } from '~/types/ws/internal'
-import { MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
+import { DeleteResponse, MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { DebugWrapper } from '../DebugWrapper'
+import { DeleteEvent } from '~/types/ws/server-events'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -165,13 +167,11 @@ export class GroupChatsDO extends DebugWrapper {
     }
   }
 
-  async fetchUsers() {
-    if (!this.group?.meta?.participants) {
-      return false
-    }
+  async fetchUsers(participants: string[]) {
+    
 
-    for (const u of this.group.meta.participants) {
-      const userId: string = (u as Profile).id ?? u
+    for (const userId of participants) {
+      
       const user = await getUserById(
         this.env.DB,
         userId,
@@ -181,15 +181,15 @@ export class GroupChatsDO extends DebugWrapper {
       if (!(row === -1)) {
         this.#users.splice(row, 1)
       }
-      const { lastName, firstName, id, username, phoneNumber, avatarUrl } = user
-      this.#users.push({ lastName, firstName, id, username, phoneNumber, avatarUrl })
+      const { lastName, firstName, id, username, phoneNumber, avatarUrl, verified } = user
+      this.#users.push({ lastName, firstName, id, username, phoneNumber, avatarUrl, verified })
     }
     for (let i = this.#users.length - 1; i >= 0; i--) {
-      if ((this.group.meta?.participants as string[])?.indexOf(this.#users[i].id) === -1) {
+      if (participants.indexOf(this.#users[i].id) === -1) {
         this.#users.splice(i, 1)
       }
     }
-    return true
+    return this.#users
   }
   // Initialize storage for group chats
   async initialize() {
@@ -222,7 +222,7 @@ export class GroupChatsDO extends DebugWrapper {
       }
     }
 
-    const participants = Array.from(this.group.meta.participants as string[])
+    const participants = this.#users.map(user=>user.id)
     for (let i = this.#counter - 1; i >= 0; i--) {
       const m = this.#messages[i]
       if (!m) continue
@@ -262,7 +262,7 @@ export class GroupChatsDO extends DebugWrapper {
       lastMessageId: lastMessage?.messageId,
       photoUrl: this.group?.photoUrl,
       type: 'group',
-      meta: { ...this.group.meta, participants: this.#users },
+      meta: this.group.meta,
       ...this.missedFor(userId),
       lastMessageText: lastMessage?.message,
       lastMessageTime: lastMessage?.createdAt,
@@ -334,22 +334,43 @@ export class GroupChatsDO extends DebugWrapper {
     return { messages, authors }
   }
 
-  async deleteMessage(request: DeleteMessageRequest): Promise<DeleteMessageResponse> {
-    const { messageId } = request
-    const messageIndex = this.#messages.findIndex(m => m.messageId === messageId)
+  async deleteMessage(sender: string, request: DeleteRequest): Promise<DeleteResponse> {
+    const { originalMessageId, chatId } = request
+    const messageIndex = this.#messages.findIndex(m => m.messageId === originalMessageId)
     if (messageIndex === -1) {
-      throw new Error(`Message with ID ${messageId} does not exist`)
+      throw new Error(`Message with ID ${originalMessageId} does not exist`)
     }
     const message = this.#messages[messageIndex]
     message.deletedAt = this.timestamp()
     message.message = undefined
     message.attachments = undefined
-    await this.#storage.put(`message-${messageId}`, message)
+    await this.#storage.put(`message-${originalMessageId}`, message)
 
-    const deleteMessageEvent = {
+    
+
+    const messageId = await this.newId()
+    const clientMessageId = `dlt-${messageId}-${newId(3)}`
+    const serviceMessage: GroupChatMessage = {
+      messageId,
+      clientMessageId,
+      sender,
       type: 'delete',
-      payload: { originalMessageId: messageId },
+      payload: { originalMessageId },
+      createdAt: message.deletedAt,
     }
+
+    this.#messages[serviceMessage.messageId] = serviceMessage
+    await this.#storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+
+    const deleteMessageEvent: DeleteEvent = {
+      originalMessageId,
+      chatId,
+      messageId,
+    }
+
+    
+
+    
 
     await this.broadcastEvent('delete', deleteMessageEvent, request.chatId)
 
@@ -372,7 +393,7 @@ export class GroupChatsDO extends DebugWrapper {
     this.#messages[messageId] = message
     await this.#storage.put<GroupChatMessage>(`message-${messageId}`, message)
 
-    for (const receiver of (this.group.meta.participants as string[]).filter(m => m !== sender)) {
+    for (const receiver of this.#users.filter(m => m.id !== sender)) {
       const event: NewGroupMessageEvent = {
         chatId: this.group.chatId,
         message: message.message,
@@ -382,12 +403,12 @@ export class GroupChatsDO extends DebugWrapper {
         clientMessageId: request.clientMessageId,
         messageId: message.messageId,
         timestamp,
-        ...this.missedFor(receiver),
+        ...this.missedFor(receiver.id),
       }
       this.#outgoingEvets.push({
         event,
         sender: this.#users.find(u => u.id === sender)!,
-        receiver: receiver as string,
+        receiver: receiver.id,
         type: 'new',
         timestamp,
       })
@@ -542,8 +563,7 @@ export class GroupChatsDO extends DebugWrapper {
     if (!name || !participants) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
     }
-
-    const newChat: Group = {
+    this.group = {
       chatId: id,
       lastMessageId: 0,
       photoUrl: imgUrl,
@@ -553,19 +573,18 @@ export class GroupChatsDO extends DebugWrapper {
       meta: {
         name,
         createdAt: Date.now(),
-        participants,
+        participants: await this.fetchUsers(participants),
         owner,
       },
     }
 
-    this.group = newChat
+    
     this.#id = id
-    await this.fetchUsers()
     await this.#storage.put('users', this.#users)
-    await this.#storage.put<Group>(`meta`, newChat)
+    await this.#storage.put<Group>(`meta`, this.group)
     await this.initialize()
 
-    await this.broadcastEvent('newChat', { ...newChat }, owner)
+    await this.broadcastEvent('newChat', this.group, owner)
 
     return newChat
   }
@@ -577,7 +596,7 @@ export class GroupChatsDO extends DebugWrapper {
     exclude?: UserId,
   ) {
     await this.#storage.deleteAlarm()
-    for (const receiver of this.group!.meta.participants as string[]) {
+    for (const receiver of this.#users.map((user) => user.id)) {
       if (exclude === receiver) continue
       this.#outgoingEvets.push({
         event,

@@ -41,7 +41,7 @@ import { env } from 'process'
 import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
 import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
 export { WorkerBigAuth } from './worker'
-
+export * from './DeliveringEnterypoint'
 export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'

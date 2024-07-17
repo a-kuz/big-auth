@@ -29,7 +29,7 @@ type pRow = {
   row_fingerprint: string
 }
 
-export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Profile[], env: Env) {
+export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Profile[], env: Env, method: "update" | "replace" = "replace") {
   const phoneBookWithIds: (Profile & PhoneBookItem)[] = await Promise.all(
     phoneNumbers
       .map((pn: PhoneBookItem) => {
@@ -51,7 +51,7 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
 
   const userMessagingDO = userStorage(env, user.id)
   await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${user.id}/client/request/replaceContacts`, {
+    new Request(`${env.ORIGIN}/${user.id}/client/request/${method}Contacts`, {
       method: 'POST',
       body: JSON.stringify(phoneBookWithIds),
     }),
@@ -148,7 +148,7 @@ export async function createContact(env: Env, contact: any) {
     })
   }
 
-  await putContacts(env.user, [contact], [new User(userId, phoneNumber).profile()], env)
+  await putContacts(env.user, [contact], [new User(userId, phoneNumber).profile()], env, "update")
   const existingContactQuery = 'SELECT * FROM contacts WHERE phone_number = ? AND owner_id = ?'
 
   const existingContact = await env.DB.prepare(existingContactQuery)

@@ -1,21 +1,15 @@
 import {
   DataOf,
   Num,
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
-  Uuid,
-  inferData,
+  Str
 } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
-import jwt from '@tsndr/cloudflare-worker-jwt'
-import { Schema, z } from 'zod'
-import { NewMessageRequest } from '~/types/ws/client-requests'
+import { z } from 'zod'
 import { AttachmentSchema } from '~/types/openapi-schemas/attachments'
+import { NewMessageRequest } from '~/types/ws/client-requests'
+import { Route } from '~/utils/route'
+import { sendMessage } from '../services/send-message'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
-import { newId } from '~/utils/new-id'
-import { sendMessage } from '../services/send-message'
 
 const requestBody = z.object({
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),

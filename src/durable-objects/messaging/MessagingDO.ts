@@ -163,6 +163,8 @@ export class MessagingDO implements DurableObject {
                 return this.lastSeenHandler(request)
               case 'blink':
                 return this.blinkHandler(request)
+              case 'dlvrd':
+                return this.dlvrdHandler(request)
               case 'debug':
                 return this.debugHandler(request)
             }
@@ -382,10 +384,11 @@ export class MessagingDO implements DurableObject {
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
     let name = chatData.name
-    if (!isGroup(chatId)) {
+    if (chatType(chatId) === 'dialog') {
       const contact = await this.contacts.contact(chatId)
       if (contact) name = displayName(contact)
     }
+    console.log({ chatData })
     if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
@@ -411,6 +414,7 @@ export class MessagingDO implements DurableObject {
 
         eventData.senderName = displayName(contact)
       }
+
       this.toQ(eventData, name, chatData.photoUrl)
       await this.cl.save()
     }
@@ -514,14 +518,26 @@ export class MessagingDO implements DurableObject {
     )
   }
 
-  private async confirmationUrl(userId: string, chatId: string, messageId: number): Promise<string> {
-    // return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)})}`
-    return `${this.env.ORIGIN}/blink/${userId}`
+  private async confirmationUrl(
+    userId: string,
+    chatId: string,
+    messageId: number,
+  ): Promise<string> {
+    if (this.env.ENV === 'dev') {
+      return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)})}`
+    } else {
+      return `${this.env.ORIGIN}/blink/${userId}`
+    }
   }
 
   async blinkHandler(request: Request) {
     await this.onlineService.blink()
     return new Response()
+  }
+  async dlvrdHandler(request: Request) {
+    const payload = await request.json<MarkDeliveredRequest>()
+    const response = await this.dlvrdRequest(payload, this.timestamp())
+    return new Response(JSON.stringify(response))
   }
 
   async chatsHandler(request: Request) {
@@ -543,7 +559,7 @@ export class MessagingDO implements DurableObject {
   async chatHandler(request: Request) {
     let { chatId } = await request.json<GetChatRequest>()
     if (chatId === 'ai') chatId = 'AI'
-    const result = await this.cl.chatHandler(chatId)
+    const result = await this.cl.chatHandler(chatId, this.#userId)
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -690,7 +706,7 @@ export class MessagingDO implements DurableObject {
   }
 
   async newRequest(payload: NewMessageRequest) {
-    const chatId = payload.chatId
+    const chatId = payload.chatId === 'ai' ? 'AI' : payload.chatId
     if (chatId === this.#userId) {
       return this.sendToFavorites(payload, this.timestamp())
     }
@@ -715,10 +731,10 @@ export class MessagingDO implements DurableObject {
     let dialog = (await storage.chat(this.#userId)) as Dialog | Group
     dialog = await this.contacts.patchChat(chatId, dialog)
     let name = dialog.name
-    
+
     const chatChanges: Partial<ChatListItem> = {
       id: chatId,
-      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ?  'undelivered' : 'unread',
+      lastMessageStatus: isGroup(chatId) ? 'undelivered' : lastSeen ? 'undelivered' : 'unread',
       lastMessageText: payload.message,
       lastMessageTime: timestamp,
       lastMessageAuthor: '',

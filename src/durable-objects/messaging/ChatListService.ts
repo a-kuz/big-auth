@@ -1,13 +1,12 @@
+import { getUserById } from '~/db/services/get-user'
 import { displayName } from '~/services/display-name'
 import { Dialog, Group } from '~/types/Chat'
 import { ChatList, ChatListItem } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { UpdateChatInternalEvent } from '~/types/ws/internal'
 import { ContactsManager } from './ContactsManager'
-import { chatStorage, isGroup } from './utils/mdo'
+import { chatStorage, chatType, isGroup } from './utils/mdo'
 import { WebSocketGod } from './WebSocketService'
-import { getUserById } from '~/db/services/get-user'
-import { User } from '~/db/models/User'
 
 export class ChatListService {
   public chatList: ChatList = [] // memory access optimization
@@ -38,8 +37,9 @@ export class ChatListService {
       this.chatList = this.chatList.filter(
         (e, i) => this.chatList.findIndex(chat => chat.id == e.id) === i,
       )
+      await this.#storage.put('chatList', this.chatList)
     }, 1000)
-    await this.#storage.put('chatList', this.chatList)
+    
   }
 
   toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
@@ -65,47 +65,48 @@ export class ChatListService {
       }
     }
     this.chatList[index].name = name
-    this.chatList[index].photoUrl = eventData.photoUrl || this.chatList[index].photoUrl 
-    await this.wsService.toBuffer('chats', this.chatList)
+    this.chatList[index].photoUrl = eventData.photoUrl || this.chatList[index].photoUrl
+    const after = this.env.ENV === 'dev' ? 1 : 1000
+    await this.wsService.toBuffer('chats', this.chatList, after, 'chats')
     await this.save()
     return {}
   }
-  async chatHandler(chatId: string) {
-    const userId = this.env.userId!
+  async chatHandler(chatId: string, userId: string) {
+    this.env.userId = userId
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
-    if ((chatItem && chatItem.lastMessageTime)|| chatId.toLowerCase() === 'ai') {
-      const chatStub = this.chatStorage(chatId)
+    if ((chatItem && chatItem.lastMessageTime) || chatId.toLowerCase() === 'ai') {
+      const chatStub = chatStorage(this.env, chatId, this.env.user.id)
       const chatData = await chatStub.chat(userId)
       result = await this.contacts.patchChat(chatId, chatData)
     } else {
-      
-      const user = chatId !== 'ai' ? new User('AI', "") : (await getUserById(this.env.DB, chatId)).profile()
+      const user = (await getUserById(this.env.DB, chatId)).profile()
       const patchedUser = await this.contacts.patchProfile(user)
       result = {
         chatId,
-        type: 'dialog',
+        type: chatType(chatId),
         name: displayName(patchedUser),
         photoUrl: patchedUser.avatarUrl,
-        isMine: false,
-        lastMessageId: 0,
+        missed: 0,
+
         meta: {
           ...patchedUser,
         },
+      }
+      const chatListItem: ChatListItem = {
+        ...result,
         missed: 0,
         lastMessageTime: 0,
+        lastMessageText:"",
+
         lastMessageStatus: 'undelivered',
+        lastMessageId: 0,
+        id: result.chatId,
+        type: 'dialog',
+        isMine: false,
       }
-      this.wsService.toBuffer('chats', [
-        { ...result, id: result.chatId } as ChatListItem,
-        ...this.chatList,
-      ])
+      this.wsService.toBuffer('chats', [ ...this.chatList, chatListItem], 1)
     }
-    return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-  private chatStorage(chatId: string) {
-    return chatStorage(this.env, chatId, this.env.user.id)
+    return result
   }
 }

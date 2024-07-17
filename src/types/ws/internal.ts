@@ -1,7 +1,8 @@
 import { Attachment } from '../Attachment'
 import { Chat, Dialog, Group, GroupChat } from '../Chat'
 import { ChatListItem } from '../ChatList'
-import { chats, deleteChat, dlvrd, newChat, newCall, nw, read, typing } from './event-literals'
+import { chats, deleteChat, dlvrd, newChat, newCall, nw, read, typing, dlt } from './event-literals'
+import { DeleteEvent } from './server-events'
 
 export interface MarkDeliveredInternalEvent {
   chatId: string
@@ -54,8 +55,9 @@ export type InternalEvent =
   | NewGroupMessageEvent
   | NewChatEvent
   | NewCallEvent
+  | DeleteEvent
 
-export type InternalEventType = nw | chats | typing | read | dlvrd | newChat | deleteChat | newCall
+export type InternalEventType = nw | chats | typing | read | dlvrd | newChat | deleteChat | newCall | dlt
 export type UserId = string
 export type ChatId = string
 export type MessageId = number

@@ -56,14 +56,18 @@ export class FindContactsHandler extends Route {
         .filter(u => u.phoneNumber !== env.user.phoneNumber)
         .toSorted(({ phoneNumber: a }, { phoneNumber: b }) => a.localeCompare(b))
 
-      const hash = await digest(JSON.stringify(phoneBook))
+      const hash = await digest(JSON.stringify(body.contacts)) + Math.floor(Date.now()/20000).toString()
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
         headers: { 'Cache-Control': 'max-age=20', ...request.headers },
         method: 'GET',
       })
       const resp = await cache.match(cacheKey)
-      if (resp) return resp
+      console.log({hash})
+      if (resp){
+        console.log('CACHE')
+         return resp
+      }
 
       const contacts = await getUsersByPhoneNumbers(
         env.DB,

@@ -23,7 +23,7 @@ import {
   UserId,
 } from '~/types/ws/internal'
 import {
-  DeleteMessageResponse,
+  DeleteResponse,
   MarkDlvrdResponse,
   MarkReadResponse,
   NewMessageResponse,
@@ -149,11 +149,11 @@ messages in storage: ${this.#counter},
     this.#id = `${user1Id}:${user2Id}`
 
     const user1 = (
-      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user1Id} is not exists`))
+      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user1Id} is not exists (from dialog)`))
     ).profile()
 
     const user2 = (
-      await getUserById(this.env.DB, user2Id, new NotFoundError(`user ${user2Id} is not exists`))
+      await getUserById(this.env.DB, user2Id, new NotFoundError(`user ${user2Id} is not exists (from dialog)`))
     ).profile()
 
     this.#users = [user1, user2]
@@ -252,21 +252,15 @@ messages in storage: ${this.#counter},
       return messages
     }
 
-    // Find the mark for the lowest messageId
+    await this.loadMarks(startId, endId, secondUserId)  
+  
+    return messages.map(message=>{
+      const status = this.messageStatus(message, message.sender)
+      const read = status === 'read' ? 1 : undefined;
+      const dlvrd = read || status === 'unread' ? 1 : undefined
+      return {...message, status, read, dlvrd}
 
-    const { readMarks, dlvrdMarks } = await this.loadMarks(startId, endId, secondUserId)
-    let readMark = readMarks.length ? readMarks[0] : undefined
-    let dlvrdMark = dlvrdMarks.length ? dlvrdMarks[0] : undefined
-    // Use cached #readMarks and #dlvrdMarks
-    for (const message of messages as DialogMessage[]) {
-      message.read = undefined
-      message.dlvrd = undefined
-      // if (message.sender !== userId) continue
-      message.status = this.messageStatus(message, message.sender)
-      message.read = message.status === 'read' ? 1 : undefined
-      message.dlvrd = message.status === 'read' || message.status === 'unread' ? 1 : undefined
-    }
-    return messages
+    })
   }
 
   async #message(messageId: number) {
@@ -281,7 +275,7 @@ messages in storage: ${this.#counter},
     return message
   }
 
-  async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteMessageResponse> {
+  async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteResponse> {
     const { originalMessageId, chatId } = request
     const message = await this.#message(originalMessageId)
     if (!message) {
@@ -341,11 +335,12 @@ messages in storage: ${this.#counter},
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
       replyTo,
+      forwarded: request.forwarded
     }
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage
     this.#lastMessage = message
-    await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
     if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
       await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       this.#lastMessageOfPreviousAuthor = prevMessage
@@ -564,7 +559,7 @@ messages in storage: ${this.#counter},
 
   private async sendNewEventToReceiver(
     receiverId: string,
-    message: DialogMessage,
+    message: StoredDialogMessage,
     timestamp: number,
   ) {
     const receiverDO = userStorage(this.env, receiverId)
@@ -581,7 +576,7 @@ messages in storage: ${this.#counter},
 
       ...(await this.missedFor(receiverId)),
       replyTo: message.replyTo,
-      forwardedFrom: message.forwardedFrom,
+      forwarded: message.forwarded,
     }
     const body = JSON.stringify(event)
     const resp = await receiverDO.fetch(

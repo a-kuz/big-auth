@@ -39,6 +39,6 @@ export const chatStorage = (env: Env, chatId: string, userId: string) => {
 }
 
 export const chatType = (id: string) =>
-  id === 'AI' ? 'ai' : id.length === GROUP_ID_LENGTH ? 'group' : 'dialog'
+  id === 'AI' || id === 'ai' ? 'ai' : id.length === GROUP_ID_LENGTH ? 'group' : 'dialog'
 
 export const isGroup = (id: string): boolean => chatType(id) === 'group'

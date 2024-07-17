@@ -3,7 +3,7 @@ import { Env } from '../types/Env'
 import { userStorage } from '~/durable-objects/messaging/utils/mdo'
 
 export function sendMessage(body: NewMessageRequest, env: Env) {
-  const { chatId, message, attachments = undefined, clientMessageId = '', replyTo = undefined } = body
+  const { chatId, message, attachments = undefined, clientMessageId = '', replyTo = undefined, forwarded = undefined } = body
   // Retrieve sender and receiver's durable object IDs
   const senderDO = userStorage(env, env.user.id)
   // Create an event object with message details and timestamp
@@ -12,7 +12,8 @@ export function sendMessage(body: NewMessageRequest, env: Env) {
     message,
     attachments,
     clientMessageId,
-		replyTo
+		replyTo, 
+    forwarded
   }
 
   const reqBody = JSON.stringify(req)

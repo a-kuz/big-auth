@@ -39,6 +39,7 @@ import { DebugWrapper } from '../DebugWrapper'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
+import { callDesription } from '~/utils/call-description'
 
 export type Missed = { missed: number; first?: string }
 export class DialogsDO extends DebugWrapper {
@@ -211,30 +212,22 @@ messages in storage: ${this.#counter},
     return this.#counter - 1
   }
   prepareCallFor(message: StoredDialogMessage, userId: string): DialogMessage {
-    if (message.type != 'call') return message
+    if (message.type != 'call') return message as DialogMessage
     if (message.payload) {
       const payload: CallPayload = message.payload as CallPayload
       const call: CallOnMessage = {
         callType: payload.callType,
-        status: payload.participants?.includes(userId) ? 'received' : 'missed',
+        status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
         direction: payload.caller == userId ? 'outcoming' : 'incoming'
       }
-      message.message = call.status === 'missed' ?
-        `Missed ${call.callType == 'video' ?
-          'video' :
-          ''} call` :
-        `${call.direction == 'incoming' ?
-          'Incoming' :
-          'Outcoming'} ${call.callType == 'video' ?
-            'video' :
-            ''} call`
+      message.message = callDesription(call)
       const preparadMessageOnCall: DialogMessage = {
         ...message,
-        call
+        payload:call
       }
       return preparadMessageOnCall
     }
-    return message
+    return message as DialogMessage
   }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
@@ -383,7 +376,7 @@ messages in storage: ${this.#counter},
       createdAt: timestamp,
       messageId,
       sender: sender,
-      clientMessageId: request.clientMessageId,
+      clientMessageId: newId(),
       type: 'call',
       payload: request.payload
     }

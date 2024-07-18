@@ -324,6 +324,15 @@ export class GroupChatsDO extends DebugWrapper {
         status: payload.participants?.includes(userId) ? 'received' : 'missed',
         direction: payload.caller == userId ? 'outcoming' : 'incoming'
       }
+      message.message = call.status === 'missed' ?
+        `Missed ${call.callType == 'video' ?
+          'video' :
+          ''} call` :
+        `${call.direction == 'incoming' ?
+          'Incoming' :
+          'Outcoming'} ${call.callType == 'video' ?
+            'video' :
+            ''} call`
       const preparadMessageOnCall: GroupChatMessage = {
         ...message,
         call

@@ -1,6 +1,6 @@
 import { Attachment } from './Attachment'
 import { MessageStatus } from './ChatList'
-import { ForwardedFrom, ReplyTo } from './ws/client-requests'
+import { ReplyTo } from './ws/client-requests'
 import { call, dlt, edit, nw } from './ws/event-literals'
 
 interface Delivering {
@@ -86,8 +86,6 @@ export interface GroupChatMessage {
   createdAt: number
   updatedAt?: number
   deletedAt?: number
-  
-  type?: nw | dlt | edit | call
   call?: CallOnMessage
 }
 export interface StoredGroupMessage {
@@ -98,7 +96,7 @@ export interface StoredGroupMessage {
   attachments?: Attachment[]
   
   replyTo?: ReplyTo
-  forwardedFrom?: ForwardedFrom
+  //forwardedFrom?: ForwardedFrom
   
   type?: MessageType
   payload?:  EditPayload | DeletionPayload | CallPayload

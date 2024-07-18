@@ -32,6 +32,7 @@ import { displayName } from '~/services/display-name'
 import { Dialog, Group } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
+  CloseCallEvent,
   InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
@@ -180,6 +181,8 @@ export class MessagingDO extends DebugWrapper {
             return this.newChatEventHandler(request)
           case 'newCall':
             return this.newCallEventHandler(request)
+          case 'closeCall':
+            return this.closeCallEventHandler(request)
           case 'deleteChat':
             return this.newChatEventHandler(request)
           case 'new':
@@ -295,6 +298,33 @@ export class MessagingDO extends DebugWrapper {
   async newCallEventHandler(request: Request) {
     const eventData = await request.json<NewCallEvent>()
     await this.wsService.toBuffer('newCall', eventData)
+    return new Response()
+  }
+  async closeCallEventHandler(request: Request) {
+    const eventData = await request.json<CloseCallEvent>()
+    const { chatId } = eventData
+    const text = eventData.status === 'missed' ?
+      `Missed ${eventData.callType == 'video' ?
+        'video' :
+        ''} call` :
+      `${eventData.direction == 'incoming' ?
+        'Incoming' :
+        'Outcoming'} ${eventData.callType == 'video' ?
+          'video' :
+          ''} call`
+    const chat = this.cl.toTop(chatId, {
+      id: chatId,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: text,
+      lastMessageTime: this.timestamp(),
+      lastMessageId: eventData.messageId,
+      type: chatType(chatId),
+      verified: false,
+    })
+    chat.missed = 0
+    this.cl.chatList.unshift(chat)
+    await this.cl.save()
+    await this.wsService.toBuffer('closeCall', eventData)
     return new Response()
   }
   async updateChatEventHandler(request: Request) {

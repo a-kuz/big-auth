@@ -4,8 +4,9 @@ import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Call, Group } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
-import { GroupChatMessage } from '~/types/ChatMessage'
+import { CallOnMessage, CallPayload, GroupChatMessage, StoredGroupMessage } from '~/types/ChatMessage'
 import {
+  CallNewMessageRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -14,14 +15,15 @@ import {
   NewMessageRequest,
 } from '~/types/ws/client-requests'
 import {
-  InternalEvent,
-  InternalEventType,
-  MarkDeliveredInternalEvent,
-  MarkReadInternalEvent,
-  NewCallEvent,
-  NewGroupMessageEvent,
-  Timestamp,
-  UserId,
+  CloseCallEvent,
+	InternalEvent,
+	InternalEventType,
+	MarkDeliveredInternalEvent,
+	MarkReadInternalEvent,
+	NewCallEvent,
+	NewGroupMessageEvent,
+	Timestamp,
+	UserId
 } from '~/types/ws/internal'
 import { DeleteResponse, MarkDlvrdResponse, MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { writeErrorLog } from '~/utils/serialize-error'
@@ -43,7 +45,7 @@ export type OutgoingEvent = {
 const MESSAGES_LOAD_CHUNK_SIZE = 128
 export class GroupChatsDO extends DebugWrapper {
   #timestamp = Date.now()
-  #messages: GroupChatMessage[] = []
+  #messages: StoredGroupMessage[] = []
   group!: Group
   #id: string = ''
   #counter = 0
@@ -211,7 +213,7 @@ export class GroupChatsDO extends DebugWrapper {
     const keyChunks = splitArray(keys, MESSAGES_LOAD_CHUNK_SIZE)
     this.#call = await this.#storage.get<Call>('call')
     for (const chunk of keyChunks) {
-      const messagesChunk = await this.#storage.get<GroupChatMessage>(chunk)
+      const messagesChunk = await this.#storage.get<StoredGroupMessage>(chunk)
       for (const key of messagesChunk.keys()) {
         const i = keys.indexOf(key)
         const message = messagesChunk.get(key)
@@ -313,6 +315,32 @@ export class GroupChatsDO extends DebugWrapper {
     }
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
   }
+  prepareCallFor(message: StoredGroupMessage, userId: string): GroupChatMessage {
+    if (message.type != 'call') return message
+    if (message.payload) {
+      const payload: CallPayload = message.payload as CallPayload
+      const call: CallOnMessage = {
+        callType: payload.callType,
+        status: payload.participants?.includes(userId) ? 'received' : 'missed',
+        direction: payload.caller == userId ? 'outcoming' : 'incoming'
+      }
+      message.message = call.status === 'missed' ?
+        `Missed ${call.callType == 'video' ?
+          'video' :
+          ''} call` :
+        `${call.direction == 'incoming' ?
+          'Incoming' :
+          'Outcoming'} ${call.callType == 'video' ?
+            'video' :
+            ''} call`
+      const preparadMessageOnCall: GroupChatMessage = {
+        ...message,
+        call
+      }
+      return preparadMessageOnCall
+    }
+    return message
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
 
@@ -331,6 +359,7 @@ export class GroupChatsDO extends DebugWrapper {
     // Collect userIds from the senders of the returned messages
     const senderIds = new Set(messages.map(m => m.sender))
     const authors = this.#users.filter(u => senderIds.has(u.id))
+    messages = messages.map(m => this.prepareCallFor(m, userId))
     return { messages, authors }
   }
 
@@ -381,7 +410,7 @@ export class GroupChatsDO extends DebugWrapper {
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     console.log(messageId)
-    const message: GroupChatMessage = {
+    const message: StoredGroupMessage = {
       createdAt: timestamp,
       messageId,
       sender: sender,
@@ -426,7 +455,53 @@ export class GroupChatsDO extends DebugWrapper {
     await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
+  async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+    this.#call = undefined
+    await this.#storage.delete('call')
+    const timestamp = this.timestamp()
+    const messageId = await this.newId()
+    console.log(messageId)
+    const message: StoredGroupMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      clientMessageId: request.clientMessageId,
+      delivering: [],
+      type:'call',
+      payload: request.payload
+    }
+    this.#messages[messageId] = message
+    await this.#storage.put<StoredGroupMessage>(`message-${messageId}`, message)
+    for (const receiver of this.#users.filter(m => m.id !== sender)) {
+      const event: CloseCallEvent = {
+        chatId: this.group.chatId,
+        callId: request.payload.callId,
+        callType: request.payload.callType,
+        status: request.payload.participants?.includes(receiver.id) ? 'received' : 'missed',
+        direction: request.payload.caller == receiver.id ? 'outcoming' : 'incoming',
+        messageId
+      }
+      this.#outgoingEvets.push({
+        event,
+        sender: this.#users.find(u => u.id === sender)!,
+        receiver: receiver.id,
+        type: 'closeCall',
+        timestamp,
+      })
+    }
 
+    if (messageId > 0) {
+      if (this.#messages[messageId - 1] && this.#messages[messageId - 1].sender !== sender) {
+        await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      }
+    }
+    const lastRead = this.#lastRead.get(sender)
+    if (!lastRead || lastRead < messageId) {
+      this.#lastRead.set(sender, messageId)
+    }
+    await this.#storage.setAlarm(Date.now() + 400, { allowConcurrency: false })
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
   async dlvrd(
     sender: string,
     request: MarkDeliveredRequest,
@@ -457,7 +532,7 @@ export class GroupChatsDO extends DebugWrapper {
       }
       d.dlvrd = timestamp
 
-      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+      await this.#storage.put<StoredGroupMessage>(`message-${message.messageId}`, message, {
         allowConcurrency: false,
       })
     }
@@ -521,7 +596,7 @@ export class GroupChatsDO extends DebugWrapper {
       }
       d.read = timestamp
       if (!d.dlvrd) d.dlvrd = timestamp
-      await this.#storage.put<GroupChatMessage>(`message-${message.messageId}`, message, {
+      await this.#storage.put<StoredGroupMessage>(`message-${message.messageId}`, message, {
         allowConcurrency: false,
       })
     }

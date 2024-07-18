@@ -1,5 +1,6 @@
 import { ChatMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
+  CallNewMessageRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -249,7 +250,6 @@ export class ChatGptDO extends DebugWrapper {
       return { messages, authors: [] }
     }
   }
-
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
     await this.ctx.storage.deleteAlarm()
     const timestamp = this.timestamp()
@@ -282,7 +282,9 @@ export class ChatGptDO extends DebugWrapper {
     await this.ctx.storage.setAlarm(new Date(Date.now() + 50))
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-
+  closeCall(sender: string, request: CallNewMessageRequest) {
+    return
+  }
   async dlvrd(
     sender: string,
     request: MarkDeliveredRequest,

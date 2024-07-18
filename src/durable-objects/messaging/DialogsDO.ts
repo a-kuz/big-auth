@@ -4,8 +4,9 @@ import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
-import { DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
+import { CallOnMessage, CallPayload, DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
+  CallNewMessageRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -15,6 +16,7 @@ import {
   ReplyTo,
 } from '~/types/ws/client-requests'
 import {
+  CloseCallEvent,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   MessageId,
@@ -208,20 +210,45 @@ messages in storage: ${this.#counter},
     this.#storage.put('counter', this.#counter, {})
     return this.#counter - 1
   }
-
+  prepareCallFor(message: StoredDialogMessage, userId: string): DialogMessage {
+    if (message.type != 'call') return message
+    if (message.payload) {
+      const payload: CallPayload = message.payload as CallPayload
+      const call: CallOnMessage = {
+        callType: payload.callType,
+        status: payload.participants?.includes(userId) ? 'received' : 'missed',
+        direction: payload.caller == userId ? 'outcoming' : 'incoming'
+      }
+      message.message = call.status === 'missed' ?
+        `Missed ${call.callType == 'video' ?
+          'video' :
+          ''} call` :
+        `${call.direction == 'incoming' ?
+          'Incoming' :
+          'Outcoming'} ${call.callType == 'video' ?
+            'video' :
+            ''} call`
+      const preparadMessageOnCall: DialogMessage = {
+        ...message,
+        call
+      }
+      return preparadMessageOnCall
+    }
+    return message
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = endIndex >= portion ? endIndex - portion + 1 : 0
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
       return { messages, authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
       const endIndex = startIndex + portion - 1
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
       return { messages, authors: [] }
     }
   }
@@ -349,7 +376,56 @@ messages in storage: ${this.#counter},
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
+  async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+    const timestamp = this.timestamp()
+    const messageId = await this.newId()
+    const message: StoredDialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      clientMessageId: request.clientMessageId,
+      type: 'call',
+      payload: request.payload
+    }
+    this.#messages[messageId] = message
+    const prevMessage = this.#lastMessage
+    this.#lastMessage = message
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
+    if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
+      await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      this.#lastMessageOfPreviousAuthor = prevMessage
+    }
+    if (request.payload.participants) {
+      await Promise.all(
+        [
+          this.sendCloseCallToReceiver(request.payload.caller, request.payload,messageId),
+          this.sendCloseCallToReceiver(request.chatId, request.payload,messageId)
+        ]
+      );
+    }
+    //await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
+  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload,messageId:number){
+    const receiverDO = userStorage(this.env, receiverId)
+    const senderId = this.chatIdFor(receiverId)
+    const event: CloseCallEvent = {
+      chatId: senderId,
+      callId: payload.callId,
+      callType: payload.callType,
+      status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
+      direction: payload.caller == receiverId ? 'outcoming' : 'incoming',
+      messageId
+    }
+    const body = JSON.stringify(event)
+    const resp = await receiverDO.fetch(
+      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/closeCall`, {
+        method: 'POST',
+        body,
+      }),
+    )
+  }
   async dlvrd(
     sender: string,
     request: MarkDeliveredRequest,

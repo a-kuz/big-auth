@@ -20,8 +20,6 @@ export class ChatListService {
     private wsService: WebSocketGod,
   ) {
     this.#storage = this.state.storage
-
-    // state.blockConcurrencyWhile(async () => this.initialize())
   }
 
   async initialize() {
@@ -39,7 +37,6 @@ export class ChatListService {
       )
       await this.#storage.put('chatList', this.chatList)
     }, 1000)
-    
   }
 
   toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
@@ -97,7 +94,7 @@ export class ChatListService {
         ...result,
         missed: 0,
         lastMessageTime: 0,
-        lastMessageText:"",
+        lastMessageText: '',
 
         lastMessageStatus: 'undelivered',
         lastMessageId: 0,
@@ -105,7 +102,7 @@ export class ChatListService {
         type: 'dialog',
         isMine: false,
       }
-      this.wsService.toBuffer('chats', [ ...this.chatList, chatListItem], 1)
+      this.wsService.toBuffer('chats', [...this.chatList, chatListItem], 1)
     }
     return result
   }

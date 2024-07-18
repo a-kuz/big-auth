@@ -53,9 +53,10 @@ import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
+import {DurableObject} from 'cloudflare:workers'
 
-export class MessagingDO implements DurableObject {
-  readonly ['__DURABLE_OBJECT_BRAND']!: never
+export class MessagingDO extends DurableObject {
+  
   #timestamp = Date.now()
   #deviceToken = ''
   private onlineService!: OnlineStatusService
@@ -66,22 +67,26 @@ export class MessagingDO implements DurableObject {
   #messageCounter: any
 
   constructor(
-    private readonly state: DurableObjectState,
-    private env: Env,
+    readonly ctx: DurableObjectState,
+    readonly env: Env,
   ) {
-    this.state.blockConcurrencyWhile(async () => this.initialize())
+    super(ctx, env)
+    this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
   async initialize() {
-    this.#deviceToken = (await this.state.storage.get<string>('deviceToken')) || ''
-    this.wsService = new WebSocketGod(this.state, this.env)
-    this.profileService = new ProfileService(this.state, this.env)
-    this.cl = new ChatListService(this.state, this.env, this.wsService)
-    this.onlineService = new OnlineStatusService(this.state, this.env, this.wsService, this.cl)
+    this.#deviceToken = (await this.ctx.storage.get<string>('deviceToken')) || ''
+    
+
+    this.wsService = new WebSocketGod(this.ctx, this.env)
+    this.profileService = new ProfileService(this.ctx, this.env)
+    this.cl = new ChatListService(this.ctx, this.env, this.wsService)
+    this.onlineService = new OnlineStatusService(this.ctx, this.env, this.wsService, this.cl)
     this.wsService.onlineService = this.onlineService
+
     this.contacts = new ContactsManager(
       this.env,
-      this.state,
+      this.ctx,
       this.profileService,
       this.cl,
       this.onlineService,
@@ -229,7 +234,7 @@ export class MessagingDO implements DurableObject {
 
   async debugHandler(request: Request) {
     if (this.env.ENV === 'production') return new Response('Not found', { status: 404 })
-    const keys = await this.state.storage.list()
+    const keys = await this.ctx.storage.list()
     const result = {}
     for (const key of keys.keys()) {
       const value = keys.get(key)
@@ -415,7 +420,7 @@ export class MessagingDO implements DurableObject {
         eventData.senderName = displayName(contact)
       }
 
-      this.toQ(eventData, name, chatData.photoUrl)
+      this.ctx.waitUntil(this.pushPush(eventData, name, chatData.photoUrl))
       await this.cl.save()
     }
 
@@ -474,15 +479,19 @@ export class MessagingDO implements DurableObject {
 
   private async setDeviceToken(token?: string) {
     if (token) {
-      await this.state.storage.put('deviceToken', token)
+      await this.ctx.storage.put('deviceToken', token)
       this.#deviceToken = token
     } else {
       if (!this.#deviceToken) {
-        this.#deviceToken = (await this.state.storage.get('deviceToken')) || ''
+        this.#deviceToken = (await this.ctx.storage.get('deviceToken')) || ''
       }
     }
   }
-  private toQ(eventData: NewGroupMessageEvent | NewMessageEvent, title: string, imgUrl?: string) {
+  private async pushPush(
+    eventData: NewGroupMessageEvent | NewMessageEvent,
+    title: string,
+    imgUrl?: string,
+  ): Promise<void> {
     if (!this.#deviceToken) return
     if (!eventData.message) return
 
@@ -492,30 +501,26 @@ export class MessagingDO implements DurableObject {
       0,
     )
 
-    this.state.waitUntil(
-      (async () => {
-        const push: PushNotification = {
-          event: {
-            ...eventData,
-            confirmationUrl: await this.confirmationUrl(
-              this.#userId,
-              eventData.chatId,
-              eventData.messageId,
-            ),
-            userId: this.#userId,
-          },
-          deviceToken: this.#deviceToken,
-          body: eventData.message!,
-          title,
-          imgUrl,
-          subtitle: eventData.senderName,
-          badge: missedCount,
-          threadId: eventData.chatId,
-          category: 'message',
-        }
-        await this.env.PUSH_QUEUE.send(push, { contentType: 'json' })
-      })(),
-    )
+    const push: PushNotification = {
+      event: {
+        ...eventData,
+        confirmationUrl: await this.confirmationUrl(
+          this.#userId,
+          eventData.chatId,
+          eventData.messageId,
+        ),
+        userId: this.#userId,
+      },
+      deviceToken: this.#deviceToken,
+      body: eventData.message!,
+      title,
+      imgUrl,
+      subtitle: eventData.senderName,
+      badge: missedCount,
+      threadId: eventData.chatId,
+      category: 'message',
+    }
+    await this.env.PUSH_QUEUE.send(push, { contentType: 'json' })
   }
 
   private async confirmationUrl(
@@ -577,7 +582,7 @@ export class MessagingDO implements DurableObject {
     return chatStorage(this.env, chatId, this.#userId)
   }
   async lastSeenHandler(request: Request) {
-    await this.state.storage.sync()
+    await this.ctx.storage.sync()
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOnline(request: Request) {
@@ -612,7 +617,7 @@ export class MessagingDO implements DurableObject {
 
   private async handleWebsocket(request: Request): Promise<Response> {
     await this.onlineService.online()
-    this.state.blockConcurrencyWhile(async () => {
+    this.ctx.blockConcurrencyWhile(async () => {
       await this.contacts.loadChatList()
     })
     const response = await this.wsService.acceptWebSocket(request)
@@ -717,7 +722,7 @@ export class MessagingDO implements DurableObject {
     if (!chatItem) {
       if (!isGroup(chatId)) {
         lastSeen = await this.onlineService.lastSeenOf(chatId)
-        await this.state.blockConcurrencyWhile(async () => {
+        await this.ctx.blockConcurrencyWhile(async () => {
           await (storage as DurableObjectStub<DialogsDO>).create(this.#userId, chatId)
         })
       }

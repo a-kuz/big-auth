@@ -204,7 +204,7 @@ export class ChatGptDO extends DebugWrapper {
     message.deletedAt = this.timestamp()
     message.message = undefined
     message.attachments = undefined
-    await this.state.storage.put(`message-${originalMessageId}`, message)
+    await this.ctx.storage.put(`message-${originalMessageId}`, message)
 
     const messageId = await this.newId()
     const clientMessageId = `dlt-${messageId}-${newId(3)}`
@@ -218,7 +218,7 @@ export class ChatGptDO extends DebugWrapper {
     }
 
     this.#messages[serviceMessage.messageId] = serviceMessage
-    await this.state.storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+    await this.ctx.storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
 
     const deleteMessageEvent: DeleteEvent = {
       originalMessageId,

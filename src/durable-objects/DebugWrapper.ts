@@ -4,15 +4,15 @@ import { Env } from '~/types/Env'
 
 export class DebugWrapper extends DurableObject {
   constructor(
-    readonly state: DurableObjectState,
+    readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
-    super(state, env)
+    super(ctx, env)
   }
 
   async listKeys(opts: DurableObjectListOptions = {}, partNumber = 0) {
     if (this.env.ENV === 'production') return
-    const keys = await this.state.storage.list(opts)
+    const keys = await this.ctx.storage.list(opts)
     const result = {}
     for (const key of keys.keys()) {
       const value = keys.get(key)

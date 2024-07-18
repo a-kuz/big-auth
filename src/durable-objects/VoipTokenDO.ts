@@ -4,19 +4,19 @@ import { DebugWrapper } from './DebugWrapper'
 
 export class VoipTokenDO extends DebugWrapper {
   constructor(
-    readonly state: DurableObjectState,
+    readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
-    super(state, env)
+    super(ctx, env)
   }
 
   async setToken(deviceToken: string) {
-    await this.state.storage.put('token', deviceToken)
+    await this.ctx.storage.put('token', deviceToken)
   }
   async setFingerPrint(fingerPrint: string) {
-    await this.state.storage.put('fingerPrint', fingerPrint)
+    await this.ctx.storage.put('fingerPrint', fingerPrint)
   }
   async getToken() {
-    return this.state.storage.get<string>(`token`)
+    return this.ctx.storage.get<string>(`token`)
   }
 }

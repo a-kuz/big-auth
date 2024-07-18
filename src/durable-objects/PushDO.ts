@@ -3,10 +3,10 @@ import { DebugWrapper } from './DebugWrapper'
 export type TokenType = 'ios-notification' | 'ios-voip'
 export class PushDO extends DebugWrapper {
   constructor(
-    readonly state: DurableObjectState,
+    readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
-    super(state, env)
+    super(ctx, env)
   }
 
   async setToken(fingerprint: string, tokenType: TokenType, deviceToken: string) {

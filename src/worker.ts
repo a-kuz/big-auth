@@ -95,7 +95,9 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }[],
     appId: string,
     userId: string,
-    type: string = 'new'
+    type: string = 'new',
+    isVideo: boolean = false,
+    isGroup: boolean = false
   ) {
     const title = (await chatStorage(this.env, chatId, userId).chat(chatId) as Group | Dialog).name;
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO;
@@ -122,8 +124,8 @@ export class WorkerBigAuth extends WorkerEntrypoint {
             token: participant.token,
             chatId,
             title,
-            isVideo: false,
-            isGroup: isGroup(chatId),
+            isVideo,
+            isGroup,
             type
           },
           title

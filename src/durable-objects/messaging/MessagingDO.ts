@@ -30,7 +30,6 @@ import { Env } from '../../types/Env'
 import { Profile, User } from '~/db/models/User'
 import { displayName } from '~/services/display-name'
 import { Dialog, Group } from '~/types/Chat'
-import { encrypt } from '~/utils/crypto'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   InternalEventType,
@@ -43,6 +42,7 @@ import {
   UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
+import { encrypt } from '~/utils/crypto'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { DebugWrapper } from '../DebugWrapper'
 import { ChatListService } from './ChatListService'
@@ -53,9 +53,8 @@ import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
-import {DurableObject} from 'cloudflare:workers'
 
-export class MessagingDO extends DurableObject {
+export class MessagingDO extends DebugWrapper {
   
   #timestamp = Date.now()
   #deviceToken = ''
@@ -76,7 +75,7 @@ export class MessagingDO extends DurableObject {
 
   async initialize() {
     this.#deviceToken = (await this.ctx.storage.get<string>('deviceToken')) || ''
-    
+
 
     this.wsService = new WebSocketGod(this.ctx, this.env)
     this.profileService = new ProfileService(this.ctx, this.env)

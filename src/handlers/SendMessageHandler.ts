@@ -1,22 +1,28 @@
 import {
   DataOf,
   Num,
-  Str
+  OpenAPIRoute,
+  OpenAPIRouteSchema,
+  Str,
+  Uuid,
+  inferData,
 } from '@cloudflare/itty-router-openapi'
-import { z } from 'zod'
-import { AttachmentSchema } from '~/types/openapi-schemas/attachments'
-import { NewMessageRequest } from '~/types/ws/client-requests'
 import { Route } from '~/utils/route'
-import { sendMessage } from '../services/send-message'
+import jwt from '@tsndr/cloudflare-worker-jwt'
+import { Schema, z } from 'zod'
+import { NewMessageRequest } from '~/types/ws/client-requests'
+import { AttachmentSchema } from '~/types/openapi-schemas/attachments'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
+import { newId } from '~/utils/new-id'
+import { sendMessage } from '../services/send-message'
 
 const requestBody = z.object({
   chatId: new Str({ example: 'JC0TvKi3f2bIQtBcW1jIn' }),
   attachments: z.optional(AttachmentSchema.array().optional()),
   message: new Str({ example: 'Hello, how are you?', required: false }),
   clientMessageId: new Str({ example: 'ldjkedlkedlk', required: false }),
-	replyTo: new Num({ example: 1, required: false }),
+	replyTo: new Num({ example: 1, required: false })
 })
 export class SendMessageHandler extends Route {
   static schema = {

@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { APIType, OpenAPIRouter } from '@cloudflare/itty-router-openapi'
+import { OpenAPIRouter } from '@cloudflare/itty-router-openapi'
 import { CreateContactHandler } from './handlers/CreateContactHandler'
 import { DeleteContactHandler } from './handlers/DeleteContactHandler'
 import { GetContactHandler } from './handlers/GetContactHandler'
@@ -20,34 +20,33 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
+import { BlinkHandler } from './handlers/BlinkHandler'
 import { CreateChatHandler } from './handlers/CreateChatHandler'
+import { DebugListKeysHandler, DebugMemoryHandler } from './handlers/DebugHandler'
 import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 import { GetChatHandler } from './handlers/GetChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
-import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
+import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler'; // Import the new handler
 import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
 import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
 import { OnlinesHandler } from './handlers/OnlinesHandler'
+import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
 import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { authenticateUser } from './middleware/auth'
 import { CORS } from './utils/cors'
-import { BlinkHandler } from './handlers/BlinkHandler'
-import { env } from 'process'
-import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
-import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
-export { WorkerBigAuth } from './worker'
 export * from './DeliveringEnterypoint'
 export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { VoipTokenDO } from './durable-objects/VoipTokenDO'
+export { WorkerBigAuth } from './worker'
 
-
+console.log("VSEM PRIVET")
 const router = OpenAPIRouter({
   schema: {
     info: {

@@ -5,7 +5,7 @@ import {
   chatStorage,
   dialogStorage,
   groupStorage,
-  isGroup,
+  isGroup as ig,
   userStorage,
 } from './durable-objects/messaging/utils/mdo'
 import { getUserById } from './db/services/get-user'
@@ -49,7 +49,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
       id: '',
       participants: [],
     }
-    if (isGroup(chatId)) {
+    if (ig(chatId)) {
       const chat = chatStorage(this.env, chatId, userId)
       //@ts-ignore
       returnObf.participants = (await chat.chat(userId)).meta?.participants
@@ -70,7 +70,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
   }
   async getChatIdOnChat(chatId: string, userId: string) {
     let id = chatId
-    if (!isGroup(chatId)) {
+    if (!ig(chatId)) {
       try {
         const [user1Id, user2Id] = [userId, chatId].sort((a, b) => (a > b ? 1 : -1))
         id = `${user1Id}:${user2Id}`
@@ -100,18 +100,20 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }[],
     appId: string,
     userId: string,
-    type: string = 'new',
-    isVideo: boolean = false,
-    isGroup: boolean = false,
+    type = 'new',
+    isVideo = 0,
+    isGroup = 0,
   ) {
-    
-      
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO
     const sendTokens: string[] = []
+    const localChatId = ig(chatId) ? chatId : userId
     for (let participant of participants) {
       if (participant.id == userId) continue
-      const chat = await userStorage(this.env, participant.id).chatRequest({chatId}) as Dialog | Group
-    const title = chat.name
+      
+      const chat = (await userStorage(this.env, participant.id).chatRequest({ chatId: localChatId })) as
+        | Dialog
+        | Group
+      const title = chat.name
       const id = VOIP_TOKEN_DO.idFromName(participant.id)
       const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
       const deviceVoipToken = await voipTokenDO.getToken()
@@ -133,7 +135,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
             chatId,
             title,
             isVideo,
-            isGroup,
+            isGroup: isGroup,
             type,
           },
           title,
@@ -146,7 +148,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     return
   }
   async startCall(data: NewCallRequest) {
-    if (isGroup(data.chatId)) {
+    if (ig(data.chatId)) {
       const group = await groupStorage(this.env, data.chatId)
       await group.newCall(data.callId, data.userId)
     }

@@ -59,6 +59,12 @@ durable_objects = { bindings = [
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
 	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" },
+], migrations = [
+	{ tag = "v1011", deleted_classes = [
+
+		"UserMessagingDO",
+
+	] },
 ] }
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
@@ -67,17 +73,7 @@ r2_buckets = [
 	{ binding = "USER_FILES", bucket_name = "user-files", preview_bucket_name = "user-files-preview" },
 ]
 tail_consumers = [{ service = "big-auth-tail" }]
-
-
-# [[migrations]]
-# tag = "v1"                                                                  # Should be unique for each entry
-# new_classes = ["GroupChatsDO", "UserMessagingDO", "DialogsDO", "ChatGptDO"]
-# [[migrations]]
-# tag = "v2"                   # Should be unique for each entry
-# deleted_classes = ["PushDO"]
-# [[migrations]]
-# tag = "v3"               # Should be unique for each entry
-# new_classes = ["PushDO"]
 [[migrations]]
-tag = "v4"                    # Should be unique for each entry
-new_classes = ["VoipTokenDO"]
+          tag = "v2" # Should be unique for each entry
+          new_classes = [ "GroupChatsDO", "UserMessagingDO", "DialogsDO",
+  "ChatGptDO"]

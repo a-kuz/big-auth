@@ -100,9 +100,10 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }[],
     appId: string,
     userId: string,
-    type: string = 'new',
-    isVideo: boolean = false,
-    isGroup: boolean = false,
+    type = 'new',
+    isVideo = 0,
+    isGroup = 0
+
   ) {
     const chat = await userStorage(this.env, userId).chatRequest({chatId}) as Dialog | Group
     const title = chat.name

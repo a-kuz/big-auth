@@ -62,8 +62,8 @@ export interface NewVOIPEvent<A extends AttachmentType | never = never> {
   uid: number
   token?: string
   title: string
-  isVideo: boolean
-  isGroup: boolean
+  isVideo: number
+  isGroup: number
   type: string
 }
 export interface MarkDeliveredEvent {

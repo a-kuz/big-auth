@@ -80,7 +80,7 @@ export class ContactsManager {
   }
 
   async patchProfile(profile: Profile) {
-    if (profile.id === 'AI' || profile.id === 'ai') return profile
+    if (profile.id === 'AI') return profile
     const alreaydCached = this.#profileCache.get(profile.id)
     if (alreaydCached) {
       return alreaydCached
@@ -88,13 +88,6 @@ export class ContactsManager {
 
     let contact = await this.contact(profile.id)
     if (contact) {
-      return this.merge(profile, contact)
-    }
-    contact = await this.contact(profile.id)
-    if (contact) {
-      contact.phoneNumber = profile.phoneNumber
-      contact.id = profile.id
-      await this.updateContacts([contact])
       return this.merge(profile, contact)
     }
 
@@ -192,7 +185,13 @@ export class ContactsManager {
     })
   }
 
-  async bigUsers() {
+  async bigUsers(withChatList = false) {
+    if (!withChatList)
+      return this.#contacts.map(c => ({
+        ...c,
+        firstName: c.firstName ? c.firstName : c.lastName,
+        lastName: c.firstName ? c.lastName : '',
+      }))
     return Promise.all(
       [
         ...this.#contacts,

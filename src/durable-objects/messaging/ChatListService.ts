@@ -7,12 +7,15 @@ import { UpdateChatInternalEvent } from '~/types/ws/internal'
 import { ContactsManager } from './ContactsManager'
 import { chatStorage, chatType, isGroup } from './utils/mdo'
 import { WebSocketGod } from './WebSocketService'
+import { OnlineStatusService } from './OnlineStatusService'
+import { newId } from '~/utils/new-id'
 
 export class ChatListService {
   public chatList: ChatList = [] // memory access optimization
   #chatListTimer: NodeJS.Timeout | undefined
   #storage!: DurableObjectStorage
   contacts!: ContactsManager
+  onlineService!: OnlineStatusService
 
   constructor(
     private state: DurableObjectState,
@@ -68,41 +71,53 @@ export class ChatListService {
     await this.save()
     return {}
   }
-  async chatHandler(chatId: string, userId: string) {
+  async chatRequest(chatId: string, userId: string) {
     this.env.userId = userId
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
-    if ((chatItem && chatItem.lastMessageTime) || chatId === 'AI') {
+    if ((chatItem && chatItem.lastMessageTime) || chatId === 'AI' || isGroup(chatId)) {
       const chatStub = chatStorage(this.env, chatId, userId)
       const chatData = await chatStub.chat(userId)
       result = await this.contacts.patchChat(chatId, chatData)
     } else {
       const user = (await getUserById(this.env.DB, chatId)).profile()
       const patchedUser = await this.contacts.patchProfile(user)
+      const lastSeen = await this.onlineService.lastSeenOf(chatId)
       result = {
         chatId,
-        type: chatType(chatId),
+        type: 'dialog',
         name: displayName(patchedUser),
-        photoUrl: patchedUser.avatarUrl,
+        photoUrl: user.avatarUrl,
         missed: 0,
 
         meta: {
           ...patchedUser,
         },
+        lastSeen,
       }
       const chatListItem: ChatListItem = {
         ...result,
         missed: 0,
         lastMessageTime: 0,
         lastMessageText: '',
-
+        photoUrl: patchedUser.avatarUrl,
         lastMessageStatus: 'undelivered',
         lastMessageId: 0,
         id: result.chatId,
         type: 'dialog',
         isMine: false,
+        lastMessageAuthor: chatId,
+
+        lastSeen,
       }
-      this.wsService.toBuffer('chats', [...this.chatList, chatListItem], 1)
+      this.wsService.sendPacket({
+        eventType: 'chats',
+        payload: [chatListItem, ...this.chatList],
+        timestamp: Date.now(),
+        id: newId(),
+        type: 'event',
+      })
+      this.wsService.toBuffer('chats', [chatListItem, ...this.chatList],1500)
     }
     return result
   }

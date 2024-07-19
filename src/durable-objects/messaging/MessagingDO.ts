@@ -91,6 +91,7 @@ export class MessagingDO extends DebugWrapper {
       this.onlineService,
     )
     this.cl.contacts = this.contacts
+    this.cl.onlineService = this.onlineService
     await this.cl.initialize()
   }
   async alarm(): Promise<void> {
@@ -316,6 +317,7 @@ export class MessagingDO extends DebugWrapper {
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
+
     await this.cl.save()
     await this.wsService.toBuffer('closeCall', eventData)
     return new Response()
@@ -585,7 +587,7 @@ export class MessagingDO extends DebugWrapper {
 
   async chatHandler(request: Request) {
     let { chatId } = await request.json<GetChatRequest>()
-    const result = await this.cl.chatHandler(chatId, this.#userId)
+    const result = await this.cl.chatRequest(chatId, this.#userId)
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -628,7 +630,7 @@ export class MessagingDO extends DebugWrapper {
   async friendTyping(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
     const event: TypingServerEvent = { chatId: eventData.userId }
-    this.wsService.toBuffer('typing', event,1,`${eventData.userId}::typing`)
+    this.wsService.toBuffer('typing', event, 1, `${eventData.userId}::typing`)
     return new Response()
   }
 
@@ -697,7 +699,7 @@ export class MessagingDO extends DebugWrapper {
         response = await this.getChatsRequest(request as GetChatsRequest)
         return response
       case 'chat':
-        response = await this.chatRequest(response, request)
+        response = await this.chatRequest(request)
         return response
 
       case 'messages':
@@ -706,11 +708,8 @@ export class MessagingDO extends DebugWrapper {
     }
   }
 
-  private async chatRequest(response: ServerResponsePayload, request: ClientRequestPayload) {
-    const chat = (await this.chatStorage((request as GetChatRequest).chatId).chat(this.#userId)) as
-      | Dialog
-      | Group
-    return await this.contacts.patchChat(chat.chatId, chat)
+  async chatRequest(request: ClientRequestPayload) {
+    return this.cl.chatRequest(request.chatId, this.#userId)
   }
 
   async getChatsRequest(payload: GetChatsRequest): Promise<ChatList> {

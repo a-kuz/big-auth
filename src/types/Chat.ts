@@ -19,6 +19,7 @@ export interface Chat<T extends ChatType> {
   isMine?: boolean
   call?: Call
   attachmentType?: AttachmentType
+  lastSeen?: number
   meta: T extends 'dialog'
     ? DialogMeta
     : T extends 'group'

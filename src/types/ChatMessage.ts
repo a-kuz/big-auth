@@ -65,9 +65,9 @@ export interface DialogMessage {
   
   status?: MessageStatus
   
+  payload?:  EditPayload | DeletionPayload | CallOnMessage
   
   type?: nw | dlt | edit | call
-  call?: CallOnMessage
 
   createdAt: number
   updatedAt?: number
@@ -80,13 +80,12 @@ export interface GroupChatMessage {
   sender: string
   replyTo?: ReplyTo
   type?: MessageType
-  payload?:  EditPayload | DeletionPayload
+  payload?:  EditPayload | DeletionPayload | CallOnMessage
   attachments?: Attachment[]
   delivering?: Delivering[]
   createdAt: number
   updatedAt?: number
   deletedAt?: number
-  call?: CallOnMessage
 }
 export interface StoredGroupMessage {
   messageId: number

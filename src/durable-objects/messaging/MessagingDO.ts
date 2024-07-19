@@ -54,6 +54,7 @@ import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
+import { callDesription } from '~/utils/call-description'
 
 export class MessagingDO extends DebugWrapper {
   #timestamp = Date.now()
@@ -199,6 +200,8 @@ export class MessagingDO extends DebugWrapper {
         switch (action) {
           case 'new':
             return this.newEventHandler(request)
+          case 'closeCall':
+            return this.closeCallEventHandler(request)
           case 'dlvrd':
             return this.dlvrdEventHandler(request)
           case 'read':
@@ -301,12 +304,7 @@ export class MessagingDO extends DebugWrapper {
   async closeCallEventHandler(request: Request) {
     const eventData = await request.json<CloseCallEvent>()
     const { chatId } = eventData
-    const text =
-      eventData.status === 'missed'
-        ? `Missed ${eventData.callType == 'video' ? 'video' : ''} call`
-        : `${eventData.direction == 'incoming' ? 'Incoming' : 'Outcoming'} ${
-            eventData.callType == 'video' ? 'video' : ''
-          } call`
+    const text = callDesription(eventData)
     const chat = this.cl.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'undelivered',

@@ -33,6 +33,8 @@ import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { DebugWrapper } from '../DebugWrapper'
 import { DeleteEvent } from '~/types/ws/server-events'
+import { newId } from '~/utils/new-id'
+import { callDesription } from '~/utils/call-description'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -316,7 +318,7 @@ export class GroupChatsDO extends DebugWrapper {
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
   }
   prepareCallFor(message: StoredGroupMessage, userId: string): GroupChatMessage {
-    if (message.type != 'call') return message
+    if (message.type != 'call') return message as GroupChatMessage
     if (message.payload) {
       const payload: CallPayload = message.payload as CallPayload
       const call: CallOnMessage = {
@@ -324,22 +326,14 @@ export class GroupChatsDO extends DebugWrapper {
         status: payload.participants?.includes(userId) ? 'received' : 'missed',
         direction: payload.caller == userId ? 'outcoming' : 'incoming'
       }
-      message.message = call.status === 'missed' ?
-        `Missed ${call.callType == 'video' ?
-          'video' :
-          ''} call` :
-        `${call.direction == 'incoming' ?
-          'Incoming' :
-          'Outcoming'} ${call.callType == 'video' ?
-            'video' :
-            ''} call`
+      message.message = callDesription(call)
       const preparadMessageOnCall: GroupChatMessage = {
         ...message,
-        call
+        payload: call
       }
       return preparadMessageOnCall
     }
-    return message
+    return message as GroupChatMessage
   }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
@@ -465,7 +459,7 @@ export class GroupChatsDO extends DebugWrapper {
       createdAt: timestamp,
       messageId,
       sender: sender,
-      clientMessageId: request.clientMessageId,
+      clientMessageId: newId(),
       delivering: [],
       type:'call',
       payload: request.payload

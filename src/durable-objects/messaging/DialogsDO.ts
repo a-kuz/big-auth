@@ -6,7 +6,9 @@ import { Dialog } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { CallOnMessage, CallPayload, DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
+  
   CallNewMessageRequest,
+  CloseCallRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -377,15 +379,18 @@ messages in storage: ${this.#counter},
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
   async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse> {
+    console.log(sender, request)
     const timestamp = this.timestamp()
     const messageId = await this.newId()
     const message: StoredDialogMessage = {
       createdAt: timestamp,
       messageId,
       sender: sender,
-      clientMessageId: request.clientMessageId,
+      clientMessageId: newId(),
       type: 'call',
-      payload: request.payload
+      payload: request.payload,
+      message: "call"
+      
     }
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage

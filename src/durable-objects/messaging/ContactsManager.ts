@@ -47,7 +47,7 @@ export class ContactsManager {
     }
     let user = this.#usersCache.get(userId)
     if (!user) {
-      user = await getUserById(this.env.DB, userId)
+      user = (await getUserById(this.env.DB, userId))?.profile()
       if (!user) user = new User('42?!!', 'contact support').profile()
       this.#usersCache.set(userId, user)
     }
@@ -59,7 +59,7 @@ export class ContactsManager {
       await this.updateContacts([contact])
     }
 
-    return contact as Profile
+    return (contact || user) as Profile
   }
 
   private merge(profile: Profile, contact: Profile): Profile {
@@ -102,9 +102,9 @@ export class ContactsManager {
   }
 
   async patchChat(chatId: string, chat: Group | Dialog) {
-    if (chatId === 'AI' || chatId === 'ai') return chat
+    if (chatId === 'AI') return chat
     let result = chat
-  
+
     if (isGroup(chatId)) {
       ;(result.meta as GroupMeta).participants = await Promise.all(
         (result.meta as GroupMeta).participants.map((e: Profile) => this.patchProfile(e)),
@@ -112,11 +112,10 @@ export class ContactsManager {
     } else {
       result.meta = await this.patchProfile(result.meta as Profile)
       chat.name = displayName(result.meta as Profile)
+      chat.photoUrl = chat.photoUrl || result.meta.avatarUrl
     }
     return result
   }
-
-
 
   async updateContacts(contacts: Profile[]): Promise<void> {
     if (!contacts) return
@@ -140,22 +139,24 @@ export class ContactsManager {
         return {
           ...(contact || prevContact),
           firstName: contact.firstName ?? '',
-          lastName: contact.lastName ?? '', 
+          lastName: contact.lastName ?? '',
           avatarUrl: contact.avatarUrl || prevContact?.avatarUrl,
           id: prevContact?.id || contact.id,
         }
       })
 
-    console.log(JSON.stringify({updatedContacts}, null, 2))
+    console.log(JSON.stringify({ updatedContacts }, null, 2))
     for (const contact of updatedContacts) {
       if (contact.id) {
-        await this.cl.updateChat({
-          chatId: contact.id,
-          name: displayName(contact),
-          meta: contact,
-          type: 'dialog',
-        
-        }, true)
+        await this.cl.updateChat(
+          {
+            chatId: contact.id,
+            name: displayName(contact),
+            meta: contact,
+            type: 'dialog',
+          },
+          true,
+        )
         this.invalidateCache(contact.id)
       }
     }
@@ -247,31 +248,38 @@ export class ContactsManager {
 
   async replaceContacts(contacts: Profile[]): Promise<void> {
     const contactsToRemove = this.#contacts.filter(
-      existingContact => !contacts.some(contact => contact.phoneNumber === existingContact.phoneNumber)
-    );
+      existingContact =>
+        !contacts.some(contact => contact.phoneNumber === existingContact.phoneNumber),
+    )
 
     for (const contact of contactsToRemove) {
-      const block = this.getBlock(contact.phoneNumber);
-      const key = `contact-${block}`;
-      const existingContacts = this.#contacts.filter(c => this.getBlock(c.phoneNumber) === block);
-      this.#contacts = this.#contacts.filter(c => c.phoneNumber !== contact.phoneNumber);
+      const block = this.getBlock(contact.phoneNumber)
+      const key = `contact-${block}`
+      const existingContacts = this.#contacts.filter(c => this.getBlock(c.phoneNumber) === block)
+      this.#contacts = this.#contacts.filter(c => c.phoneNumber !== contact.phoneNumber)
       this.invalidateCache(contact.id)
       let user = this.#usersCache.get(contact.id)
       if (!user) {
         user = await getUserById(this.env.DB, contact.id)
-        
+
         this.#usersCache.set(contact.id, user)
       }
-      await this.cl.updateChat({
-        chatId: contact.id,
-        name: displayName(user),
-        meta: user,
-        type: 'dialog',
-      }, true);
+      await this.cl.updateChat(
+        {
+          chatId: contact.id,
+          name: displayName(user),
+          meta: user,
+          type: 'dialog',
+        },
+        true,
+      )
 
-      await this.state.storage.put(key, existingContacts.filter(c => c.phoneNumber !== contact.phoneNumber));
+      await this.state.storage.put(
+        key,
+        existingContacts.filter(c => c.phoneNumber !== contact.phoneNumber),
+      )
     }
 
-    await this.updateContacts(contacts);
+    await this.updateContacts(contacts)
   }
 }

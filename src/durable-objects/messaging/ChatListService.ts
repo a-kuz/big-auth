@@ -33,10 +33,10 @@ export class ChatListService {
 
     this.#chatListTimer = setTimeout(async () => {
       this.chatList = this.chatList.filter(
-        (e, i) => this.chatList.findIndex(chat => chat.id == e.id) === i,
+        (e, i) => this.chatList.findIndex(chat => chat.id === e.id) === i,
       )
-      await this.#storage.put('chatList', this.chatList)
     }, 1000)
+    await this.#storage.put('chatList', this.chatList)
   }
 
   toTop(chatId: string, eventData: Partial<ChatListItem>): ChatListItem {
@@ -72,8 +72,8 @@ export class ChatListService {
     this.env.userId = userId
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
-    if ((chatItem && chatItem.lastMessageTime) || chatId.toLowerCase() === 'ai') {
-      const chatStub = chatStorage(this.env, chatId, this.env.user.id)
+    if ((chatItem && chatItem.lastMessageTime) || chatId === 'AI') {
+      const chatStub = chatStorage(this.env, chatId, userId)
       const chatData = await chatStub.chat(userId)
       result = await this.contacts.patchChat(chatId, chatData)
     } else {

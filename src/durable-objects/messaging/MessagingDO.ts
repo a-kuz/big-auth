@@ -56,7 +56,6 @@ import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils
 import { messagePreview } from './utils/message-preview'
 
 export class MessagingDO extends DebugWrapper {
-  
   #timestamp = Date.now()
   #deviceToken = ''
   private onlineService!: OnlineStatusService
@@ -76,7 +75,6 @@ export class MessagingDO extends DebugWrapper {
 
   async initialize() {
     this.#deviceToken = (await this.ctx.storage.get<string>('deviceToken')) || ''
-
 
     this.wsService = new WebSocketGod(this.ctx, this.env)
     this.profileService = new ProfileService(this.ctx, this.env)
@@ -303,15 +301,12 @@ export class MessagingDO extends DebugWrapper {
   async closeCallEventHandler(request: Request) {
     const eventData = await request.json<CloseCallEvent>()
     const { chatId } = eventData
-    const text = eventData.status === 'missed' ?
-      `Missed ${eventData.callType == 'video' ?
-        'video' :
-        ''} call` :
-      `${eventData.direction == 'incoming' ?
-        'Incoming' :
-        'Outcoming'} ${eventData.callType == 'video' ?
-          'video' :
-          ''} call`
+    const text =
+      eventData.status === 'missed'
+        ? `Missed ${eventData.callType == 'video' ? 'video' : ''} call`
+        : `${eventData.direction == 'incoming' ? 'Incoming' : 'Outcoming'} ${
+            eventData.callType == 'video' ? 'video' : ''
+          } call`
     const chat = this.cl.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'undelivered',
@@ -558,7 +553,7 @@ export class MessagingDO extends DebugWrapper {
     messageId: number,
   ): Promise<string> {
     if (this.env.ENV === 'dev') {
-      return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)})}`
+      return `${this.env.DLVRD_BASE_URL}${await encrypt(`${userId}.${chatId}.${messageId}`, this.env.ENV)}`
     } else {
       return `${this.env.ORIGIN}/blink/${userId}`
     }
@@ -592,7 +587,6 @@ export class MessagingDO extends DebugWrapper {
 
   async chatHandler(request: Request) {
     let { chatId } = await request.json<GetChatRequest>()
-    if (chatId === 'ai') chatId = 'AI'
     const result = await this.cl.chatHandler(chatId, this.#userId)
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
@@ -611,7 +605,6 @@ export class MessagingDO extends DebugWrapper {
     return chatStorage(this.env, chatId, this.#userId)
   }
   async lastSeenHandler(request: Request) {
-    await this.ctx.storage.sync()
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOnline(request: Request) {
@@ -621,7 +614,7 @@ export class MessagingDO extends DebugWrapper {
       this.cl.chatList[chatIndex].lastSeen = undefined
       await this.cl.save()
     }
-    await this.wsService.toBuffer('online', eventData)
+    await this.wsService.toBuffer('online', eventData, 1, `${eventData.userId}::status`)
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendOffline(request: Request) {
@@ -631,13 +624,13 @@ export class MessagingDO extends DebugWrapper {
       this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
       await this.cl.save()
     }
-    this.wsService.toBuffer('offline', eventData)
+    this.wsService.toBuffer('offline', eventData, 1000, `${eventData.userId}::status`)
     return new Response(JSON.stringify(this.onlineService.status()))
   }
   async friendTyping(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
     const event: TypingServerEvent = { chatId: eventData.userId }
-    this.wsService.toBuffer('typing', event)
+    this.wsService.toBuffer('typing', event,1,`${eventData.userId}::typing`)
     return new Response()
   }
 

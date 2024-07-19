@@ -7,7 +7,9 @@ import { chatStorage, userStorage } from './utils/mdo'
 import { WebSocketGod } from './WebSocketService'
 export type OnlineStatus = { lastSeen?: number; status: 'online' | 'offline' }
 export const UNKNOWN_LAST_SEEN = 1719781200000 // 2024-07-01
+const LASTSEEN_TTL = 1000 * 5
 export class OnlineStatusService {
+  #lastSeenCache = new Map<string, { lastSeen?: number; timestamp: number }>()
   constructor(
     private state: DurableObjectState,
     private env: Env,
@@ -39,6 +41,14 @@ export class OnlineStatusService {
   }
 
   async lastSeenOf(userId: string): Promise<number | undefined> {
+    const cached = this.#lastSeenCache.get(userId)
+    if (cached) {
+      if (cached.timestamp > Date.now() - LASTSEEN_TTL) {
+        this.#lastSeenCache.delete(userId)
+      } else {
+        return cached.lastSeen
+      }
+    }
     const mdo = await userStorage(this.env, userId)
     const lastSeenResponse = await mdo.fetch(
       new Request(`${this.env.ORIGIN}/${userId}/messaging/request/lastSeen`, {
@@ -49,8 +59,10 @@ export class OnlineStatusService {
     const onlineStatus = await lastSeenResponse.json<OnlineStatus>()
 
     if (onlineStatus.status === 'online') {
+      this.#lastSeenCache.set(userId, { lastSeen: undefined, timestamp: Date.now() })
       return undefined
     } else {
+      this.#lastSeenCache.set(userId, { lastSeen: onlineStatus.lastSeen, timestamp: Date.now() })
       return onlineStatus.lastSeen
     }
   }
@@ -84,8 +96,6 @@ export class OnlineStatusService {
   }
 
   async processOutgoingStatusQueue(eventsPerProcessing = 6): Promise<void> {
-    
-
     while (this.#outgoingStatusQueue.length && eventsPerProcessing) {
       eventsPerProcessing--
       const event = this.#outgoingStatusQueue.shift()
@@ -201,7 +211,7 @@ export class OnlineStatusService {
       .filter(c => c.type === 'dialog' && c.id !== this.userId)
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
-    
+
     await this.processOutgoingStatusQueue(100)
   }
 

@@ -100,18 +100,18 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }[],
     appId: string,
     userId: string,
-    type = 'new',
-    isVideo = 0,
-    isGroup = 0
-
+    type: string = 'new',
+    isVideo: boolean = false,
+    isGroup: boolean = false,
   ) {
-    const chat = await userStorage(this.env, userId).chatRequest({chatId}) as Dialog | Group
-    const title = chat.name
+    
       
     const VOIP_TOKEN_DO = this.env.VOIP_TOKEN_DO
     const sendTokens: string[] = []
     for (let participant of participants) {
       if (participant.id == userId) continue
+      const chat = await userStorage(this.env, participant.id).chatRequest({chatId}) as Dialog | Group
+    const title = chat.name
       const id = VOIP_TOKEN_DO.idFromName(participant.id)
       const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
       const deviceVoipToken = await voipTokenDO.getToken()

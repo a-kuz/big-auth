@@ -50,6 +50,7 @@ export class FindContactsHandler extends Route {
     { body }: DataOf<typeof FindContactsHandler.schema>,
   ) {
     try {
+      if (!body.contacts.length) return new Response(JSON.stringify(body))
       let phoneBook: typeof body.contacts = body.contacts
         .map(e => ({ ...e, phoneNumber: normalizePhoneNumber(e.phoneNumber) }))
       phoneBook = phoneBook.filter((e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i)

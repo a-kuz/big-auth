@@ -22,6 +22,7 @@ export interface MarkReadInternalEvent {
 }
 export interface TypingInternalEvent {
   userId: string
+  stop?: boolean
 }
 
 export interface NewGroupMessageEvent {

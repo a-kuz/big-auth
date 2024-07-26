@@ -52,29 +52,35 @@ export class FindContactsHandler extends Route {
     try {
       if (!body.contacts.length) return new Response(JSON.stringify(body))
       let phoneBook: typeof body.contacts = body.contacts
-        .map(e => ({ ...e, phoneNumber: normalizePhoneNumber(e.phoneNumber) }))
-      phoneBook = phoneBook.filter((e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i)
         .filter(u => u.phoneNumber !== env.user.phoneNumber)
+        .map(e => ({
+          firstName: e.firstName,
+          lastName: e.lastName,
+          phoneNumber: normalizePhoneNumber(e.phoneNumber),
+        }))
         .toSorted(({ phoneNumber: a }, { phoneNumber: b }) => a.localeCompare(b))
-
-      const hash = await digest(JSON.stringify(body.contacts)) + Math.floor(Date.now()/20000).toString()
+      phoneBook = phoneBook.filter(
+        (e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i,
+      )
+      const stringPhoneBook = JSON.stringify(phoneBook)
+      // console.log(stringPhoneBook)
+      const hash =
+        (await digest(stringPhoneBook)) + Math.floor(Date.now() / 20000).toString()
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
-        headers: { 'Cache-Control': 'max-age=20', ...request.headers },
+        headers: { 'Cache-Control': 'max-age=20' },
         method: 'GET',
       })
       const resp = await cache.match(cacheKey)
-      console.log({hash})
-      if (resp){
+      console.log({ hash })
+      if (resp) {
         console.log('CACHE')
-         return resp
+        return resp
       }
 
-      const contacts = await getUsersByPhoneNumbers(
-        env.DB,
-        phoneBook
-      )
-      const responseBody = JSON.stringify({ contacts })
+      const users = await getUsersByPhoneNumbers(env.DB, phoneBook)
+      await putContacts(env.user, phoneBook, users, env)
+      const responseBody = JSON.stringify({ contacts: users })
 
       const response = new Response(responseBody, {
         status: 200,
@@ -82,10 +88,9 @@ export class FindContactsHandler extends Route {
           'Content-Type': 'application/json',
         },
       })
-      await putContacts(env.user, phoneBook, contacts, env)
-      
+
       context.waitUntil(
-        Promise.all([getMergedContacts(env),
+        Promise.all([
           cache.put(
             cacheKey,
             new Response(responseBody, {

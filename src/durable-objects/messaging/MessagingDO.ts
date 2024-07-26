@@ -45,18 +45,18 @@ import {
 import { MarkReadResponse } from '~/types/ws/responses'
 import { encrypt } from '~/utils/crypto'
 import { writeErrorLog } from '~/utils/serialize-error'
-import { DebugWrapper } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugWrapper'
 import { ChatListService } from './ChatListService'
 import { ContactsManager } from './ContactsManager'
 import { DialogsDO } from './DialogsDO'
-import { OnlineStatusService } from './OnlineStatusService'
+import { OnlineStatus, OnlineStatusService } from './OnlineStatusService'
 import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
 import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
 import { callDesription } from '~/utils/call-description'
 
-export class MessagingDO extends DebugWrapper {
+export class MessagingDO extends DebugableDurableObject {
   #timestamp = Date.now()
   #deviceToken = ''
   private onlineService!: OnlineStatusService
@@ -224,11 +224,11 @@ export class MessagingDO extends DebugWrapper {
           case 'event':
             switch (action) {
               case 'online':
-                return this.friendOnline(request)
+                return this.friendOnlineHandler(request)
               case 'offline':
-                return this.friendOffline(request)
+                return this.friendOfflineHandler(request)
               case 'typing':
-                return this.friendTyping(request)
+                return this.friendTypingHandler(request)
             }
         }
       }
@@ -246,7 +246,7 @@ export class MessagingDO extends DebugWrapper {
       result[key] = value
     }
 
-    return new Response(DebugWrapper.returnBigResult(result, 0))
+    return new Response(DebugableDurableObject.returnBigResult(result, 0))
   }
   async newHandler(request: Request) {
     const eventData = await request.json<NewMessageRequest>()
@@ -412,12 +412,15 @@ export class MessagingDO extends DebugWrapper {
     const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
-    let name = chatData.name
+    let name = chatData.name, verified = false
     if (chatType(chatId) === 'dialog') {
       const contact = await this.contacts.contact(chatId)
-      if (contact) name = displayName(contact)
+      if (contact) {
+        name = displayName(contact)
+        verified = contact.verified ?? false;
+      }
     }
-    console.log({ chatData })
+    
     if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
@@ -426,7 +429,7 @@ export class MessagingDO extends DebugWrapper {
 
         name,
         type: chatType(chatId),
-        verified: false,
+        verified,
         lastMessageAuthor: chatData.lastMessageAuthor,
         photoUrl: chatData.photoUrl,
         isMine: false,
@@ -605,32 +608,47 @@ export class MessagingDO extends DebugWrapper {
     return chatStorage(this.env, chatId, this.#userId)
   }
   async lastSeenHandler(request: Request) {
-    return new Response(JSON.stringify(this.onlineService.status()))
+    return new Response(JSON.stringify(this.onlineStatus()))
   }
-  async friendOnline(request: Request) {
+  async onlineStatus(): Promise<OnlineStatus> {
+    return this.onlineService.status()
+  }
+
+  async friendOnlineHandler(request: Request) {
     const eventData = await request.json<OnlineEvent>()
+
+    return new Response(JSON.stringify(await this.friendOnline(eventData)))
+  }
+
+  async friendOnline(eventData: OnlineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
       this.cl.chatList[chatIndex].lastSeen = undefined
       await this.cl.save()
     }
     await this.wsService.toBuffer('online', eventData, 1, `${eventData.userId}::status`)
-    return new Response(JSON.stringify(this.onlineService.status()))
+    return this.onlineService.status()
   }
-  async friendOffline(request: Request) {
+
+  async friendOfflineHandler(request: Request) {
     const eventData = await request.json<OfflineEvent>()
+    const status = await this.friendOffline(eventData)
+    return new Response(JSON.stringify(status))
+  }
+
+  async friendOffline(eventData: OfflineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
       this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
       await this.cl.save()
     }
     this.wsService.toBuffer('offline', eventData, 1000, `${eventData.userId}::status`)
-    return new Response(JSON.stringify(this.onlineService.status()))
+    return this.onlineService.status()
   }
-  async friendTyping(request: Request) {
+
+  async friendTypingHandler(request: Request) {
     const eventData = await request.json<TypingInternalEvent>()
-    const event: TypingServerEvent = { chatId: eventData.userId }
-    this.wsService.toBuffer('typing', event, 1, `${eventData.userId}::typing`)
+    this.incomingTypingEvent(eventData)
     return new Response()
   }
 
@@ -803,17 +821,16 @@ export class MessagingDO extends DebugWrapper {
     await this.cl.save()
     return resp
   }
+  async incomingTypingEvent(eventData: TypingInternalEvent) {
+    const event: TypingServerEvent = { chatId: eventData.userId, stop: eventData.stop }
+    this.wsService.toBuffer('typing', event, 1, `${eventData.userId}::typing`)
+  }
 
   async typingEvent(event: TypingClientEvent) {
     const receiverDO = userStorage(this.env, event.chatId)
-
-    await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${event.chatId}/messaging/event/typing`, {
-        method: 'POST',
-        body: JSON.stringify({ userId: this.#userId } as TypingInternalEvent),
-      }),
-    )
+    await receiverDO.incomingTypingEvent({ userId: this.#userId, stop: event.stop })
   }
+
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)

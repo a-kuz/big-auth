@@ -1,6 +1,6 @@
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
-import { OnlineEvent } from '~/types/ws/server-events'
+import { OfflineEvent, OnlineEvent } from '~/types/ws/server-events'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { ChatListService } from './ChatListService'
 import { chatStorage, userStorage } from './utils/mdo'
@@ -50,13 +50,7 @@ export class OnlineStatusService {
       }
     }
     const mdo = await userStorage(this.env, userId)
-    const lastSeenResponse = await mdo.fetch(
-      new Request(`${this.env.ORIGIN}/${userId}/messaging/request/lastSeen`, {
-        method: 'POST',
-        body: '{}',
-      }),
-    )
-    const onlineStatus = await lastSeenResponse.json<OnlineStatus>()
+    const onlineStatus = await mdo.onlineStatus()
 
     if (onlineStatus.status === 'online') {
       this.#lastSeenCache.set(userId, { lastSeen: undefined, timestamp: Date.now() })
@@ -101,21 +95,22 @@ export class OnlineStatusService {
       const event = this.#outgoingStatusQueue.shift()
       if (event) {
         const { status } = this.status()
-        const reqBody = JSON.stringify({
+        const req = {
           userId: this.userId,
           ...(status === 'online' ? {} : { lastSeen: this.#lastSeen || Date.now() }),
-        })
-        let resp: Response, friendStatus: OnlineStatus
+        }
+
+        let friendStatus: OnlineStatus
         try {
           const receiverDO = userStorage(this.env, event.userId)
 
-          const url = `${this.env.ORIGIN}/${event.userId}/messaging/event/${status}`
           try {
-            resp = await receiverDO.fetch(url, { body: reqBody, method: 'POST' })
-            friendStatus = await resp.json<OnlineStatus>()
+            friendStatus =
+              status === 'online'
+                ? await receiverDO.friendOnline(req)
+                : await receiverDO.friendOffline(req as OfflineEvent)
           } catch (error) {
             writeErrorLog(error)
-            if (resp!) console.log('!!!!! FRIEND')
 
             friendStatus = { status: 'offline', lastSeen: UNKNOWN_LAST_SEEN }
           }
@@ -124,7 +119,6 @@ export class OnlineStatusService {
             if (status === 'online') {
               this.ws.toBuffer('online', wsEvent)
             }
-          } else {
           }
           const chatIndex = this.chatListService.chatList.findIndex(c => c.id === event.userId)
           if (chatIndex !== -1) {
@@ -212,7 +206,7 @@ export class OnlineStatusService {
       .map(c => ({ userId: c.id }))
     await this.state.storage.put('outgoingStatusQueue', this.#outgoingStatusQueue)
 
-    await this.processOutgoingStatusQueue(100)
+    await this.processOutgoingStatusQueue(10)
   }
 
   async setUserId(id: string) {
@@ -226,21 +220,18 @@ export class OnlineStatusService {
   }
 
   async sendOnlineTo(userId: string) {
-    const body = JSON.stringify({
+    const event = {
       userId: this.userId,
-    })
-    let resp: Response, friendStatus: OnlineStatus
+    }
+
+    let friendStatus: OnlineStatus
     try {
       const receiverDO = userStorage(this.env, userId)
 
-      const url = `${this.env.ORIGIN}/${userId}/messaging/event/online`
       try {
-        resp = await receiverDO.fetch(url, { body, method: 'POST' })
-        friendStatus = await resp.json<OnlineStatus>()
+        friendStatus = await receiverDO.friendOnline(event)
       } catch (error) {
         writeErrorLog(error)
-        if (resp!) console.log('!!!!! FRIEND', await resp.clone().text())
-
         friendStatus = { status: 'offline', lastSeen: UNKNOWN_LAST_SEEN }
       }
       if (friendStatus.status === 'online') {
@@ -248,7 +239,6 @@ export class OnlineStatusService {
         if (this.#isOnline) {
           this.ws.toBuffer('online', wsEvent)
         }
-      } else {
       }
       const chatIndex = this.chatListService.chatList.findIndex(c => c.id === userId)
       if (chatIndex !== -1) {

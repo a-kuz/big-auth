@@ -120,12 +120,12 @@ export class ContactsManager {
         return { ...contact, prevContact }
       })
       .filter(
-        ({ lastName, firstName, prevContact, avatarUrl, id }) =>
+        ({ lastName, firstName, prevContact, avatarUrl, id, verified }) =>
           !prevContact ||
           !id ||
           prevContact.lastName !== lastName ||
           prevContact.firstName !== firstName ||
-          prevContact.avatarUrl !== avatarUrl,
+          prevContact.avatarUrl !== avatarUrl || prevContact.verified !==verified,
       )
       .map(c => {
         const { prevContact, ...contact } = c
@@ -133,12 +133,13 @@ export class ContactsManager {
           ...(contact || prevContact),
           firstName: contact.firstName ?? '',
           lastName: contact.lastName ?? '',
-          avatarUrl: contact.avatarUrl || prevContact?.avatarUrl,
+          avatarUrl: contact.avatarUrl ?? '',
           id: prevContact?.id || contact.id,
+          verified: contact.verified
         }
       })
 
-    console.log(JSON.stringify({ updatedContacts }, null, 2))
+    
     for (const contact of updatedContacts) {
       if (contact.id) {
         await this.cl.updateChat(
@@ -161,6 +162,14 @@ export class ContactsManager {
         contactsByBlock.set(block, [])
       }
       contactsByBlock.get(block)!.push(contact)
+      
+    }
+
+    for (let [block, contacts] of contactsByBlock.entries()) {
+      const existingContacts = this.#contacts.filter(c => this.getBlock(c.phoneNumber) === block).filter(c1=>!contacts.find(c2=>c1.phoneNumber===c2.phoneNumber))
+      for (const existingContact of existingContacts) {
+        contactsByBlock.get(block)!.push(existingContact)
+      }
     }
 
     await this.state.storage.transaction(async () => {
@@ -250,7 +259,8 @@ export class ContactsManager {
       existingContact =>
         !contacts.some(contact => contact.phoneNumber === existingContact.phoneNumber),
     )
-
+    console.log('remove:')
+    console.log(JSON.stringify(contactsToRemove))
     for (const contact of contactsToRemove) {
       const block = this.getBlock(contact.phoneNumber)
       const key = `contact-${block}`

@@ -27,6 +27,12 @@ export class ChatListService {
 
   async initialize() {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
+    const removeIt = this.chatList.filter(c=>c.photoUrl==="https://dev.iambig.ai/public/c0c99c272df4a05e0d0303b4a390492c4786432853c0cb974ed75b8b1b80308e" && c.type==="group");
+    if (removeIt.length) {
+
+      this.chatList = this.chatList.filter(e=>!removeIt.includes(e))
+      this.save()
+    }
     await this.contacts.initialize()
     await this.contacts.loadChatList()
   }

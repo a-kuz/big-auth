@@ -33,15 +33,16 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
   const phoneBookWithIds: (Profile & PhoneBookItem)[] = await Promise.all(
     phoneNumbers
       .map((pn: PhoneBookItem) => {
-        const contact = users.find(c => c.phoneNumber === pn.phoneNumber)
-        if (!contact) return undefined
+        const user = users.find(c => c.phoneNumber === pn.phoneNumber)
+        if (!user) return undefined
         return {
-          id: contact.id,
+          id: user.id,
           phoneNumber: pn.phoneNumber,
-          avatarUrl: pn.avatarUrl || contact.avatarUrl,
+          avatarUrl: user.avatarUrl,
           firstName: pn.firstName,
           lastName: pn.lastName,
-          username: contact.username,
+          username: user.username,
+          verified: user.verified
         }
       })
 
@@ -49,6 +50,8 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
       .map(async e => ({ ...e, fingerprint: await contactFingerprint(e) })),
   )
 
+  console.log("phoneBookWithIds:")
+  console.log(JSON.stringify(phoneBookWithIds))
   const userMessagingDO = userStorage(env, user.id)
   await userMessagingDO.fetch(
     new Request(`${env.ORIGIN}/${user.id}/client/request/${method}Contacts`, {

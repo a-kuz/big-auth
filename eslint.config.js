@@ -29,17 +29,7 @@ module.exports = [
 				},],
 
 
-			"sort-imports": [
-				"error",
-				{
-					ignoreCase: false,
-					ignoreDeclarationSort: false,
-					ignoreMemberSort: false,
-					memberSyntaxSortOrder: ["none", "all", "multiple", "single"],
-					allowSeparatedGroups: false,
-
-				},
-			],
+			  '@stylistic/ts/lines-between-class-members': ['error', 'always', { exceptAfterSingleLine: true}]
 
 		},
 	},

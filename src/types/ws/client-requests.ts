@@ -80,6 +80,7 @@ export type GetMessagesResponse = {
 
 export interface TypingClientEvent {
   chatId: string
+  stop?: boolean
 }
 
 export interface EditMessageRequest {

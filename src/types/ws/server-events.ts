@@ -38,6 +38,7 @@ export interface OfflineEvent {
 export interface TypingServerEvent {
   userId?: string
   chatId: string
+  stop?: boolean
 }
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {

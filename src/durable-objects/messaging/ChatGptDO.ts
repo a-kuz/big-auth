@@ -30,9 +30,9 @@ import { userStorage } from './utils/mdo'
 
 import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
-import { DebugWrapper } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugWrapper'
 
-export class ChatGptDO extends DebugWrapper {
+export class ChatGptDO extends DebugableDurableObject {
   #timestamp = Date.now()
   #messages: StoredDialogMessage[] = []
   #user?: User

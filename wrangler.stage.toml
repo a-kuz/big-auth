@@ -74,6 +74,5 @@ r2_buckets = [
 ]
 tail_consumers = [{ service = "big-auth-tail" }]
 [[migrations]]
-          tag = "v2" # Should be unique for each entry
-          new_classes = [ "GroupChatsDO", "UserMessagingDO", "DialogsDO",
-  "ChatGptDO"]
+tag = "v2"                                                                  # Should be unique for each entry
+new_classes = ["GroupChatsDO", "UserMessagingDO", "DialogsDO", "ChatGptDO"]

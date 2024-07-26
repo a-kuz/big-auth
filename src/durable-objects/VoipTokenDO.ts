@@ -1,8 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Env } from '~/types/Env'
-import { DebugWrapper } from './DebugWrapper'
+import { DebugableDurableObject } from './DebugWrapper'
 
-export class VoipTokenDO extends DebugWrapper {
+export class VoipTokenDO extends DebugableDurableObject {
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,

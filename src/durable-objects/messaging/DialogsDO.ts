@@ -6,7 +6,6 @@ import { Dialog } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
 import { CallOnMessage, CallPayload, DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
 import {
-  
   CallNewMessageRequest,
   CloseCallRequest,
   DeleteRequest,
@@ -37,14 +36,14 @@ import { newId } from '~/utils/new-id'
 import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { Mark, MarkPointer, Marks } from '../../types/Marks'
-import { DebugWrapper } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugWrapper'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorage } from './utils/mdo'
 import { messagePreview } from './utils/message-preview'
 import { callDesription } from '~/utils/call-description'
 
 export type Missed = { missed: number; firstMissed?: string }
-export class DialogsDO extends DebugWrapper {
+export class DialogsDO extends DebugableDurableObject {
   #timestamp = Date.now()
   #messages: StoredDialogMessage[] = []
   #users?: [Profile, Profile]
@@ -131,7 +130,7 @@ export class DialogsDO extends DebugWrapper {
     return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
   }
 
-  debugInfo() {
+  async debugInfo() {
     if (this.#users) {
       return `in memory:
 messages: ${this.#messages.filter(e => !!e).length},
@@ -145,6 +144,8 @@ messages: ${this.#messages.filter(e => !!e).length},
 messages in storage: ${this.#counter},
 
 		`
+    } else {
+      return 'O'
     }
   }
 
@@ -154,11 +155,19 @@ messages in storage: ${this.#counter},
     this.#id = `${user1Id}:${user2Id}`
 
     const user1 = (
-      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user1Id} is not exists (from dialog)`))
+      await getUserById(
+        this.env.DB,
+        user1Id,
+        new NotFoundError(`user ${user1Id} is not exists (from dialog)`),
+      )
     ).profile()
 
     const user2 = (
-      await getUserById(this.env.DB, user2Id, new NotFoundError(`user ${user2Id} is not exists (from dialog)`))
+      await getUserById(
+        this.env.DB,
+        user2Id,
+        new NotFoundError(`user ${user2Id} is not exists (from dialog)`),
+      )
     ).profile()
 
     this.#users = [user1, user2]
@@ -220,12 +229,12 @@ messages in storage: ${this.#counter},
       const call: CallOnMessage = {
         callType: payload.callType,
         status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
-        direction: payload.caller == userId ? 'outcoming' : 'incoming'
+        direction: payload.caller == userId ? 'outcoming' : 'incoming',
       }
       message.message = callDesription(call)
       const preparadMessageOnCall: DialogMessage = {
         ...message,
-        payload:call
+        payload: call,
       }
       return preparadMessageOnCall
     }
@@ -237,13 +246,17 @@ messages in storage: ${this.#counter},
       const endIndex = payload.endId || this.#messages.length
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = endIndex >= portion ? endIndex - portion + 1 : 0
-      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m =>
+        this.prepareCallFor(m, userId),
+      )
       return { messages, authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
       const endIndex = startIndex + portion - 1
-      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m => this.prepareCallFor(m,userId))
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m =>
+        this.prepareCallFor(m, userId),
+      )
       return { messages, authors: [] }
     }
   }
@@ -274,14 +287,13 @@ messages in storage: ${this.#counter},
       return messages
     }
 
-    await this.loadMarks(startId, endId, secondUserId)  
-  
-    return messages.map(message=>{
-      const status = this.messageStatus(message, message.sender)
-      const read = status === 'read' ? 1 : undefined;
-      const dlvrd = read || status === 'unread' ? 1 : undefined
-      return {...message, status, read, dlvrd}
+    await this.loadMarks(startId, endId, secondUserId)
 
+    return messages.map(message => {
+      const status = this.messageStatus(message, message.sender)
+      const read = status === 'read' ? 1 : undefined
+      const dlvrd = read || status === 'unread' ? 1 : undefined
+      return { ...message, status, read, dlvrd }
     })
   }
 
@@ -357,7 +369,7 @@ messages in storage: ${this.#counter},
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
       replyTo,
-      forwarded: request.forwarded
+      forwarded: request.forwarded,
     }
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage
@@ -371,41 +383,43 @@ messages in storage: ${this.#counter},
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  async closeCall(sender: string, request: CallNewMessageRequest): Promise<NewMessageResponse | void> {
+
+  async closeCall(
+    sender: string,
+    request: CallNewMessageRequest,
+  ): Promise<NewMessageResponse | void> {
     console.log(sender, request)
     const timestamp = this.timestamp()
-    // const messageId = await this.newId()
-    // const message: StoredDialogMessage = {
-    //   createdAt: timestamp,
-    //   messageId,
-    //   sender: sender,
-    //   clientMessageId: newId(),
-    //   type: 'call',
-    //   payload: request.payload,
-    //   message: "call"
-      
-    // }
-    // this.#messages[messageId] = message
-    // const prevMessage = this.#lastMessage
-    // this.#lastMessage = message
-    // await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
-    // if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
-    //   await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
-    //   this.#lastMessageOfPreviousAuthor = prevMessage
-    // }
-    // if (request.payload.participants) {
-    //   await Promise.all(
-    //     [
-    //       this.sendCloseCallToReceiver(request.payload.caller, request.payload,messageId),
-    //       this.sendCloseCallToReceiver(request.chatId, request.payload,messageId)
-    //     ]
-    //   );
-    // }
-    // //await this.sendNewEventToReceiver(request.chatId, message, timestamp)
+    const messageId = await this.newId()
+    const message: StoredDialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      clientMessageId: newId(),
+      type: 'call',
+      payload: request.payload,
+    }
+    this.#messages[messageId] = message
+    const prevMessage = this.#lastMessage
+    this.#lastMessage = message
 
-    // return { messageId, timestamp, clientMessageId: message.clientMessageId }
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
+    
+    if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
+      await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      this.#lastMessageOfPreviousAuthor = prevMessage
+    }
+    if (request.payload.participants) {
+      await Promise.all([
+        this.sendCloseCallToReceiver(request.payload.caller, request.payload, messageId),
+        this.sendCloseCallToReceiver(request.chatId, request.payload, messageId),
+      ])
+    }
+    //await this.sendNewEventToReceiver(request.chatId, message, timestamp)
+
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
-  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload,messageId:number){
+  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload, messageId: number) {
     const receiverDO = userStorage(this.env, receiverId)
     const senderId = this.chatIdFor(receiverId)
     const event: CloseCallEvent = {
@@ -414,7 +428,7 @@ messages in storage: ${this.#counter},
       callType: payload.callType,
       status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
       direction: payload.caller == receiverId ? 'outcoming' : 'incoming',
-      messageId
+      messageId,
     }
     const body = JSON.stringify(event)
     const resp = await receiverDO.fetch(
@@ -464,7 +478,7 @@ messages in storage: ${this.#counter},
         clientMessageId: messageId.toString(),
         missed: 0,
         // @ts-ignore
-        err: "shlem read v pustoy chat"
+        err: 'shlem read v pustoy chat',
       }
     }
     const message = (await this.#message(messageId))!

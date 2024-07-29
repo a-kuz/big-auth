@@ -1,6 +1,6 @@
 import { NewMessageRequest } from '~/types/ws/client-requests'
 import { Env } from '../types/Env'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 
 export async function sendMessage(body: NewMessageRequest, env: Env) {
   const {
@@ -11,7 +11,7 @@ export async function sendMessage(body: NewMessageRequest, env: Env) {
     replyTo = undefined,
   } = body
   // Retrieve sender and receiver's durable object IDs
-  const senderDO = userStorage(env, env.user.id)
+  const senderDO = userStorageById(env, env.user.id)
   // Create an event object with message details and timestamp
   const req: NewMessageRequest = {
     chatId,

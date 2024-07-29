@@ -11,7 +11,7 @@ export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
   payload: ServerEventPayload
 }
 
-export interface EditMessageEvent {
+export interface EditEvent {
   chatId: string
   userId?: string
   messageId: number

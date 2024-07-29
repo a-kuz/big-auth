@@ -1,4 +1,9 @@
-import { ChatMessage, StoredDialogMessage } from '~/types/ChatMessage'
+import {
+  DeletionPayload,
+  DialogMessage,
+  EditPayload,
+  StoredDialogMessage,
+} from '~/types/ChatMessage'
 import {
   CallNewMessageRequest,
   DeleteRequest,
@@ -21,16 +26,16 @@ import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { GPTmessage, askGPT } from '~/services/ask-gpt'
 import { DialogAI } from '~/types/Chat'
-import { ChatListItem } from '~/types/ChatList'
+import { MessageStatus } from '~/types/ChatList'
 import { MarkReadInternalEvent, UserId } from '~/types/ws/internal'
 import { DeleteEvent, NewMessageEvent } from '~/types/ws/server-events'
 import { newId } from '~/utils/new-id'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
-import { userStorage } from './utils/mdo'
+import { userStorageById } from './utils/get-durable-object'
 
 import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
-import { DebugableDurableObject } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugableDurableObject'
 
 export class ChatGptDO extends DebugableDurableObject {
   #timestamp = Date.now()
@@ -67,7 +72,7 @@ export class ChatGptDO extends DebugableDurableObject {
         if (!answer) {
           return
         }
-        const message: ChatMessage = {
+        const message: StoredDialogMessage = {
           clientMessageId: newId(),
           createdAt: this.timestamp(),
           messageId: await this.newId(),
@@ -75,16 +80,6 @@ export class ChatGptDO extends DebugableDurableObject {
           message: answer,
         }
 
-        const event: NewMessageEvent = {
-          messageId: message.messageId,
-          sender: 'ai',
-          chatId: 'AI',
-          message: message.message,
-          clientMessageId: message.clientMessageId,
-          timestamp: message.createdAt,
-          missed: 1,
-          firstMissed: message.clientMessageId,
-        }
         this.#messages.push(message)
         await this.ctx.storage.put<StoredDialogMessage>(`message-${message.messageId}`, message)
         console.log('this.#id', this.#id)
@@ -100,7 +95,7 @@ export class ChatGptDO extends DebugableDurableObject {
     message: StoredDialogMessage,
     timestamp: number,
   ) {
-    const receiverDO = userStorage(this.env, receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
     const senderId = this.#id.replace(receiverId, '').replace(':', '')
 
     const event: NewMessageEvent = {
@@ -115,21 +110,9 @@ export class ChatGptDO extends DebugableDurableObject {
       firstMissed: message.clientMessageId,
     }
 
-    const reqBody = JSON.stringify(event)
-    const headers = new Headers({ 'Content-Type': 'application/json' })
-
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/new`, {
-        method: 'POST',
-        body: reqBody,
-        headers,
-      }),
-    )
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      throw new Error("Couldn't send event")
-    }
+    await receiverDO.newEvent(event)
   }
+
   async create(owner: string) {
     return this.ctx.blockConcurrencyWhile(async () => {
       // if (this.#messages.length) throw new Error('DO dialog: "messages" is not empty')
@@ -141,7 +124,7 @@ export class ChatGptDO extends DebugableDurableObject {
         owner,
         new NotFoundError(`user ${owner} is not exists (from ai)`),
       )
-      const message: ChatMessage = {
+      const message: StoredDialogMessage = {
         clientMessageId: newId(),
         createdAt: this.timestamp(),
         messageId: 0,
@@ -172,10 +155,8 @@ export class ChatGptDO extends DebugableDurableObject {
     }
     const lastMessage = this.#messages.slice(-1)[0]
     const missed = this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0
-    const chat: ChatListItem | DialogAI = {
+    const chat: DialogAI = {
       chatId: 'AI',
-      id: 'AI',
-      verified: true,
       lastMessageId: this.#messages.length ? this.#messages.length - 1 : 0,
       photoUrl: this.env.AI_AVATAR_URL,
       type: 'ai',
@@ -184,7 +165,7 @@ export class ChatGptDO extends DebugableDurableObject {
       lastMessageText: lastMessage?.message ?? '',
       lastMessageTime: lastMessage?.createdAt,
       lastMessageAuthor: lastMessage?.sender,
-      lastMessageStatus: lastMessage?.read ? 'read' : lastMessage?.dlvrd ? 'unread' : 'undelivered',
+      lastMessageStatus: missed ? 'unread' : 'read',
       isMine: userId === lastMessage?.sender,
       name: 'ask AI',
       meta: { firstName: 'AI' },
@@ -229,11 +210,27 @@ export class ChatGptDO extends DebugableDurableObject {
 
     return { messageId, timestamp: message.deletedAt }
   }
+
   async newId() {
     this.#counter++
     await this.ctx.storage.put('counter', this.#counter)
     return this.#counter - 1
   }
+
+  toDialogMessage(message: StoredDialogMessage): DialogMessage {
+    let status: MessageStatus = 'read'
+    if (message.messageId === this.#counter - 1) {
+      const missed = this.#counter > 1 ? this.#counter - (this.#lastRead.get(this.#id) || 0) - 1 : 0
+      if (missed) status = 'unread'
+    }
+    return {
+      ...message,
+      status,
+      payload:
+        message.type === 'call' ? undefined : (message.payload as DeletionPayload | EditPayload),
+    }
+  }
+
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
@@ -241,13 +238,13 @@ export class ChatGptDO extends DebugableDurableObject {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = endIndex > portion ? endIndex - portion + 1 : 0
       const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-      return { messages, authors: [] }
+      return { messages: messages.map(this.toDialogMessage), authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
       const endIndex = startIndex + portion - 1
       const messages = this.#messages.slice(startIndex, endIndex + 1).filter(m => !!m)
-      return { messages, authors: [] }
+      return { messages: messages.map(this.toDialogMessage), authors: [] }
     }
   }
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
@@ -298,8 +295,13 @@ export class ChatGptDO extends DebugableDurableObject {
     timestamp: number,
   ): Promise<MarkReadResponse> {
     if (!this.#messages.length) {
-      console.error('read requ for emty chat')
-      throw new Error('Chat is empty')
+      return {
+        messageId: 0,
+        timestamp: this.#timestamp,
+        clientMessageId: '',
+        missed: 0,
+        chatId: request.chatId,
+      }
     }
     let endIndex = this.#messages.length - 1
 
@@ -315,7 +317,7 @@ export class ChatGptDO extends DebugableDurableObject {
     if (!lastRead || lastRead < messageId) {
       this.#lastRead.set(sender, messageId)
     }
-    let lastUnread = 0
+
     for (let i = endIndex; i >= 0; i--) {
       const message = this.#messages[i]
       if (message.sender === sender) {
@@ -339,7 +341,7 @@ export class ChatGptDO extends DebugableDurableObject {
   private async sendReadEventToAuthor(receiverId: string, messageId: number, timestamp: number) {
     // Retrieve sender and receiver's durable object IDs
     if (receiverId === 'ai') return
-    const receiverDO = userStorage(this.env, receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
 
     // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
@@ -349,21 +351,7 @@ export class ChatGptDO extends DebugableDurableObject {
       clientMessageId: this.#messages[messageId].clientMessageId,
     }
 
-    const reqBody = JSON.stringify(event)
-    const headers = new Headers({ 'Content-Type': 'application/json' })
-
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/read`, {
-        method: 'POST',
-        body: reqBody,
-        headers,
-      }),
-    )
-
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      throw new Error("Couldn't send event")
-    }
+    await receiverDO.readEvent(event)
   }
 
   private async initialize() {

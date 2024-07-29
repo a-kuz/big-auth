@@ -1,6 +1,6 @@
 import { DataOf } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { fingerprintDO, userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { fingerprintDO, userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
@@ -32,7 +32,7 @@ export class StoreDeviceTokenHandler extends Route {
     await tokenStorage.setToken(fingerprint, tokenType, deviceToken)
     const userId = (await tokenStorage.getUserId()) as string | undefined;
     if (userId) {
-      const mDO = userStorage(env, userId)
+      const storage = userStorageById(env, userId)
       switch (tokenType) {
        case "ios-voip":{
         const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO
@@ -42,12 +42,7 @@ export class StoreDeviceTokenHandler extends Route {
         break
        } 
       case "ios-notification":{
-        await mDO.fetch(
-          new Request(`${env.ORIGIN}/${userId}/client/request/setDeviceToken`, {
-            method: 'POST',
-            body: JSON.stringify({ fingerprint, deviceToken }),
-          }),
-        )
+        await storage.setDeviceToken({ fingerprint, deviceToken, type: tokenType })
         break
       }
     }

@@ -1,8 +1,7 @@
 import { Attachment } from '../Attachment'
-import { Chat, Dialog, Group, GroupChat } from '../Chat'
-import { ChatListItem } from '../ChatList'
-import { CallType, CallDirectionType, CallStatusType } from '../ChatMessage'
-import { chats, deleteChat, dlvrd, newChat, newCall, nw, read, typing, dlt, closeCall } from './event-literals'
+import { Chat, Dialog, Group } from '../Chat'
+import { CallDirectionType, CallStatusType, CallType } from '../ChatMessage'
+import { chats, closeCall, deleteChat, dlt, dlvrd, newCall, newChat, nw, read, typing } from './event-literals'
 import { DeleteEvent } from './server-events'
 
 export interface MarkDeliveredInternalEvent {
@@ -12,7 +11,7 @@ export interface MarkDeliveredInternalEvent {
   clientMessageId: string
   timestamp: number
 }
-export type UpdateChatInternalEvent =Partial<Dialog | Group>
+export type UpdateChatInternalEvent = Partial<Dialog | Group>
 export interface MarkReadInternalEvent {
   chatId: string
   userId?: string
@@ -52,7 +51,9 @@ export interface CloseCallEvent {
   callType: CallType
   messageId: number
   status: CallStatusType
-  direction: CallDirectionType
+  direction: CallDirectionType,
+  missed: number,
+  firstMissed?: string
 }
 export interface DeleteChatEvent {
   chatId: string

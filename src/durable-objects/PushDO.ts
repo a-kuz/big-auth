@@ -1,5 +1,5 @@
 import { Env } from '~/types/Env'
-import { DebugableDurableObject } from './DebugWrapper'
+import { DebugableDurableObject } from './DebugableDurableObject'
 export type TokenType = 'ios-notification' | 'ios-voip'
 export class PushDO extends DebugableDurableObject {
   constructor(

@@ -13,6 +13,8 @@ import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
+const NO_BUFFERED_EVENT_TYPES: ServerEventType[] = ['typing']
+
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
@@ -166,8 +168,14 @@ export class WebSocketGod {
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
-  async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100, key?: string) {
+  async toSockets(
+    eventType: ServerEventType,
+    event: ServerEventPayload,
+    after = 100,
+    key?: string,
+  ) {
     if (!this.onlineService.isOnline()) return
+
     const id = newId(10)
 
     const packet: ServerEvent = {
@@ -177,16 +185,17 @@ export class WebSocketGod {
       type: 'event',
       id,
     }
+    if (NO_BUFFERED_EVENT_TYPES.includes(eventType)) {
+      this.sendPacket(packet)
+      return
+    }
 
-    
-    if (this.env.ENV === 'dev') this.#eventBuffer.set(id, packet)
-    else
-      setTimeout(
-        () => {
-          this.#eventBuffer.set(id, { ...packet, ...(key ? { key } : {}) })
-        },
-        Math.max(0, after - 50),
-      ) // #costile against iOS chatlist doubling chats (race condition)
+    setTimeout(
+      () => {
+        this.#eventBuffer.set(id, { ...packet, ...(key ? { key } : {}) })
+      },
+      Math.max(0, after - 50),
+    ) // #costile against iOS chatlist doubling chats (race condition)
 
     const alarm = await this.state.storage.getAlarm()
     if (!alarm || alarm > Date.now() + after)
@@ -195,6 +204,7 @@ export class WebSocketGod {
         allowUnconfirmed: true,
       })
   }
+
   sendPacket(packet: ServerEvent) {
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {

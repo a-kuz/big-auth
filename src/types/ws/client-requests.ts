@@ -1,10 +1,11 @@
 import { ClientEventType, ClientRequestType } from '.'
-import { dlt, dlvrd, edit, nw, read, typing } from './event-literals'
+import { dlt, dlvrd, edit, nw, read, typing, updateProfile } from './event-literals'
 
 import { Profile } from '~/db/models/User'
 import { Attachment } from '../Attachment'
 import { CallPayload, CallType, ChatMessage, MessageType } from '../ChatMessage'
 import { UserId } from './internal'
+import { TokenType } from '~/durable-objects/PushDO'
 
 export interface ClientRequest<Type extends ClientRequestType = ClientRequestType> {
   type: 'request'
@@ -21,7 +22,9 @@ export interface ClientRequest<Type extends ClientRequestType = ClientRequestTyp
           ? MarkDeliveredRequest
           : Type extends read
             ? MarkReadRequest
-            : never
+            : Type extends updateProfile
+              ? UpdateProfileRequest
+              : never
 }
 
 export interface ClientEvent<Type extends ClientEventType = ClientEventType> {
@@ -46,6 +49,8 @@ export interface NewMessageRequest {
   forwarded?: boolean
   type?: MessageType
 }
+
+export type UpdateProfileRequest = Profile
 export interface CallNewMessageRequest {
   chatId: string
   clientMessageId: string
@@ -125,4 +130,9 @@ export interface CloseCallRequest {
   participantsConnected: string[]
   callDuration: number
   typeCall: CallType
+}
+export interface SetDeviceTokenRequest {
+  fingerprint: string
+  deviceToken: string
+  type: TokenType
 }

@@ -1,9 +1,9 @@
 import { DialogsDO, MessagingDO } from '~/durable-objects/messaging'
-import { chatStorage, userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { chatStorage, userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { domainToASCII } from 'url'
-import { DebugableDurableObject } from '~/durable-objects/DebugWrapper'
+import { DebugableDurableObject } from '~/durable-objects/DebugableDurableObject'
 import { RefreshTokenDO } from '~/durable-objects/RefreshTokenDO'
 
 export const DebugListKeysHandler = async (request: Request, env: Env, ..._args: any[]) => {
@@ -22,8 +22,8 @@ export const DebugListKeysHandler = async (request: Request, env: Env, ..._args:
 
     let stub : DurableObjectStub<DebugableDurableObject|MessagingDO>
     if (doType === 'user') {
-      stub = userStorage(env, userId)
-      return stub.fetch(`http://www.ru/${userId}/client/request/debug`)
+      stub = userStorageById(env, userId)
+      return new Response(JSON.stringify(await stub.debugInfo()))
     } else if (doType === 'chat') {
       stub = chatStorage(env, name, userId)
       return new Response(await stub.listKeys({ prefix }), {

@@ -8,6 +8,7 @@ import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { errorResponse } from '../utils/error-response'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string
@@ -89,6 +90,8 @@ export class VerifyCodeHandler extends Route {
           body: JSON.stringify(row),
         }),
       )
+
+      await userStorageById(env, user.id).setUserId(user.id)
 
       return new Response(
         JSON.stringify({

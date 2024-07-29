@@ -1,6 +1,6 @@
-import { DataOf, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, OpenAPIRouteSchema, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { DialogSchema, GroupSchema } from '~/types/openapi-schemas/chat'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
@@ -26,35 +26,18 @@ export class GetChatHandler extends Route {
   }
 
   async handle(
-    request: Request,
+    _request: Request,
     env: Env,
     _ctx: ExecutionContext,
-    data: DataOf<typeof GetChatHandler.schema>,
+    { query: { chatId } }: DataOf<typeof GetChatHandler.schema>,
   ): Promise<Response> {
     const user = env.user
     try {
-      const {
-        query: { chatId },
-      } = data
+      const userMessagingDO = userStorageById(env, user.id)
 
-      const userMessagingDO = userStorage(env, user.id)
-
-      return userMessagingDO.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/client/request/chat`, {
-          method: 'POST',
-          body: JSON.stringify({ chatId }),
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      ).then(response => {
-
-        return response
-      })
+      const chatData = await userMessagingDO.chatRequest({ chatId })
+      return jsonResp(chatData)
     } catch (error) {
-      // Handle any errors
       writeErrorLog(error)
 
       return errorResponse('Something went wrong', 500)

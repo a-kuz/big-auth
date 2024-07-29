@@ -26,8 +26,10 @@ import {
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   NewCallEvent,
+  NewChatEvent,
   NewGroupMessageEvent,
   Timestamp,
+  TypingInternalEvent,
   UserId,
 } from '~/types/ws/internal'
 import {
@@ -40,11 +42,12 @@ import { writeErrorLog } from '~/utils/serialize-error'
 import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
-import { userStorage } from './utils/mdo'
-import { DebugableDurableObject } from '../DebugWrapper'
-import { DeleteEvent } from '~/types/ws/server-events'
+import { userStorageById } from './utils/get-durable-object'
+import { DebugableDurableObject } from '../DebugableDurableObject'
+import { DeleteEvent, NewMessageEvent } from '~/types/ws/server-events'
 import { newId } from '~/utils/new-id'
 import { callDesription } from '~/utils/call-description'
+import { a } from 'vitest/dist/suite-IbNSsUWN'
 
 export type OutgoingEvent = {
   type: InternalEventType
@@ -98,67 +101,71 @@ export class GroupChatsDO extends DebugableDurableObject {
         this.#outgoingEvets.splice(i, 1)
         n++
         if (n > 2) break
+        let req: Promise<any>
         try {
-          const receiverDO = userStorage(this.env, receiver)
+          const receiverDO = userStorageById(this.env, receiver)
+          if (type === 'closeCall') {
+            req = receiverDO.closeCallEvent(event as CloseCallEvent)
+          } else if (type === 'new') {
+            req = receiverDO.newEvent(event as NewMessageEvent)
+          } else if (type === 'dlvrd') {
+            req = receiverDO.dlvrdEvent(event as MarkDeliveredInternalEvent)
+          } else if (type === 'read') {
+            req = receiverDO.readEvent(event as MarkReadInternalEvent)
+          } else if (type === 'delete') {
+            req = receiverDO.deleteEvent(event as DeleteEvent)
+          } else if (type === 'typing') {
+            req = receiverDO.incomingTypingEvent(event as TypingInternalEvent)
+          } else if (type === 'newCall') {
+            req = receiverDO.newCallEvent(event as NewCallEvent)
+          } else if (type === 'newChat') {
+            req = receiverDO.newChatEvent(event as NewChatEvent)
+          } else {
+            //@ts-ignore
+            req = receiverDO[`type${Event}`](event as NewChatEvent)
+          }
 
-          // Create an event object with message details and timestamp
-
-          const reqBody = JSON.stringify({ ...event })
-
-          const resp = receiverDO
-            .fetch(
-              new Request(`${this.env.ORIGIN}/${receiver}/group/event/${type}`, {
-                method: 'POST',
-                body: reqBody,
-              }),
-            )
-            .then(resp => {
-              if (resp.status === 200) {
-                console.log('task completed', JSON.stringify({ timestamp, type, receiver, event }))
-                if (type === 'new') {
-                  this.#outgoingEvets = [...this.#outgoingEvets].filter(
-                    e =>
-                      !(
-                        e.type === type &&
-                        e.receiver === receiver &&
-                        e.sender === sender &&
-                        e.timestamp === timestamp
-                      ),
-                  )
-                  this.#runningEvents = [...this.#runningEvents].filter(
-                    e =>
-                      !(
-                        e.type === type &&
-                        e.receiver === receiver &&
-                        e.sender === sender &&
-                        e.timestamp === timestamp
-                      ),
-                  )
-                } else {
-                  this.#outgoingEvets = this.#outgoingEvets.filter(
-                    e =>
-                      !(
-                        e.type === type &&
-                        e.receiver === receiver &&
-                        e.sender === sender &&
-                        e.timestamp <= timestamp
-                      ),
-                  )
-                  this.#runningEvents = this.#runningEvents.filter(
-                    e =>
-                      !(
-                        e.type === type &&
-                        e.receiver === receiver &&
-                        e.sender === sender &&
-                        e.timestamp <= timestamp
-                      ),
-                  )
-                }
+          req
+            .then(_ => {
+              console.log('task completed', JSON.stringify({ timestamp, type, receiver, event }))
+              if (type === 'new') {
+                this.#outgoingEvets = [...this.#outgoingEvets].filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp === timestamp
+                    ),
+                )
+                this.#runningEvents = [...this.#runningEvents].filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp === timestamp
+                    ),
+                )
               } else {
-                resp
-                  .text()
-                  .then(text => console.error(text))
-                  .catch(async error => await writeErrorLog(error))
+                this.#outgoingEvets = this.#outgoingEvets.filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp <= timestamp
+                    ),
+                )
+                this.#runningEvents = this.#runningEvents.filter(
+                  e =>
+                    !(
+                      e.type === type &&
+                      e.receiver === receiver &&
+                      e.sender === sender &&
+                      e.timestamp <= timestamp
+                    ),
+                )
               }
             })
             .catch(async error => await writeErrorLog(error))
@@ -311,6 +318,7 @@ export class GroupChatsDO extends DebugableDurableObject {
   counter() {
     return this.#messages.length
   }
+
   async newCall(callId: string, ownerCallId: string) {
     this.#call = {
       callId,
@@ -324,6 +332,7 @@ export class GroupChatsDO extends DebugableDurableObject {
     }
     await this.broadcastEvent('newCall', { ..._newCall }, ownerCallId)
   }
+
   prepareCallFor(message: StoredGroupMessage, userId: string): GroupChatMessage {
     if (message.type != 'call') return message as GroupChatMessage
     if (message.payload) {
@@ -331,7 +340,7 @@ export class GroupChatsDO extends DebugableDurableObject {
       const call: CallOnMessage = {
         callType: payload.callType,
         status: payload.participants?.includes(userId) ? 'received' : 'missed',
-        direction: payload.caller == userId ? 'outcoming' : 'incoming',
+        direction: payload.caller == userId ? 'outgoing' : 'incoming',
       }
       message.message = callDesription(call)
       const preparadMessageOnCall: GroupChatMessage = {
@@ -342,6 +351,7 @@ export class GroupChatsDO extends DebugableDurableObject {
     }
     return message as GroupChatMessage
   }
+
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
 
@@ -462,8 +472,8 @@ export class GroupChatsDO extends DebugableDurableObject {
       sender: sender,
       clientMessageId: newId(),
       delivering: [],
-      type:'call',
-      payload: request.payload
+      type: 'call',
+      payload: request.payload,
     }
     this.#messages[messageId] = message
     await this.#storage.put<StoredGroupMessage>(`message-${messageId}`, message)
@@ -473,8 +483,9 @@ export class GroupChatsDO extends DebugableDurableObject {
         callId: request.payload.callId,
         callType: request.payload.callType,
         status: request.payload.participants?.includes(receiver.id) ? 'received' : 'missed',
-        direction: request.payload.caller == receiver.id ? 'outcoming' : 'incoming',
-        messageId
+        direction: request.payload.caller == receiver.id ? 'outgoing' : 'incoming',
+        messageId,
+        ...(await this.missedFor(receiver.id)),
       }
       this.#outgoingEvets.push({
         event,

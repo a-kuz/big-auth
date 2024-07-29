@@ -1,4 +1,4 @@
-import { ClientEventType, ClientRequestType, ServerEventType } from '~/types/ws'
+import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
   DeleteRequest,
   GetChatRequest,
@@ -8,7 +8,9 @@ import {
   MarkDeliveredRequest,
   MarkReadRequest,
   NewMessageRequest,
+  SetDeviceTokenRequest,
   TypingClientEvent,
+  UpdateProfileRequest,
 } from '~/types/ws/client-requests'
 import {
   ClientEventPayload,
@@ -17,6 +19,7 @@ import {
 } from '~/types/ws/payload-types'
 import {
   DeleteEvent,
+  EditEvent,
   MarkDeliveredEvent,
   MarkReadEvent,
   NewMessageEvent,
@@ -27,13 +30,12 @@ import {
 import { ChatList, ChatListItem } from '../../types/ChatList'
 import { Env } from '../../types/Env'
 
-import { Profile, User } from '~/db/models/User'
+import { Profile } from '~/db/models/User'
 import { displayName } from '~/services/display-name'
-import { Dialog, Group } from '~/types/Chat'
+import { Dialog, DialogAI, Group } from '~/types/Chat'
 import { PushNotification } from '~/types/queue/PushNotification'
 import {
   CloseCallEvent,
-  InternalEventType,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   NewCallEvent,
@@ -43,18 +45,24 @@ import {
   UpdateChatInternalEvent,
 } from '~/types/ws/internal'
 import { MarkReadResponse } from '~/types/ws/responses'
+import { callDesription } from '~/utils/call-description'
 import { encrypt } from '~/utils/crypto'
 import { writeErrorLog } from '~/utils/serialize-error'
-import { DebugableDurableObject } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugableDurableObject'
 import { ChatListService } from './ChatListService'
 import { ContactsManager } from './ContactsManager'
 import { DialogsDO } from './DialogsDO'
 import { OnlineStatus, OnlineStatusService } from './OnlineStatusService'
 import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
-import { chatStorage, chatType, gptStorage, isGroup, userStorage } from './utils/mdo'
+import {
+  chatStorage,
+  chatType,
+  gptStorage,
+  isGroup,
+  userStorageById,
+} from './utils/get-durable-object'
 import { messagePreview } from './utils/message-preview'
-import { callDesription } from '~/utils/call-description'
 
 export class MessagingDO extends DebugableDurableObject {
   #timestamp = Date.now()
@@ -64,7 +72,6 @@ export class MessagingDO extends DebugableDurableObject {
   private cl!: ChatListService
   private wsService!: WebSocketGod
   private contacts!: ContactsManager
-  #messageCounter: any
 
   constructor(
     readonly ctx: DurableObjectState,
@@ -75,6 +82,7 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async initialize() {
+    this.#userId = (await this.ctx.storage.get('userId')) || 'ALARM! NO USER ID'
     this.#deviceToken = (await this.ctx.storage.get<string>('deviceToken')) || ''
 
     this.wsService = new WebSocketGod(this.ctx, this.env)
@@ -105,140 +113,21 @@ export class MessagingDO extends DebugableDurableObject {
       .filter(p => p)
       .slice(-4)
 
-    const [userId, from, type, action] = paths as [
-      string,
-      'dialog' | 'client' | 'group' | 'messaging',
-      'event' | 'request' | 'connect',
-      (
-        | ClientEventType
-        | ServerEventType
-        | InternalEventType
-        | ClientRequestType
-        | 'websocket'
-        | 'setDeviceToken'
-        | 'updateProfile'
-        | 'updateContacts'
-        | 'replaceContacts'
-        | 'contacts'
-        | 'updateChat'
-        | 'blink'
-        | 'lastSeen'
-        | 'debug'
-      ),
-    ]
+    const [userId, from, type, action] = paths as [string, 'client', 'connect', 'websocket']
     if (!this.#userId) {
-      await this.#setUserId(userId)
-      if (action !== 'setDeviceToken') {
-        await this.setDeviceToken()
-      }
+      await this.setUserId(userId)
     }
     console.log(JSON.stringify({ from, type, action }, null, 2))
-    if (!this.env.user) {
-      this.env.user = new User(this.#userId, '')
-      this.env.userId = this.#userId
+    if (type === 'connect' && action === 'websocket') {
+      return this.handleWebsocket(request)
     }
-    switch (from) {
-      case 'client':
-        switch (type) {
-          case 'connect':
-            return this.handleWebsocket(request)
-          case 'request':
-            switch (action) {
-              case 'chats':
-                return this.chatsHandler(request)
-              case 'chat':
-                return this.chatHandler(request)
-              case 'messages':
-                return this.messagesHandler(request)
-              case 'new':
-                return this.newHandler(request)
-              case 'delete':
-                return this.deleteHandler(request)
-              case 'setDeviceToken':
-                return this.setDeviceTokenHandler(request)
-              case 'updateProfile':
-                return this.updateProfileHandler(request)
-              case 'updateContacts':
-                return this.updateContactsHandler(request)
-              case 'replaceContacts':
-                return this.replaceContactsHandler(request)
-              case 'contacts':
-                return this.contactsHandler(request)
-              case 'lastSeen':
-                return this.lastSeenHandler(request)
-              case 'blink':
-                return this.blinkHandler(request)
-              case 'dlvrd':
-                return this.dlvrdHandler(request)
-              case 'debug':
-                return this.debugHandler(request)
-            }
-        }
 
-      case 'group': {
-        switch (action) {
-          case 'newChat':
-            return this.newChatEventHandler(request)
-          case 'newCall':
-            return this.newCallEventHandler(request)
-          case 'closeCall':
-            return this.closeCallEventHandler(request)
-          case 'deleteChat':
-            return this.newChatEventHandler(request)
-          case 'new':
-            return this.newEventHandler(request)
-          case 'read':
-            return this.readEventHandler(request)
-          case 'dlvrd':
-            return this.dlvrdEventHandler(request)
-          case 'updateChat':
-            return this.updateChatEventHandler(request)
-          case 'delete':
-            return this.deleteEventHandler(request)
-        }
-      }
-      case 'dialog': {
-        switch (action) {
-          case 'new':
-            return this.newEventHandler(request)
-          case 'closeCall':
-            return this.closeCallEventHandler(request)
-          case 'dlvrd':
-            return this.dlvrdEventHandler(request)
-          case 'read':
-            return this.readEventHandler(request)
-          case 'updateChat':
-            return this.updateChatEventHandler(request)
-          case 'delete':
-            return this.deleteEventHandler(request)
-        }
-      }
-
-      case 'messaging': {
-        switch (type) {
-          case 'request':
-            switch (action) {
-              case 'lastSeen':
-                return this.lastSeenHandler(request)
-            }
-          case 'event':
-            switch (action) {
-              case 'online':
-                return this.friendOnlineHandler(request)
-              case 'offline':
-                return this.friendOfflineHandler(request)
-              case 'typing':
-                return this.friendTypingHandler(request)
-            }
-        }
-      }
-    }
-    return new Response(`${url.pathname} Not found`, { status: 404 })
+    return new Response(`${url.pathname} ❹０𝟢𝟬𝟎𝟢０❹  `, { status: 404 })
   }
 
-  async debugHandler(request: Request) {
-    if (this.env.ENV === 'production') return new Response('Not found', { status: 404 })
-    const keys = await this.ctx.storage.list()
+  async debugInfo() {
+    if (this.env.ENV === 'production') return 'Not found'
+    const keys = await this.ctx.storage.list() || {}
     const result = {}
     for (const key of keys.keys()) {
       const value = keys.get(key)
@@ -246,41 +135,15 @@ export class MessagingDO extends DebugableDurableObject {
       result[key] = value
     }
 
-    return new Response(DebugableDurableObject.returnBigResult(result, 0))
+    return DebugableDurableObject.returnBigResult(result, 0) as string
   }
-  async newHandler(request: Request) {
-    const eventData = await request.json<NewMessageRequest>()
-
-    if (eventData.chatId === this.#userId) {
-      const timestamp = this.timestamp()
-      return this.sendToFavorites(eventData, timestamp)
-    } else {
-      const response = new Response(JSON.stringify(await this.newRequest(eventData)))
-
-      return response
-    }
-  }
-  async deleteHandler(request: Request) {
-    const eventData = await request.json<DeleteRequest>()
-
-    const response = new Response(JSON.stringify(await this.deleteRequest(eventData)))
-
-    return response
-  }
-
-  async newEventHandler(request: Request) {
-    const eventData = await request.json<NewMessageEvent | NewGroupMessageEvent>()
-
-    return new Response(JSON.stringify(await this.receiveMessage(eventData)))
-  }
-  async newChatEventHandler(request: Request) {
-    const eventData = await request.json<NewChatEvent>()
-    console.log(eventData)
-    const { chatId, name, meta } = eventData
+  
+  async newChatEvent(event: NewChatEvent) {
+    const { chatId, name, meta } = event
     const { owner } = meta
     const chat = this.cl.toTop(chatId, {
       id: chatId,
-      photoUrl: eventData.photoUrl,
+      photoUrl: event.photoUrl,
       lastMessageStatus: 'undelivered',
       lastMessageText: 'chat created',
       lastMessageTime: this.timestamp(),
@@ -293,52 +156,60 @@ export class MessagingDO extends DebugableDurableObject {
     chat.missed = 0
     this.cl.chatList.unshift(chat)
     await this.cl.save()
-    await this.wsService.toBuffer('chats', this.cl.chatList)
+    await this.chatsEvent(this.cl.chatList)
+  }
 
-    return new Response()
+  async chatsEvent(chats: ChatList) {
+    await this.wsService.toSockets('chats', this.cl.chatList)
   }
-  async newCallEventHandler(request: Request) {
-    const eventData = await request.json<NewCallEvent>()
-    await this.wsService.toBuffer('newCall', eventData)
-    return new Response()
+
+  
+  async newCallEvent(event: NewCallEvent) {
+    await this.wsService.toSockets('newCall', event)
   }
-  async closeCallEventHandler(request: Request) {
-    const eventData = await request.json<CloseCallEvent>()
-    const { chatId } = eventData
-    const text = callDesription(eventData)
+  async closeCallEvent(event: CloseCallEvent) {
+    const { chatId } = event
+    const text = callDesription(event)
     const chat = this.cl.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'undelivered',
       lastMessageText: text,
       lastMessageTime: this.timestamp(),
-      lastMessageId: eventData.messageId,
-      type: chatType(chatId),
-      verified: false,
+      lastMessageId: event.messageId,
+      lastMessageAuthor: event.direction === 'incoming' ? chatId : '',
+      isMine: event.direction === 'outgoing',
+      missed: event.missed,
+      firstMissed: event.firstMissed,
     })
     chat.missed = 0
     this.cl.chatList.unshift(chat)
 
     await this.cl.save()
-    await this.wsService.toBuffer('closeCall', eventData)
+    await this.wsService.toSockets('closeCall', event)
     return new Response()
   }
-  async updateChatEventHandler(request: Request) {
-    return new Response(
-      JSON.stringify(this.cl.updateChat((await request.json()) as UpdateChatInternalEvent)),
-    )
-  }
-  async deleteEventHandler(request: Request) {
-    const eventData = await request.json<DeleteEvent>()
-    await this.wsService.toBuffer('delete', eventData)
-    return new Response()
-  }
-  async dlvrdEventHandler(request: Request) {
-    const eventData = await request.json<MarkDeliveredInternalEvent>()
 
-    const chatId = eventData.chatId
+  async updateChatEvent(event: UpdateChatInternalEvent) {
+    const chatData = await this.contacts.patchChat(event.chatId!, event as Dialog | Group)
+    this.cl.updateChat(chatData)
+  }
 
-    console.log(JSON.stringify(eventData))
+
+  async deleteEvent(event: DeleteEvent) {
+    await this.wsService.toSockets('delete', event)
+    return {}
+  }
+  async editEvent(event: EditEvent) {
+    //await this.wsService.toSockets('delete', event)
+    return {}
+  }
+
+  async dlvrdEvent(event: MarkDeliveredInternalEvent) {
+    const chatId = event.chatId
+
+    console.log(JSON.stringify(event))
     const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    if (i === -1) return
     if (
       !this.cl.chatList[i].lastMessageStatus ||
       this.cl.chatList[i].lastMessageStatus === 'undelivered'
@@ -348,25 +219,21 @@ export class MessagingDO extends DebugableDurableObject {
     }
 
     if (this.onlineService.isOnline()) {
-      const event: MarkDeliveredEvent = {
-        ...eventData,
+      const wsEvent: MarkDeliveredEvent = {
+        ...event,
         chatId,
       }
-      await this.wsService.toBuffer('dlvrd', event)
+      await this.wsService.toSockets('dlvrd', wsEvent)
     }
-    return new Response()
   }
-  async readEventHandler(request: Request) {
-    const eventData = await request.json<MarkReadInternalEvent>()
-
-    const chatId = eventData.chatId
-    console.log({ chatId })
-    console.log({ eventData })
-
+  
+  async readEvent(event: MarkReadInternalEvent) {
+    const chatId = event.chatId
     const counter = await this.chatStorage(chatId).counter()
 
-    if (counter - 1 === eventData.messageId) {
+    if (counter - 1 === event.messageId) {
       const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+      if (i === -1) return
       if (
         !this.cl.chatList[i].lastMessageStatus ||
         this.cl.chatList[i].lastMessageStatus === 'undelivered' ||
@@ -378,13 +245,9 @@ export class MessagingDO extends DebugableDurableObject {
     }
 
     if (this.onlineService.isOnline()) {
-      const event: MarkReadEvent = {
-        ...eventData,
-        chatId,
-      }
-      await this.wsService.toBuffer('read', event)
+      const wsEvent: MarkReadEvent = event
+      await this.wsService.toSockets('read', wsEvent)
     }
-    return new Response()
   }
   async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.#userId
@@ -407,21 +270,22 @@ export class MessagingDO extends DebugableDurableObject {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-  async receiveMessage(eventData: NewMessageEvent | NewGroupMessageEvent) {
+  async newEvent(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
     const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
-    let name = chatData.name, verified = false
+    let name = chatData.name,
+      verified = false
     if (chatType(chatId) === 'dialog') {
       const contact = await this.contacts.contact(chatId)
       if (contact) {
         name = displayName(contact)
-        verified = contact.verified ?? false;
+        verified = contact.verified ?? false
       }
     }
-    
-    if (isNew || this.cl.chatList[chatIndex].lastMessageId < eventData.messageId) {
+
+    if (isNew || (this.cl.chatList[chatIndex].lastMessageId ?? -1) < eventData.messageId) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
@@ -454,10 +318,10 @@ export class MessagingDO extends DebugableDurableObject {
     let dlvrd = false
     if (this.onlineService.isOnline()) {
       if (isNew) {
-        await this.wsService.toBuffer('chats', this.cl.chatList)
+        await this.wsService.toSockets('chats', this.cl.chatList)
         await this.onlineService.sendOnlineTo(chatId)
       }
-      await this.wsService.toBuffer('new', {
+      await this.wsService.toSockets('new', {
         ...eventData,
         sender: eventData.sender ?? eventData.chatId,
       })
@@ -467,53 +331,38 @@ export class MessagingDO extends DebugableDurableObject {
     return { success: true, dlvrd }
   }
 
-  private async updateProfileHandler(request: Request) {
-    const profile = await request.json<Profile>()
-    await this.profileService.broadcastProfile(profile)
+
+  async updateProfileRequest(request: UpdateProfileRequest) {
+    await this.profileService.broadcastProfile(request)
+  }
+
+  async updateContactsRequest(contacts: Profile[], replace = false) {
+    try {
+      if (replace) {
+        await this.contacts.replaceContacts(contacts)
+      } else {
+        await this.contacts.updateContacts(contacts)
+      }
+    } catch (e) {
+      await writeErrorLog(e)
+    }
     return new Response()
   }
 
-  private async updateContactsHandler(request: Request) {
-    const updatedContacts = await request.json<Profile[]>()
-    try {
-      await this.contacts.updateContacts(updatedContacts)
-    } catch (e) {
-      await writeErrorLog(e)
-    }
-    return new Response()
-  }
-  private async replaceContactsHandler(request: Request) {
-    const updatedContacts = await request.json<Profile[]>()
-    try {
-      await this.contacts.replaceContacts(updatedContacts)
-    } catch (e) {
-      await writeErrorLog(e)
-    }
-    return new Response()
-  }
-  private async contactsHandler(request: Request) {
+  async contactsReqest() {
     const contacts = await this.contacts.bigUsers()
-    return new Response(JSON.stringify(contacts))
+    return contacts
   }
 
-  private async setDeviceTokenHandler(request: Request) {
-    const data = await request.json<{ fingerprint: string; deviceToken: string }>()
 
-    this.setDeviceToken(data.deviceToken)
-
-    return new Response()
-  }
-
-  private async setDeviceToken(token?: string) {
+  async setDeviceToken(request: SetDeviceTokenRequest) {
+    const token = request.deviceToken
     if (token) {
       await this.ctx.storage.put('deviceToken', token)
       this.#deviceToken = token
-    } else {
-      if (!this.#deviceToken) {
-        this.#deviceToken = (await this.ctx.storage.get('deviceToken')) || ''
-      }
     }
   }
+
   private async pushPush(
     eventData: NewGroupMessageEvent | NewMessageEvent,
     title: string,
@@ -562,96 +411,62 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-  async blinkHandler(request: Request) {
+
+  async blinkRequest() {
     await this.onlineService.blink()
-    return new Response()
-  }
-  async dlvrdHandler(request: Request) {
-    const payload = await request.json<MarkDeliveredRequest>()
-    const response = await this.dlvrdRequest(payload, this.timestamp())
-    return new Response(JSON.stringify(response))
   }
 
-  async chatsHandler(request: Request) {
-    await this.checkAi()
-    return new Response(JSON.stringify(this.cl.chatList), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
+
   private async checkAi() {
     const ai = this.cl.chatList.find(chat => chat.id === 'AI')
     if (!ai) {
       const gpt = gptStorage(this.env, this.#userId)
-      const chat = await gpt.create(this.#userId)
-      this.cl.chatList.unshift(chat)
+      const chat = (await gpt.create(this.#userId)) as DialogAI
+      const chatListItem: ChatListItem = {
+        name: chat.name,
+        missed: 0,
+        id: chat.chatId,
+        type: 'ai',
+        verified: true,
+      }
+      this.cl.chatList.unshift(chatListItem)
       await this.cl.save()
     }
   }
 
-  async chatHandler(request: Request) {
-    let { chatId } = await request.json<GetChatRequest>()
-    const result = await this.cl.chatRequest(chatId, this.#userId)
-    return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-  async messagesHandler(request: Request) {
-    const data = await request.json<GetMessagesRequest>()
 
-    const messages = await this.getMessagesRequest(data)
-
-    return new Response(JSON.stringify(messages), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
+  
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
   }
-  async lastSeenHandler(request: Request) {
-    return new Response(JSON.stringify(this.onlineStatus()))
-  }
+  
   async onlineStatus(): Promise<OnlineStatus> {
     return this.onlineService.status()
   }
 
-  async friendOnlineHandler(request: Request) {
-    const eventData = await request.json<OnlineEvent>()
 
-    return new Response(JSON.stringify(await this.friendOnline(eventData)))
-  }
-
-  async friendOnline(eventData: OnlineEvent) {
+  async onlineEvent(eventData: OnlineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
       this.cl.chatList[chatIndex].lastSeen = undefined
       await this.cl.save()
     }
-    await this.wsService.toBuffer('online', eventData, 1, `${eventData.userId}::status`)
+    await this.wsService.toSockets('online', eventData, 1, `${eventData.userId}::status`)
     return this.onlineService.status()
   }
 
-  async friendOfflineHandler(request: Request) {
-    const eventData = await request.json<OfflineEvent>()
-    const status = await this.friendOffline(eventData)
-    return new Response(JSON.stringify(status))
-  }
 
-  async friendOffline(eventData: OfflineEvent) {
+  async offlineEvent(eventData: OfflineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
       this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
       await this.cl.save()
     }
-    this.wsService.toBuffer('offline', eventData, 1000, `${eventData.userId}::status`)
+    this.wsService.toSockets('offline', eventData, 1000, `${eventData.userId}::status`)
     return this.onlineService.status()
   }
 
-  async friendTypingHandler(request: Request) {
-    const eventData = await request.json<TypingInternalEvent>()
-    this.incomingTypingEvent(eventData)
-    return new Response()
-  }
-
+  
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
@@ -667,10 +482,7 @@ export class MessagingDO extends DebugableDurableObject {
   ////////////////////////////////////////////////////////////////////////////////////
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (this.#messageCounter++ % 100 === 0)
-      console.log(`user ${this.#userId} take ${this.#messageCounter} messages`)
-
-    this.wsService.handlePacket(ws, message, this)
+    await this.wsService.handlePacket(ws, message, this)
   }
 
   async webSocketClose(
@@ -714,14 +526,14 @@ export class MessagingDO extends DebugableDurableObject {
         response = await this.deleteRequest(request as DeleteRequest)
         return response
       case 'chats':
-        response = await this.getChatsRequest(request as GetChatsRequest)
+        response = await this.chatsRequest(request as GetChatsRequest)
         return response
       case 'chat':
         response = await this.chatRequest(request)
         return response
 
       case 'messages':
-        response = await this.getMessagesRequest(request as GetMessagesRequest)
+        response = await this.messagesRequest(request as GetMessagesRequest)
         return response
     }
   }
@@ -730,11 +542,12 @@ export class MessagingDO extends DebugableDurableObject {
     return this.cl.chatRequest(request.chatId, this.#userId)
   }
 
-  async getChatsRequest(payload: GetChatsRequest): Promise<ChatList> {
+  async chatsRequest(payload: GetChatsRequest): Promise<ChatList> {
     return this.cl.chatList.filter(chat => chat.id !== this.#userId)
   }
 
-  async getMessagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+  async messagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
+
     const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(
       payload,
       this.#userId,
@@ -748,7 +561,7 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async newRequest(payload: NewMessageRequest) {
-    const chatId = payload.chatId === 'ai' ? 'AI' : payload.chatId
+    const chatId = payload.chatId;
     if (chatId === this.#userId) {
       return this.sendToFavorites(payload, this.timestamp())
     }
@@ -823,11 +636,11 @@ export class MessagingDO extends DebugableDurableObject {
   }
   async incomingTypingEvent(eventData: TypingInternalEvent) {
     const event: TypingServerEvent = { chatId: eventData.userId, stop: eventData.stop }
-    this.wsService.toBuffer('typing', event, 1, `${eventData.userId}::typing`)
+    this.wsService.toSockets('typing', event, 1, `${eventData.userId}::typing`)
   }
 
   async typingEvent(event: TypingClientEvent) {
-    const receiverDO = userStorage(this.env, event.chatId)
+    const receiverDO = userStorageById(this.env, event.chatId)
     await receiverDO.incomingTypingEvent({ userId: this.#userId, stop: event.stop })
   }
 
@@ -836,8 +649,10 @@ export class MessagingDO extends DebugableDurableObject {
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
   #userId = ''
-  async #setUserId(id: string) {
+  async setUserId(id: string) {
     this.#userId = id
+    this.checkAi()
+    await this.ctx.storage.put('userId', id)
     await this.onlineService.setUserId(id)
   }
 }

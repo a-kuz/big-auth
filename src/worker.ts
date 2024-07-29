@@ -6,8 +6,8 @@ import {
   dialogStorage,
   groupStorage,
   isGroup as ig,
-  userStorage,
-} from './durable-objects/messaging/utils/mdo'
+  userStorageById,
+} from './durable-objects/messaging/utils/get-durable-object'
 import { getUserById } from './db/services/get-user'
 import { digest } from './utils/digest'
 import { NotFoundError } from './errors/NotFoundError'
@@ -110,7 +110,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     for (let participant of participants) {
       if (participant.id == userId) continue
       
-      const chat = (await userStorage(this.env, participant.id).chatRequest({ chatId: localChatId })) as
+      const chat = (await userStorageById(this.env, participant.id).chatRequest({ chatId: localChatId })) as
         | Dialog
         | Group
       const title = chat.name

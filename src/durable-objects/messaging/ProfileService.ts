@@ -3,7 +3,7 @@ import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { DialogsDO } from './DialogsDO'
 import { GroupChatsDO } from './GroupChatsDO'
-import { chatStorage } from './utils/mdo'
+import { chatStorage } from './utils/get-durable-object'
 
 export class ProfileService {
   constructor(

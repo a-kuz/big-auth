@@ -11,7 +11,7 @@ export class DebugableDurableObject extends TaskManager {
     
     super(ctx, env)
   }
-  async fetch(){return new Response}
+  async fetch(request: Request){return new Response}
 
   async listKeys(opts: DurableObjectListOptions = {}, partNumber = 0) {
     if (this.env.ENV === 'production') return

@@ -3,8 +3,9 @@ import { UserId } from '~/types/ws/internal'
 import { GROUP_ID_LENGTH } from '../constants'
 
 
-export const userStorage = ({ USER_MESSAGING_DO }: Env, userId: UserId) => {
+export const userStorageById = ({ USER_MESSAGING_DO }: Env, userId: UserId) => {
   const id = USER_MESSAGING_DO.idFromName(userId)
+  
   return USER_MESSAGING_DO.get(id)
 }
 

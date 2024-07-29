@@ -1,7 +1,5 @@
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import {
-  userStorage
-} from './durable-objects/messaging/utils/mdo'
+import { userStorageById } from './durable-objects/messaging/utils/get-durable-object'
 import { Env } from './types/Env'
 
 export class DeliveringEnterypoint extends WorkerEntrypoint {
@@ -11,20 +9,8 @@ export class DeliveringEnterypoint extends WorkerEntrypoint {
   ) {
     super(ctx, env)
   }
-  async dlvrd(userId: string, chatId: string, messageId: string): Promise<void> {
-    const userMessagingDO = userStorage(this.env, userId)
-    this.ctx.waitUntil(
-      
-      userMessagingDO
-        .fetch(
-          new Request(`${this.env.ORIGIN}/${userId}/client/request/dlvrd`, {
-            method: 'POST',
-            body: JSON.stringify({chatId, userId, messageId}),
-          }),
-        )
-        .then(response => {
-          return response
-        }),
-    )
+  async dlvrd(userId: string, chatId: string, messageId: number): Promise<void> {
+    const userMessagingDO = userStorageById(this.env, userId)
+    this.ctx.waitUntil(userMessagingDO.dlvrdRequest({ chatId, messageId }, Date.now()))
   }
 }

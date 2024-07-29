@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { groupStorage } from '~/durable-objects/messaging/utils/mdo'
+import { groupStorage } from '~/durable-objects/messaging/utils/get-durable-object'
 import { CustomError } from '~/errors/CustomError'
 import { Route } from '~/utils/route'
 import { writeErrorLog } from '~/utils/serialize-error'

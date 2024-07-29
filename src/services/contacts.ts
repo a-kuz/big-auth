@@ -1,7 +1,7 @@
 import { Profile, ProfileWithLastSeen, User, UserDB } from '~/db/models/User'
 
 import { OnlineStatus, UNKNOWN_LAST_SEEN } from '~/durable-objects/messaging/OnlineStatusService'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { ChatList } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { PhoneBook, PhoneBookItem } from '~/types/PhoneBook'
@@ -50,15 +50,10 @@ export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Pr
       .map(async e => ({ ...e, fingerprint: await contactFingerprint(e) })),
   )
 
-  console.log("phoneBookWithIds:")
-  console.log(JSON.stringify(phoneBookWithIds))
-  const userMessagingDO = userStorage(env, user.id)
-  await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${user.id}/client/request/${method}Contacts`, {
-      method: 'POST',
-      body: JSON.stringify(phoneBookWithIds),
-    }),
-  )
+  
+  const userMessagingDO = userStorageById(env, user.id)
+  await userMessagingDO.updateContactsRequest(phoneBookWithIds, method === 'replace')
+  
 
   const DB = env.DB
   const query =
@@ -199,15 +194,11 @@ export async function getContacts(env: Env, ownerId: string) {
 }
 
 export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
-  const userMessagingDO = userStorage(env, env.user.id)
+  const userMessagingDO = userStorageById(env, env.user.id)
 
-  const response = await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${env.user.id}/client/request/contacts`, {
-      method: 'POST',
-      body: '{}',
-    }),
-  )
-  return response.json<ProfileWithLastSeen[]>()
+   const response = await userMessagingDO.contactsReqest();
+  
+  return response;
 
   // const query = `
   //   SELECT u.id,

@@ -9,7 +9,7 @@ export interface Chat<T extends ChatType> {
   photoUrl?: string
   type: ChatType
   name: string
-  lastMessageId?: T extends 'dialog' ? number : T extends 'group' ? number | undefined : never
+  lastMessageId?: number
   lastMessageText?: string
   lastMessageTime?: number
   lastMessageAuthor?: string

@@ -1,7 +1,7 @@
 // File: /src/handlers/GetMessagesHandler.ts
-import { DataOf, Query } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { DialogMessageSchema, GroupChatMessageSchema } from '~/types/openapi-schemas/messages'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
@@ -16,7 +16,7 @@ export class GetMessagesHandler extends Route {
     tags: ['messages'],
 
     parameters: {
-      chatId: Query(z.coerce.string().optional(), { description: 'The ID of the chat' }),
+      chatId: Query(z.coerce.string(), { description: 'The ID of the chat' }),
       count: Query(z.coerce.number().max(MAX_PORTION).default(DEFAULT_PORTION).optional(), {
         description: 'portion length',
       }),
@@ -45,24 +45,12 @@ export class GetMessagesHandler extends Route {
     data: DataOf<typeof GetMessagesHandler.schema>,
   ): Promise<Response> {
     try {
-      const url = new URL(request.url)
       const { chatId, count = undefined, endId = undefined, startId = undefined } = data.query
-      if (!chatId) {
-        return errorResponse('chatId parameter is required', 400)
-      }
-      let user = env.user
-      const userMessagingDO = userStorage(env, user.id)
-      return userMessagingDO
-        .fetch(
-          new Request(`${env.ORIGIN}/${user.id}/client/request/messages`, {
-            method: 'POST',
-            body: JSON.stringify({ chatId, count, endId, startId }),
-          }),
-        )
-        .then(response => {
 
-          return response
-        })
+      let user = env.user
+      const userMessagingDO = userStorageById(env, user.id)
+      const messages = await userMessagingDO.getMessagesRequest({ chatId, count, endId, startId })
+      return jsonResp(messages)
     } catch (error) {
       console.error('Failed to retrieve messages:', error)
       return errorResponse('Internal Server Error', 500)

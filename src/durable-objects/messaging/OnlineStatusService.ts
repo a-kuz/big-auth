@@ -3,7 +3,7 @@ import { Env } from '~/types/Env'
 import { OfflineEvent, OnlineEvent } from '~/types/ws/server-events'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { ChatListService } from './ChatListService'
-import { chatStorage, userStorage } from './utils/mdo'
+import { chatStorage, userStorageById } from './utils/get-durable-object'
 import { WebSocketGod } from './WebSocketService'
 export type OnlineStatus = { lastSeen?: number; status: 'online' | 'offline' }
 export const UNKNOWN_LAST_SEEN = 1719781200000 // 2024-07-01
@@ -49,7 +49,7 @@ export class OnlineStatusService {
         return cached.lastSeen
       }
     }
-    const mdo = await userStorage(this.env, userId)
+    const mdo = await userStorageById(this.env, userId)
     const onlineStatus = await mdo.onlineStatus()
 
     if (onlineStatus.status === 'online') {
@@ -102,13 +102,13 @@ export class OnlineStatusService {
 
         let friendStatus: OnlineStatus
         try {
-          const receiverDO = userStorage(this.env, event.userId)
+          const receiverDO = userStorageById(this.env, event.userId)
 
           try {
             friendStatus =
               status === 'online'
-                ? await receiverDO.friendOnline(req)
-                : await receiverDO.friendOffline(req as OfflineEvent)
+                ? await receiverDO.onlineEvent(req)
+                : await receiverDO.offlineEvent(req as OfflineEvent)
           } catch (error) {
             writeErrorLog(error)
 
@@ -117,7 +117,7 @@ export class OnlineStatusService {
           if (friendStatus.status === 'online') {
             const wsEvent: OnlineEvent = { userId: event.userId }
             if (status === 'online') {
-              this.ws.toBuffer('online', wsEvent)
+              this.ws.toSockets('online', wsEvent)
             }
           }
           const chatIndex = this.chatListService.chatList.findIndex(c => c.id === event.userId)
@@ -226,10 +226,10 @@ export class OnlineStatusService {
 
     let friendStatus: OnlineStatus
     try {
-      const receiverDO = userStorage(this.env, userId)
+      const receiverDO = userStorageById(this.env, userId)
 
       try {
-        friendStatus = await receiverDO.friendOnline(event)
+        friendStatus = await receiverDO.onlineEvent(event)
       } catch (error) {
         writeErrorLog(error)
         friendStatus = { status: 'offline', lastSeen: UNKNOWN_LAST_SEEN }
@@ -237,7 +237,7 @@ export class OnlineStatusService {
       if (friendStatus.status === 'online') {
         const wsEvent: OnlineEvent = { userId }
         if (this.#isOnline) {
-          this.ws.toBuffer('online', wsEvent)
+          this.ws.toSockets('online', wsEvent)
         }
       }
       const chatIndex = this.chatListService.chatList.findIndex(c => c.id === userId)

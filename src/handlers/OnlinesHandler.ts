@@ -10,7 +10,8 @@ import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
 import { putContacts } from '~/services/contacts'
 import { UserMessagingDO } from '..'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export class OnlinesHandler extends Route {
   static schema = {
@@ -52,23 +53,14 @@ export class OnlinesHandler extends Route {
       const onlineContacts = []
 
       for (const contact of contacts) {
-        const contactStorage = userStorage(env, contact.id as string)
-        const response = await contactStorage.fetch(
-          new Request(`${env.ORIGIN}/${contact.id}/messaging/event/online`, {
-            method: 'POST',
-            body: JSON.stringify({
-              userId: ownerId,
-            }),
-          }),
+        const contactStorage = userStorageById(env, contact.id as string)
+        const response = await contactStorage.onlineStatus()
+
+        console.log(
+          `${contact.id} : ${response.status}${response.lastSeen ? `, last seen: ${response.lastSeen}` : ''}`,
         )
 
-        if (response.ok) {
-          const resp = await response.text()
-          console.log(`${contact.id} : ${resp}`)
-          if (resp === 'online') {
-            onlineContacts.push(contact)
-          }
-        }
+        onlineContacts.push({ contact, ...response })
       }
 
       return new Response(JSON.stringify({ users: onlineContacts }), {
@@ -78,7 +70,7 @@ export class OnlinesHandler extends Route {
         },
       })
     } catch (error) {
-      console.error(error)
+      await writeErrorLog(error)
       return errorResponse('Failed to find contacts')
     }
   }

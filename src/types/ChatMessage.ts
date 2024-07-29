@@ -10,7 +10,7 @@ interface Delivering {
 }
 
 export type MessageType = 'new' | 'edit' | 'delete' | call
-export type CallDirectionType = 'incoming' | 'outcoming' 
+export type CallDirectionType = 'incoming' | 'outgoing' 
 export type CallStatusType = 'missed' | 'received' 
 export type CallType = 'video' | 'audio' 
 
@@ -51,6 +51,9 @@ export interface StoredDialogMessage {
   createdAt: number
   updatedAt?: number
   deletedAt?: number
+
+  // @deprecated
+  read?: number, dlvrd?: number // deprecated
 }
 
 export interface DialogMessage {

@@ -1,6 +1,6 @@
 import { DataOf, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { UserId } from '~/types/ws/internal'
@@ -20,7 +20,10 @@ export class UpdateProfileHandler extends Route {
       username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
-      avatarUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
+      avatarUrl: z
+        .string()
+        .regex(REGEX_URL_FILTER, { message: 'url must be at iambig.ai' })
+        .optional(),
     }),
     responses: {
       '200': {
@@ -58,13 +61,8 @@ export class UpdateProfileHandler extends Route {
 
       const updatedUser = await updateUser(env.DB, user.id, data.body)
 
-      const storage = await userStorage(env, user.id)
-      await storage.fetch(
-        new Request(`${env.ORIGIN}/${user.id}/client/request/updateProfile`, {
-          method: 'POST',
-          body: JSON.stringify(updatedUser.profile()),
-        }),
-      )
+      const storage = await userStorageById(env, user.id)
+      await storage.updateProfileRequest(updatedUser.profile())
 
       const responseBody = updatedUser.profile()
 
@@ -81,23 +79,3 @@ export class UpdateProfileHandler extends Route {
   }
 }
 
-export const userStorageRpcRequest = async <
-  Resp extends ServerResponsePayload,
-  Req extends ClientRequestPayload | Object,
->(
-  env: Env,
-  userId: string,
-  method: string,
-  requestBody: Req,
-  from = 'client',
-  type = 'reqest',
-): Promise<Resp> => {
-  const storage = userStorage(env, userId as UserId)
-  const resp = await storage.fetch(
-    new Request(`${env.ORIGIN}/${userId}/${from}/${type}/${method}`, {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    }),
-  )
-  return resp.json<Resp>()
-}

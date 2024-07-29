@@ -5,7 +5,7 @@ import { ChatList, ChatListItem } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { UpdateChatInternalEvent } from '~/types/ws/internal'
 import { ContactsManager } from './ContactsManager'
-import { chatStorage, chatType, isGroup } from './utils/mdo'
+import { chatStorage, chatType, isGroup } from './utils/get-durable-object'
 import { WebSocketGod } from './WebSocketService'
 import { OnlineStatusService } from './OnlineStatusService'
 import { newId } from '~/utils/new-id'
@@ -71,14 +71,14 @@ export class ChatListService {
       }
     }
     this.chatList[index].name = name
-    this.chatList[index].photoUrl = eventData.photoUrl || this.chatList[index].photoUrl
+    this.chatList[index].photoUrl = eventData.photoUrl 
     const after = this.env.ENV === 'dev' ? 1 : 1000
-    await this.wsService.toBuffer('chats', this.chatList, after, 'chats')
+    await this.wsService.toSockets('chats', this.chatList, after, 'chats')
     await this.save()
     return {}
   }
   async chatRequest(chatId: string, userId: string) {
-    this.env.userId = userId
+    
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
     if ((chatItem && chatItem.lastMessageTime) || chatId === 'AI' || isGroup(chatId)) {
@@ -123,7 +123,7 @@ export class ChatListService {
         id: newId(),
         type: 'event',
       })
-      this.wsService.toBuffer('chats', [chatListItem, ...this.chatList],1500)
+      await this.wsService.toSockets('chats', [chatListItem, ...this.chatList],1500)
     }
     return result
   }

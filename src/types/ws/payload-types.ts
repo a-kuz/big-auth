@@ -16,7 +16,7 @@ import {
 } from './client-requests'
 import {
   NewMessageEvent,
-  EditMessageEvent,
+  EditEvent,
   DeleteEvent,
   OnlineEvent,
   OfflineEvent,
@@ -40,7 +40,7 @@ export type ServerResponsePayload =
   | {}
 export type ServerEventPayload =
   | NewMessageEvent
-  | EditMessageEvent
+  | EditEvent
   | DeleteEvent
   | OnlineEvent
   | OfflineEvent
@@ -48,4 +48,5 @@ export type ServerEventPayload =
   | MarkDeliveredEvent
   | MarkReadEvent
   | ChatList
+  
 export type ClientEventPayload = TypingClientEvent | OfflineEvent

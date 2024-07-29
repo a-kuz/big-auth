@@ -2,7 +2,7 @@ import { DurableObjectState } from '@cloudflare/workers-types'
 import { Task } from 'do-taskmanager'
 import { getUsersByPhoneNumbers } from '~/db/services/get-user'
 import { Env } from '~/types/Env'
-import { DebugableDurableObject } from './DebugWrapper'
+import { DebugableDurableObject } from './DebugableDurableObject'
 
 interface Contact {
   phoneNumber: string

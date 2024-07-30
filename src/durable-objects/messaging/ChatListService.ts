@@ -1,11 +1,11 @@
 import { getUserById } from '~/db/services/get-user'
 import { displayName } from '~/services/display-name'
-import { Dialog, Group } from '~/types/Chat'
+import { Dialog, DialogAI, Group } from '~/types/Chat'
 import { ChatList, ChatListItem } from '~/types/ChatList'
 import { Env } from '~/types/Env'
 import { UpdateChatInternalEvent } from '~/types/ws/internal'
 import { ContactsManager } from './ContactsManager'
-import { chatStorage, chatType, isGroup } from './utils/get-durable-object'
+import { chatStorage, chatType, gptStorage, isGroup } from './utils/get-durable-object'
 import { WebSocketGod } from './WebSocketService'
 import { OnlineStatusService } from './OnlineStatusService'
 import { newId } from '~/utils/new-id'
@@ -27,14 +27,26 @@ export class ChatListService {
 
   async initialize() {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
-    const removeIt = this.chatList.filter(c=>c.photoUrl==="https://dev.iambig.ai/public/c0c99c272df4a05e0d0303b4a390492c4786432853c0cb974ed75b8b1b80308e" && c.type==="group");
-    if (removeIt.length) {
 
-      this.chatList = this.chatList.filter(e=>!removeIt.includes(e))
-      this.save()
-    }
     await this.contacts.initialize()
     await this.contacts.loadChatList()
+  }
+
+  async createAi(userId: string) {
+    const ai = this.chatList.find(chat => chat.id === 'AI')
+    if (!ai) {
+      const gpt = gptStorage(this.env, userId)
+      const chat = (await gpt.create(userId)) as DialogAI
+      const chatListItem: ChatListItem = {
+        name: chat.name,
+        missed: 0,
+        id: chat.chatId,
+        type: 'ai',
+        verified: true,
+      }
+      this.chatList.unshift(chatListItem)
+      await this.save()
+    }
   }
 
   async save() {
@@ -71,14 +83,13 @@ export class ChatListService {
       }
     }
     this.chatList[index].name = name
-    this.chatList[index].photoUrl = eventData.photoUrl 
+    this.chatList[index].photoUrl = eventData.photoUrl
     const after = this.env.ENV === 'dev' ? 1 : 1000
     await this.wsService.toSockets('chats', this.chatList, after, 'chats')
     await this.save()
     return {}
   }
   async chatRequest(chatId: string, userId: string) {
-    
     let result: Dialog | Group
     const chatItem = this.chatList.find(chat => chat.id === chatId)
     if ((chatItem && chatItem.lastMessageTime) || chatId === 'AI' || isGroup(chatId)) {
@@ -123,7 +134,7 @@ export class ChatListService {
         id: newId(),
         type: 'event',
       })
-      await this.wsService.toSockets('chats', [chatListItem, ...this.chatList],1500)
+      await this.wsService.toSockets('chats', [chatListItem, ...this.chatList], 1500)
     }
     return result
   }

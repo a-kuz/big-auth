@@ -410,22 +410,6 @@ export class MessagingDO extends DebugableDurableObject {
     await this.onlineService.blink()
   }
 
-  private async checkAi() {
-    const ai = this.cl.chatList.find(chat => chat.id === 'AI')
-    if (!ai) {
-      const gpt = gptStorage(this.env, this.#userId)
-      const chat = (await gpt.create(this.#userId)) as DialogAI
-      const chatListItem: ChatListItem = {
-        name: chat.name,
-        missed: 0,
-        id: chat.chatId,
-        type: 'ai',
-        verified: true,
-      }
-      this.cl.chatList.unshift(chatListItem)
-      await this.cl.save()
-    }
-  }
 
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
@@ -638,7 +622,7 @@ export class MessagingDO extends DebugableDurableObject {
   #userId = ''
   async setUserId(id: string) {
     this.#userId = id
-    this.checkAi()
+    await this.cl.createAi(this.#userId)
     await this.ctx.storage.put('userId', id)
     await this.onlineService.setUserId(id)
   }

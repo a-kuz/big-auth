@@ -42,7 +42,7 @@ export class StoreDeviceTokenHandler extends Route {
         break
        } 
       case "ios-notification":{
-        await storage.setDeviceToken({ fingerprint, deviceToken, type: tokenType })
+        await storage.setDeviceTokenRequest({ fingerprint, deviceToken, type: tokenType })
         break
       }
     }

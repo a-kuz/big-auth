@@ -26,7 +26,7 @@ export const WebsocketHandler = async (request: Request, env: Env, ..._args: any
 
       const deviceToken = await tokenStorage.getToken()
       if (deviceToken) {
-        await userStorage.setDeviceToken({ fingerprint, deviceToken, type: 'ios-notification' })
+        await userStorage.setDeviceTokenRequest({ fingerprint, deviceToken, type: 'ios-notification' })
       }
       const deviceTokenVoip = await tokenStorage.getToken('ios-voip')
       if (deviceTokenVoip) {

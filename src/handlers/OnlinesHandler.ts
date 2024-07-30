@@ -54,7 +54,7 @@ export class OnlinesHandler extends Route {
 
       for (const contact of contacts) {
         const contactStorage = userStorageById(env, contact.id as string)
-        const response = await contactStorage.onlineStatus()
+        const response = await contactStorage.onlineStatusRequest()
 
         console.log(
           `${contact.id} : ${response.status}${response.lastSeen ? `, last seen: ${response.lastSeen}` : ''}`,

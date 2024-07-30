@@ -50,7 +50,7 @@ export class OnlineStatusService {
       }
     }
     const mdo = await userStorageById(this.env, userId)
-    const onlineStatus = await mdo.onlineStatus()
+    const onlineStatus = await mdo.onlineStatusRequest()
 
     if (onlineStatus.status === 'online') {
       this.#lastSeenCache.set(userId, { lastSeen: undefined, timestamp: Date.now() })

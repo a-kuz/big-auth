@@ -33,7 +33,7 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     }
   }
   async fetch(request: Request<unknown, CfProperties<unknown>>) {
-    return new Response()
+    return jsonResp({})
   }
   async getUsersOnChat(chatId: string, userId: string) {
     const returnObf: {

@@ -25,6 +25,6 @@ export class PublicBlinkHandler extends OpenAPIRoute {
     const userMessagingDO = userStorageById(env, data.params.userId)
 
     ctx.waitUntil(userMessagingDO.blinkRequest())
-    return new Response()
+    return jsonResp({})
   }
 }

@@ -1,14 +1,18 @@
-import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
-import { getUsersByPhoneNumbers } from '../db/services/get-user'
-import { getUserByToken } from '../services/get-user-by-token'
-import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
-import { errorResponses } from '../types/openapi-schemas/error-responses'
+import {
+  Arr,
+  DataOf,
+  jsonResp,
+  Str
+} from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
+import { putContacts } from '~/services/contacts'
 import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
-import { getMergedContacts, putContacts } from '~/services/contacts'
+import { Route } from '~/utils/route'
+import { getUsersByPhoneNumbers } from '../db/services/get-user'
+import { Env } from '../types/Env'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
+import { errorResponse } from '../utils/error-response'
 
 export class FindContactsHandler extends Route {
   static schema = {
@@ -58,14 +62,14 @@ export class FindContactsHandler extends Route {
           lastName: e.lastName,
           phoneNumber: normalizePhoneNumber(e.phoneNumber),
         }))
+        .filter(({ phoneNumber }) => phoneNumber.length >= 6 || phoneNumber.startsWith('+9'))
         .toSorted(({ phoneNumber: a }, { phoneNumber: b }) => a.localeCompare(b))
       phoneBook = phoneBook.filter(
         (e, i) => phoneBook.findIndex(ee => ee.phoneNumber === e.phoneNumber) === i,
       )
       const stringPhoneBook = JSON.stringify(phoneBook)
       // console.log(stringPhoneBook)
-      const hash =
-        (await digest(stringPhoneBook)) + Math.floor(Date.now() / 20000).toString()
+      const hash = await digest(stringPhoneBook + Math.floor(Date.now() / 60000).toString())
       const cache = await caches.open('find-contacts')
       const cacheKey = new Request(request.url + '/' + hash, {
         headers: { 'Cache-Control': 'max-age=20' },
@@ -80,30 +84,11 @@ export class FindContactsHandler extends Route {
 
       const users = await getUsersByPhoneNumbers(env.DB, phoneBook)
       await putContacts(env.user, phoneBook, users, env)
-      const responseBody = JSON.stringify({ contacts: users })
+      const result = { contacts: users }
 
-      const response = new Response(responseBody, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      context.waitUntil(Promise.all([cache.put(cacheKey, jsonResp(result))]))
 
-      context.waitUntil(
-        Promise.all([
-          cache.put(
-            cacheKey,
-            new Response(responseBody, {
-              status: 200,
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }),
-          ),
-        ]),
-      )
-
-      return response
+      return jsonResp(result)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find contacts')

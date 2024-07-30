@@ -62,7 +62,7 @@ export class SendCodeHandler extends Route {
 
       if (response.status - 200 < 100) {
         // If the request was successful, return a success response
-        return new Response('{}', { status: 200 })
+        return jsonResp({})
       } else {
         return errorResponse((await response.text()) as string, response.status)
       }

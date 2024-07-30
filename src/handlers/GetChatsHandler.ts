@@ -55,9 +55,7 @@ export class GetChatsHandler extends Route {
           ),
         },
       },
-      '401': {
-        description: 'Unauthorized',
-      },
+
       ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
@@ -67,8 +65,7 @@ export class GetChatsHandler extends Route {
     try {
       const userMessagingDO = userStorageById(env, env.user.id)
 
-      
-      const chats = await userMessagingDO.getChatsRequest({})
+      const chats = await userMessagingDO.chatsRequest({})
       return jsonResp(chats)
     } catch (error: unknown) {
       // Handle any errors

@@ -49,7 +49,7 @@ export class GetMessagesHandler extends Route {
 
       let user = env.user
       const userMessagingDO = userStorageById(env, user.id)
-      const messages = await userMessagingDO.getMessagesRequest({ chatId, count, endId, startId })
+      const messages = await userMessagingDO.messagesRequest({ chatId, count, endId, startId })
       return jsonResp(messages)
     } catch (error) {
       console.error('Failed to retrieve messages:', error)

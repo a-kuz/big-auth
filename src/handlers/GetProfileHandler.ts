@@ -37,12 +37,7 @@ export class GetProfileHandler extends Route {
 
       const userProfile = user.profile()
 
-      return new Response(JSON.stringify(userProfile), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(userProfile)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to fetch profile', 500)

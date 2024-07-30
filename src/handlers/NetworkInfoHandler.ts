@@ -46,9 +46,7 @@ More info about datacenter '${colo}' location: https://en.wikipedia.org/wiki/IAT
         undefined,
         2,
       )
-      return new Response(response, {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return jsonResp(JSON.parse(response))
     } else {
       // HTML response
       return new Response(

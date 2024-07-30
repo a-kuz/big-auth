@@ -3,16 +3,16 @@ import {
   userStorageById,
 } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '../types/Env'
-import { errorResponse } from '../utils/error-response'
+import { errorResponse, unauthorized } from '../utils/error-response'
 
 export const WebsocketHandler = async (request: Request, env: Env, ..._args: any[]) => {
   try {
     const user = env.user
     if (!env.user) {
-      return new Response()
+      return unauthorized()
     }
     const userStorage = userStorageById(env, user.id)
-    userStorage.setUserId(user.id)
+    await userStorage.setUserId(user.id) // stupid line
 
     const fingerprint = request.headers.get('fingerprint')
     if (fingerprint) {

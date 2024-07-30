@@ -44,7 +44,7 @@ import {
   TypingInternalEvent,
   UpdateChatInternalEvent,
 } from '~/types/ws/internal'
-import { MarkReadResponse } from '~/types/ws/responses'
+import { MarkReadResponse, NewMessageResponse } from '~/types/ws/responses'
 import { callDesription } from '~/utils/call-description'
 import { encrypt } from '~/utils/crypto'
 import { writeErrorLog } from '~/utils/serialize-error'
@@ -63,6 +63,7 @@ import {
   userStorageById,
 } from './utils/get-durable-object'
 import { messagePreview } from './utils/message-preview'
+import { jsonResp } from '@cloudflare/itty-router-openapi'
 
 export class MessagingDO extends DebugableDurableObject {
   #timestamp = Date.now()
@@ -127,7 +128,7 @@ export class MessagingDO extends DebugableDurableObject {
 
   async debugInfo() {
     if (this.env.ENV === 'production') return 'Not found'
-    const keys = await this.ctx.storage.list() || {}
+    const keys = (await this.ctx.storage.list()) || {}
     const result = {}
     for (const key of keys.keys()) {
       const value = keys.get(key)
@@ -137,7 +138,7 @@ export class MessagingDO extends DebugableDurableObject {
 
     return DebugableDurableObject.returnBigResult(result, 0) as string
   }
-  
+
   async newChatEvent(event: NewChatEvent) {
     const { chatId, name, meta } = event
     const { owner } = meta
@@ -163,7 +164,6 @@ export class MessagingDO extends DebugableDurableObject {
     await this.wsService.toSockets('chats', this.cl.chatList)
   }
 
-  
   async newCallEvent(event: NewCallEvent) {
     await this.wsService.toSockets('newCall', event)
   }
@@ -193,7 +193,6 @@ export class MessagingDO extends DebugableDurableObject {
     const chatData = await this.contacts.patchChat(event.chatId!, event as Dialog | Group)
     this.cl.updateChat(chatData)
   }
-
 
   async deleteEvent(event: DeleteEvent) {
     await this.wsService.toSockets('delete', event)
@@ -226,7 +225,7 @@ export class MessagingDO extends DebugableDurableObject {
       await this.wsService.toSockets('dlvrd', wsEvent)
     }
   }
-  
+
   async readEvent(event: MarkReadInternalEvent) {
     const chatId = event.chatId
     const counter = await this.chatStorage(chatId).counter()
@@ -265,11 +264,9 @@ export class MessagingDO extends DebugableDurableObject {
     chat.missed = 0
     this.cl.chatList.unshift(chat)
     await this.cl.save()
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return {clientMessageId: '', messageId: 42, timestamp: this.#timestamp} as NewMessageResponse
   }
+
   async newEvent(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
     const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
@@ -331,7 +328,6 @@ export class MessagingDO extends DebugableDurableObject {
     return { success: true, dlvrd }
   }
 
-
   async updateProfileRequest(request: UpdateProfileRequest) {
     await this.profileService.broadcastProfile(request)
   }
@@ -353,7 +349,6 @@ export class MessagingDO extends DebugableDurableObject {
     const contacts = await this.contacts.bigUsers()
     return contacts
   }
-
 
   async setDeviceToken(request: SetDeviceTokenRequest) {
     const token = request.deviceToken
@@ -411,11 +406,9 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-
   async blinkRequest() {
     await this.onlineService.blink()
   }
-
 
   private async checkAi() {
     const ai = this.cl.chatList.find(chat => chat.id === 'AI')
@@ -434,16 +427,13 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-
-  
   private chatStorage(chatId: string) {
     return chatStorage(this.env, chatId, this.#userId)
   }
-  
+
   async onlineStatus(): Promise<OnlineStatus> {
     return this.onlineService.status()
   }
-
 
   async onlineEvent(eventData: OnlineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
@@ -455,7 +445,6 @@ export class MessagingDO extends DebugableDurableObject {
     return this.onlineService.status()
   }
 
-
   async offlineEvent(eventData: OfflineEvent) {
     const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
@@ -466,7 +455,6 @@ export class MessagingDO extends DebugableDurableObject {
     return this.onlineService.status()
   }
 
-  
   ////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////
 
@@ -547,7 +535,6 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async messagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
-
     const resp: GetMessagesResponse = await this.chatStorage(payload.chatId).getMessages(
       payload,
       this.#userId,
@@ -561,7 +548,7 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async newRequest(payload: NewMessageRequest) {
-    const chatId = payload.chatId;
+    const chatId = payload.chatId
     if (chatId === this.#userId) {
       return this.sendToFavorites(payload, this.timestamp())
     }

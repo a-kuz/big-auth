@@ -29,10 +29,7 @@ export async function GetDeviceTokensHandler(
       return errorResponse('User not found or no device tokens available', 404)
     }
 
-    return new Response(JSON.stringify(tokens, null, 2), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResp(tokens)
   } catch (error) {
     console.error('Failed to retrieve device tokens:')
     await writeErrorLog(error)

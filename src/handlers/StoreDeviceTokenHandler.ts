@@ -48,11 +48,6 @@ export class StoreDeviceTokenHandler extends Route {
     }
   }
 
-    return new Response(JSON.stringify({}), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    return jsonResp({})
   }
 }

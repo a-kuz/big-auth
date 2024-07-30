@@ -63,12 +63,7 @@ export class OnlinesHandler extends Route {
         onlineContacts.push({ contact, ...response })
       }
 
-      return new Response(JSON.stringify({ users: onlineContacts }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp({ users: onlineContacts })
     } catch (error) {
       await writeErrorLog(error)
       return errorResponse('Failed to find contacts')

@@ -36,12 +36,7 @@ export class GetContactsHandler extends Route {
     try {
       const ownerId = env.user.id
       const contacts = await getContacts(env, ownerId)
-      return new Response(JSON.stringify({ contacts }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp({ contacts })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to retrieve contacts', 500)

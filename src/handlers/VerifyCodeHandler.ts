@@ -93,19 +93,11 @@ export class VerifyCodeHandler extends Route {
 
       await userStorageById(env, user.id).setUserId(user.id)
 
-      return new Response(
-        JSON.stringify({
-          accessToken,
-          refreshToken,
-          profile: user.profile(),
-        }),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      )
+      return jsonResp({
+        accessToken,
+        refreshToken,
+        profile: user.profile(),
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to verify OTP', 500)

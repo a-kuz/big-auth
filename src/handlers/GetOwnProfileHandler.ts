@@ -1,4 +1,4 @@
-import { OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { CustomError } from '~/errors/CustomError'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
@@ -30,12 +30,7 @@ export class GetOwnProfileHandler extends Route {
     try {
       const user = env.user
 
-      return new Response(JSON.stringify(user.profile()), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(user.profile())
     } catch (e) {
       await writeErrorLog(e)
       return errorResponse(

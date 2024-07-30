@@ -70,14 +70,7 @@ export class CreateContactHandler extends Route {
         ownerId,
       }
       const newContact = (await createContact(env, contact))
-      return new Response(
-        JSON.stringify({ result: true, profile: await getUserById(env.DB, newContact.userId) }),
-        {
-          status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp({ result: true, profile: await getUserById(env.DB, newContact.userId) })
     } catch (error) {
       await writeErrorLog(error)
       return errorResponse((error as Error).message, 400)

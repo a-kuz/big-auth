@@ -1,4 +1,4 @@
-import { DataOf, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
@@ -66,12 +66,7 @@ export class UpdateProfileHandler extends Route {
 
       const responseBody = updatedUser.profile()
 
-      return new Response(JSON.stringify(responseBody), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(responseBody)
     } catch (error) {
       await writeErrorLog(error)
       return errorResponse('Failed to update profile')

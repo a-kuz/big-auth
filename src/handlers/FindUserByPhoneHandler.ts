@@ -1,4 +1,4 @@
-import { OpenAPIRoute, OpenAPIRouteSchema, Query, Str } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRoute, OpenAPIRouteSchema, Query, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
@@ -38,12 +38,7 @@ export class FindUserByPhoneHandler extends Route {
       if (!user) {
         return errorResponse('User not found', 404)
       }
-      return new Response(JSON.stringify(user), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(user)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find user', 500)

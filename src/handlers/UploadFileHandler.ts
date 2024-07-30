@@ -50,15 +50,9 @@ export class UploadFileHandler extends Route {
           }),
         )
 
-        return new Response(
-          JSON.stringify({
-            url: `${new URL(request.url).origin}/public/${id}`,
-          }),
-          {
-						headers: {'Content-Type': 'application/json'},
-            status: 200,
-          },
-        )
+        return jsonResp({
+          url: `${new URL(request.url).origin}/public/${id}`,
+        })
       } catch (error) {
         console.error('Error uploading file:', error)
         return errorResponse('Failed to upload file')

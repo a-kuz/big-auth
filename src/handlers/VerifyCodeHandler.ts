@@ -1,4 +1,4 @@
-import { DataOf, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { Route } from '~/utils/route'

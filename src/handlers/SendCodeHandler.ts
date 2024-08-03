@@ -1,4 +1,4 @@
-import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { Env } from '../types/Env'

@@ -1,4 +1,4 @@
-import { Arr, Bool, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, Bool, jsonResp, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { getContacts } from '../services/contacts'
 import { Env } from '../types/Env'

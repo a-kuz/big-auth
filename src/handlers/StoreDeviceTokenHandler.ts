@@ -1,6 +1,9 @@
-import { DataOf } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { fingerprintDO, userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
+import {
+  fingerprintDO,
+  userStorageById,
+} from '~/durable-objects/messaging/utils/get-durable-object'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
@@ -29,24 +32,24 @@ export class StoreDeviceTokenHandler extends Route {
     const { deviceToken, fingerprint, tokenType = 'ios-notification' } = body
 
     const tokenStorage = fingerprintDO(env, fingerprint)
-    await tokenStorage.setToken(fingerprint, tokenType, deviceToken)
-    const userId = (await tokenStorage.getUserId()) as string | undefined;
+    const userId = await tokenStorage.setTokenAndGetUserId(tokenType, deviceToken)
+
     if (userId) {
       const storage = userStorageById(env, userId)
       switch (tokenType) {
-       case "ios-voip":{
-        const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO
-        const id = VOIP_TOKEN_DO.idFromName(userId)
-        const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
-        await voipTokenDO.setToken(deviceToken)
-        break
-       } 
-      case "ios-notification":{
-        await storage.setDeviceTokenRequest({ fingerprint, deviceToken, type: tokenType })
-        break
+        case 'ios-voip': {
+          const VOIP_TOKEN_DO = env.VOIP_TOKEN_DO
+          const id = VOIP_TOKEN_DO.idFromName(userId)
+          const voipTokenDO = await VOIP_TOKEN_DO.get(id)
+          await voipTokenDO.setToken(deviceToken)
+          break
+        }
+        case 'ios-notification': {
+          await storage.setDeviceTokenRequest({ fingerprint, deviceToken, type: tokenType })
+          break
+        }
       }
     }
-  }
 
     return jsonResp({})
   }

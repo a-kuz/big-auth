@@ -123,6 +123,7 @@ export class ChatGptDO extends DebugableDurableObject {
         this.env.DB,
         owner,
         new NotFoundError(`user ${owner} is not exists (from ai)`),
+        "gpt"
       )
       const message: StoredDialogMessage = {
         clientMessageId: newId(),

@@ -9,6 +9,7 @@ import { chatStorage, chatType, gptStorage, isGroup } from './utils/get-durable-
 import { WebSocketGod } from './WebSocketService'
 import { OnlineStatusService } from './OnlineStatusService'
 import { newId } from '~/utils/new-id'
+import { NotFoundError } from '~/errors/NotFoundError'
 
 export class ChatListService {
   public chatList: ChatList = [] // memory access optimization
@@ -27,7 +28,7 @@ export class ChatListService {
 
   async initialize() {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
-
+    this.chatList = this.chatList.filter(chat => chat.id)
     await this.contacts.initialize()
     await this.contacts.loadChatList()
   }
@@ -73,6 +74,9 @@ export class ChatListService {
 
   async updateChat(eventData: UpdateChatInternalEvent, noPatch = false) {
     const { chatId } = eventData
+    if (!chatId) {
+      return
+    }
     let name = eventData.name!
     const index = this.chatList.findIndex(chat => chat.id === chatId)
     if (index === -1) return
@@ -97,7 +101,9 @@ export class ChatListService {
       const chatData = await chatStub.chat(userId)
       result = await this.contacts.patchChat(chatId, chatData)
     } else {
-      const user = (await getUserById(this.env.DB, chatId)).profile()
+      const user = (
+        await getUserById(this.env.DB, chatId, new NotFoundError(), 'ChatListService')
+      ).profile()
       const patchedUser = await this.contacts.patchProfile(user)
       const lastSeen = await this.onlineService.lastSeenOf(chatId)
       result = {

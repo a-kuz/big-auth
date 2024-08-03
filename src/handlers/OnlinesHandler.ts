@@ -1,4 +1,4 @@
-import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, DataOf, jsonResp, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { getContacts, getMergedContacts } from '../services/contacts'
 import { getUserByToken } from '../services/get-user-by-token'
@@ -63,7 +63,7 @@ export class OnlinesHandler extends Route {
         onlineContacts.push({ contact, ...response })
       }
 
-      return jsonResp({ users: onlineContacts })
+      return jsonResp ({ users: onlineContacts })
     } catch (error) {
       await writeErrorLog(error)
       return errorResponse('Failed to find contacts')

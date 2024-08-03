@@ -2,11 +2,7 @@ import 'reflect-metadata'
 
 import { OpenAPIRouter } from '@cloudflare/itty-router-openapi'
 import { CreateContactHandler } from './handlers/CreateContactHandler'
-import { DeleteContactHandler } from './handlers/DeleteContactHandler'
-import { GetContactHandler } from './handlers/GetContactHandler'
-import { GetContactsHandler } from './handlers/GetContactsHandler'
 import { SendCodeHandler } from './handlers/SendCodeHandler'
-import { UpdateContactHandler } from './handlers/UpdateContactHandler'
 import { VerifyCodeHandler } from './handlers/VerifyCodeHandler'
 
 import { RefreshTokenHandler } from './handlers/RefreshTokenHandler'
@@ -28,7 +24,6 @@ import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 import { GetChatHandler } from './handlers/GetChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
-import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler'
 import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
@@ -45,7 +40,7 @@ export {
   ChatGptDO,
   DialogsDO,
   GroupChatsDO,
-  MessagingDO as UserMessagingDO,
+  MessagingDO as UserMessagingDO
 } from './durable-objects/messaging'
 export * from './durable-objects/PhoneNumberDO'
 export { PushDO } from './durable-objects/PushDO'

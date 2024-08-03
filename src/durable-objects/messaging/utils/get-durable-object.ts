@@ -25,7 +25,7 @@ export const gptStorage = ({ GPT_DO }: Env, name: string) => {
 }
 export const fingerprintDO = ({ PUSH_TOKEN_DO }: Env, name: string) => {
   const id = PUSH_TOKEN_DO.idFromName(name)
-  return PUSH_TOKEN_DO.get(id, { locationHint: 'weur' })
+  return PUSH_TOKEN_DO.get(id)
 }
 
 export const chatStorage = (env: Env, chatId: string, userId: string) => {

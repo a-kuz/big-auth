@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { User } from '../db/models/User'
@@ -164,7 +165,7 @@ async function verifyCode(phoneNumber: string, code: string) {
     body: JSON.stringify({ phoneNumber, code }),
   })
   const data = await response.json()
-  return { accessToken: data.accessToken, id: data.profile.id }
+  return { accessToken: data!.accessToken, id: data!.profile.id }
 }
 
 async function getChatList(jwt: string): Promise<ChatList> {

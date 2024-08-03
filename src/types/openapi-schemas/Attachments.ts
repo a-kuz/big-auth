@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { REGEX_URL_FILTER } from '~/constants'
 
 const FileMetaSchema = z.object({
   extension: z.string(),
@@ -28,7 +29,8 @@ export const AttachmentSchema = z
     type: z.enum(['file', 'image', 'video']),
     id: z.string(),
     filename: z.string(),
-    url: z.string().url(),
+    url: z.string().regex(REGEX_URL_FILTER, { message: 'url must be at iambig.ai' }),
+    
     meta: AttachmentMetaSchema,
   })
   .optional()

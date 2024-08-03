@@ -1,4 +1,4 @@
-import { DataOf, Path, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Path, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { Route } from '~/utils/route'
 import { updateContact } from '../services/contacts'

@@ -8,6 +8,7 @@ import { ProfileService } from './ProfileService'
 import { ChatListService } from './ChatListService'
 import { displayName } from '~/services/display-name'
 import { OnlineStatusService } from './OnlineStatusService'
+import { NotFoundError } from '~/errors/NotFoundError'
 
 export class ContactsManager {
   #contacts: Profile[] = []
@@ -16,8 +17,8 @@ export class ContactsManager {
   #blockCache = new Map<string, number>()
 
   constructor(
-    private env: Env,
     private state: DurableObjectState,
+    private env: Env,
     private profileService: ProfileService,
     private cl: ChatListService,
     private onlineService: OnlineStatusService,
@@ -31,6 +32,10 @@ export class ContactsManager {
   }
   async loadChatList() {
     for (const chat of this.cl.chatList) {
+      if (!chat.id) {
+        console.log('!!!!!')
+        console.log(this.cl.chatList)
+      }
       if (chatType(chat.id) === 'dialog') {
         if (this.#contacts.some(c => c.id === chat.id)) continue
         const contact = await this.contact(chat.id)
@@ -40,6 +45,7 @@ export class ContactsManager {
       }
     }
   }
+
   async contact(userId: string): Promise<Profile> {
     let contact = this.#contacts.find(contact => contact.id === userId)
     if (contact) {
@@ -47,7 +53,14 @@ export class ContactsManager {
     }
     let user = this.#usersCache.get(userId)
     if (!user) {
-      user = (await getUserById(this.env.DB, userId))?.profile()
+      user = (
+        await getUserById(
+          this.env.DB,
+          userId,
+          new NotFoundError(`user ${userId} is not exists, contacts manager 1`),
+          'ContactsManager-57',
+        )
+      )?.profile()
       if (!user) user = new User('42?!!', 'contact support').profile()
       this.#usersCache.set(userId, user)
     }
@@ -125,7 +138,8 @@ export class ContactsManager {
           !id ||
           prevContact.lastName !== lastName ||
           prevContact.firstName !== firstName ||
-          prevContact.avatarUrl !== avatarUrl || prevContact.verified !==verified,
+          prevContact.avatarUrl !== avatarUrl ||
+          prevContact.verified !== verified,
       )
       .map(c => {
         const { prevContact, ...contact } = c
@@ -135,11 +149,10 @@ export class ContactsManager {
           lastName: contact.lastName ?? '',
           avatarUrl: contact.avatarUrl ?? '',
           id: prevContact?.id || contact.id,
-          verified: contact.verified
+          verified: contact.verified,
         }
       })
 
-    
     for (const contact of updatedContacts) {
       if (contact.id) {
         await this.cl.updateChat(
@@ -162,11 +175,12 @@ export class ContactsManager {
         contactsByBlock.set(block, [])
       }
       contactsByBlock.get(block)!.push(contact)
-      
     }
 
     for (let [block, contacts] of contactsByBlock.entries()) {
-      const existingContacts = this.#contacts.filter(c => this.getBlock(c.phoneNumber) === block).filter(c1=>!contacts.find(c2=>c1.phoneNumber===c2.phoneNumber))
+      const existingContacts = this.#contacts
+        .filter(c => this.getBlock(c.phoneNumber) === block)
+        .filter(c1 => !contacts.find(c2 => c1.phoneNumber === c2.phoneNumber))
       for (const existingContact of existingContacts) {
         contactsByBlock.get(block)!.push(existingContact)
       }
@@ -269,7 +283,12 @@ export class ContactsManager {
       this.invalidateCache(contact.id)
       let user = this.#usersCache.get(contact.id)
       if (!user) {
-        user = await getUserById(this.env.DB, contact.id)
+        user = await getUserById(
+          this.env.DB,
+          contact.id,
+          new NotFoundError(`user ${contact.id} is not exists, contacts manager 2`),
+          'ContactsManager-290',
+        )
 
         this.#usersCache.set(contact.id, user)
       }

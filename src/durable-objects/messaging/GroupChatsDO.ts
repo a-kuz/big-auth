@@ -13,6 +13,7 @@ import {
 import {
   CallNewMessageRequest,
   DeleteRequest,
+  EditMessageRequest,
   GetMessagesRequest,
   GetMessagesResponse,
   MarkDeliveredRequest,
@@ -34,6 +35,7 @@ import {
 } from '~/types/ws/internal'
 import {
   DeleteResponse,
+  EditMessageResponse,
   MarkDlvrdResponse,
   MarkReadResponse,
   NewMessageResponse,
@@ -44,7 +46,7 @@ import { Env } from '../../types/Env'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorageById } from './utils/get-durable-object'
 import { DebugableDurableObject } from '../DebugableDurableObject'
-import { DeleteEvent, NewMessageEvent } from '~/types/ws/server-events'
+import { DeleteEvent, EditEvent, NewMessageEvent } from '~/types/ws/server-events'
 import { newId } from '~/utils/new-id'
 import { callDesription } from '~/utils/call-description'
 import { a } from 'vitest/dist/suite-IbNSsUWN'
@@ -375,19 +377,19 @@ export class GroupChatsDO extends DebugableDurableObject {
   }
 
   async deleteMessage(sender: string, request: DeleteRequest): Promise<DeleteResponse> {
-    const { originalMessageId, chatId } = request
-    const messageIndex = this.#messages.findIndex(m => m.messageId === originalMessageId)
+    const { originalMessageId, chatId } = request;
+    const messageIndex = this.#messages.findIndex(m => m.messageId === originalMessageId);
     if (messageIndex === -1) {
-      throw new Error(`Message with ID ${originalMessageId} does not exist`)
+      throw new Error(`Message with ID ${originalMessageId} does not exist`);
     }
-    const message = this.#messages[messageIndex]
-    message.deletedAt = this.timestamp()
-    message.message = undefined
-    message.attachments = undefined
-    await this.#storage.put(`message-${originalMessageId}`, message)
+    const message = this.#messages[messageIndex];
+    message.deletedAt = this.timestamp();
+    message.message = undefined;
+    message.attachments = undefined;
+    await this.#storage.put(`message-${originalMessageId}`, message);
 
-    const messageId = await this.newId()
-    const clientMessageId = `dlt-${messageId}-${newId(3)}`
+    const messageId = await this.newId();
+    const clientMessageId = `dlt-${messageId}-${newId(3)}`;
     const serviceMessage: StoredGroupMessage = {
       messageId,
       clientMessageId,
@@ -395,21 +397,52 @@ export class GroupChatsDO extends DebugableDurableObject {
       type: 'delete',
       payload: { originalMessageId },
       createdAt: message.deletedAt,
-    }
+    };
+    
 
-    this.#messages[serviceMessage.messageId] = serviceMessage
-    await this.#storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+    this.#messages[serviceMessage.messageId] = serviceMessage;
+    await this.#storage.put(`message-${serviceMessage.messageId}`, serviceMessage);
 
     const deleteMessageEvent: DeleteEvent = {
       originalMessageId,
       chatId,
       messageId,
-    }
+    };
 
-    await this.broadcastEvent('delete', deleteMessageEvent, request.chatId)
+    await this.broadcastEvent('delete', deleteMessageEvent, request.chatId);
 
-    return { messageId, timestamp: message.deletedAt }
+    return { messageId, timestamp: message.deletedAt };
   }
+
+  async editMessage(sender: string, request: EditMessageRequest): Promise<EditMessageResponse> {
+    const { originalMessageId, chatId, message, attachments } = request;
+    const messageIndex = this.#messages.findIndex(m => m.messageId === originalMessageId);
+    if (messageIndex === -1) {
+      throw new Error(`Message with ID ${originalMessageId} does not exist`);
+    }
+    const messageToEdit = this.#messages[messageIndex];
+    messageToEdit.message = message;
+    messageToEdit.attachments = attachments;
+    
+    messageToEdit.updatedAt = this.timestamp(); // Store updatedAt field
+    await this.#storage.put(`message-${originalMessageId}`, messageToEdit);
+
+    const editMessageEvent: EditEvent = {
+      chatId,
+      userId: sender,
+      messageId: originalMessageId,
+      message,
+    };
+
+    await this.broadcastEvent('edit', editMessageEvent, request.chatId);
+
+    // Check if the edited message is the last message
+    const lastMessage = this.#messages[this.#messages.length - 1];
+
+
+    return { messageId: originalMessageId, timestamp: messageToEdit.updatedAt };
+  }
+    
 
   async newMessage(sender: string, request: NewMessageRequest): Promise<NewMessageResponse> {
     const timestamp = this.timestamp()

@@ -36,7 +36,9 @@ export const getUserById = async (
   d1: D1Database,
   id: string,
   error: CustomError = new UnauthorizedError(`User not found ${JSON.stringify({ id })}`),
+  from?: string
 ): Promise<User> => {
+  console.log(`↓ D1 select for user ${id} from ${from}`)
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()

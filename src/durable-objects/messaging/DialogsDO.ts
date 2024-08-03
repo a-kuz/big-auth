@@ -68,7 +68,13 @@ export class DialogsDO extends DebugableDurableObject {
     console.log('Dialog constructor')
     this.#storage = ctx.storage
     this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
-    this.ctx.blockConcurrencyWhile(async () => this.initialize())
+    this.initialize()
+  }
+
+  private async initialize() {
+    await this.ctx.blockConcurrencyWhile(async () => {
+      await this.loadInitialData()
+    })
   }
 
   async loadMarks(
@@ -162,6 +168,7 @@ messages in storage: ${this.#counter},
         this.env.DB,
         user1Id,
         new NotFoundError(`user ${user1Id} is not exists (from dialog)`),
+        
       )
     ).profile()
 
@@ -170,6 +177,7 @@ messages in storage: ${this.#counter},
         this.env.DB,
         user2Id,
         new NotFoundError(`user ${user2Id} is not exists (from dialog)`),
+        "Dialog-2"
       )
     ).profile()
 
@@ -266,25 +274,12 @@ messages in storage: ${this.#counter},
   }
   async loadMessages(startId: number, endId: number, userId: string) {
     const secondUserId = this.chatIdFor(userId)
-    const missedIds = []
-    for (let i = startId; i <= endId; i++) {
-      if (!this.#messages[i]) {
-        missedIds.push(i)
-      }
-    }
+    const missedIds = this.getMissedMessageIds(startId, endId)
     const keys = missedIds.map(i => `message-${i}`)
     const keyChunks = splitArray(keys, 128)
 
-    for (const chunk of keyChunks) {
-      const messagesChunk = await this.#storage.get<StoredDialogMessage>(chunk)
-      for (const key of messagesChunk.keys()) {
-        const i = keys.indexOf(key)
-        const message = messagesChunk.get(key)
-        if (message) {
-          this.#messages[message.messageId] = message
-        }
-      }
-    }
+    await this.loadMessagesFromStorage(keyChunks, keys)
+
     const messages = this.#messages.slice(startId, endId + 1).filter(m => !!m)
 
     if (messages.length === 0) {
@@ -681,7 +676,7 @@ messages in storage: ${this.#counter},
       : currentBlockOfMessagesOfOneAuthorLength
   }
 
-  private async initialize() {
+  private async loadInitialData() {
     if (!this.#users || !this.#users.length) {
       this.#users = await this.#storage.get('users')
     }
@@ -795,5 +790,28 @@ messages in storage: ${this.#counter},
     const receiverDO = userStorageById(this.env, receiverId)
 
     await receiverDO.updateChatEvent(event)
+  }
+
+  private getMissedMessageIds(startId: number, endId: number): number[] {
+    const missedIds = []
+    for (let i = startId; i <= endId; i++) {
+      if (!this.#messages[i]) {
+        missedIds.push(i)
+      }
+    }
+    return missedIds
+  }
+
+  private async loadMessagesFromStorage(keyChunks: string[][], keys: string[]) {
+    for (const chunk of keyChunks) {
+      const messagesChunk = await this.#storage.get<StoredDialogMessage>(chunk)
+      for (const key of messagesChunk.keys()) {
+        const i = keys.indexOf(key)
+        const message = messagesChunk.get(key)
+        if (message) {
+          this.#messages[message.messageId] = message
+        }
+      }
+    }
   }
 }

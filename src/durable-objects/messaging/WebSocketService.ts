@@ -65,7 +65,7 @@ export class WebSocketGod {
     this.refreshPing()
     this.clearBuffer()
 
-    await this.state.storage.setAlarm(Date.now() + 1)
+    await this.state.storage.setAlarm(Date.now() + 2000)
     return new Response(null, { status: 101, webSocket: client })
   }
 

@@ -1,3 +1,5 @@
+import { Attachment } from "./Attachment";
+
 export type GroupChat = {
   id: string;
   name: string;
@@ -15,6 +17,19 @@ interface DialogMeta {
   lastName?: string;
   username?: string;
   phoneNumber?: string;
+}
+
+interface EditMessageRequest {
+  chatId: string;
+  originalMessageId: number;
+  clientMessageId: string;
+  message: string;
+  attachments?: Attachment[];
+}
+
+interface EditMessageResponse {
+  messageId: number;
+  timestamp: number;
 }
 
 interface GroupMeta {

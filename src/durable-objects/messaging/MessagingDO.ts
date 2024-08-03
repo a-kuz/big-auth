@@ -1,6 +1,7 @@
 import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
   DeleteRequest,
+  EditMessageRequest,
   GetChatsRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -9,7 +10,7 @@ import {
   NewMessageRequest,
   SetDeviceTokenRequest,
   TypingClientEvent,
-  UpdateProfileRequest
+  UpdateProfileRequest,
 } from '~/types/ws/client-requests'
 import {
   ClientEventPayload,
@@ -54,23 +55,21 @@ import { DialogsDO } from './DialogsDO'
 import { OnlineStatus, OnlineStatusService } from './OnlineStatusService'
 import { ProfileService } from './ProfileService'
 import { WebSocketGod } from './WebSocketService'
-import {
-  chatStorage,
-  chatType,
-  isGroup,
-  userStorageById
-} from './utils/get-durable-object'
+import { chatStorage, chatType, isGroup, userStorageById } from './utils/get-durable-object'
 import { messagePreview } from './utils/message-preview'
 
 export class MessagingDO extends DebugableDurableObject {
   #timestamp = Date.now()
+  #userId = ''
   #deviceToken = ''
-  private onlineService!: OnlineStatusService
-  private profileService!: ProfileService
-  private cl!: ChatListService
-  private wsService!: WebSocketGod
-  private contacts!: ContactsManager
 
+  private onlineService!: OnlineStatusService //  ____    ______
+  private profileService!: ProfileService //     /\  _`\ /\__  _\
+  private chatListService!: ChatListService //   \ \ \/\ \/_/\ \/
+  private wsService!: WebSocketGod //             \ \ \ \ \ \ \ \
+  private contactsService!: ContactsManager //     \ \ \_\ \ \_\ \__
+  //                                                \ \____/ /\_____\
+  //                                                 \/___/  \/_____/
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
@@ -79,44 +78,48 @@ export class MessagingDO extends DebugableDurableObject {
     this.ctx.blockConcurrencyWhile(async () => this.initialize())
   }
 
-  async initialize() {
-    this.#userId = (await this.ctx.storage.get('userId')) || 'ALARM! NO USER ID'
+  private async initialize() {
+    this.#userId = (await this.ctx.storage.get('userId')) || ''
     this.#deviceToken = (await this.ctx.storage.get<string>('deviceToken')) || ''
 
     this.wsService = new WebSocketGod(this.ctx, this.env)
     this.profileService = new ProfileService(this.ctx, this.env)
-    this.cl = new ChatListService(this.ctx, this.env, this.wsService)
-    this.onlineService = new OnlineStatusService(this.ctx, this.env, this.wsService, this.cl)
+    this.chatListService = new ChatListService(this.ctx, this.env, this.wsService)
+    this.onlineService = new OnlineStatusService(
+      this.ctx,
+      this.env,
+      this.wsService,
+      this.chatListService,
+    )
     this.wsService.onlineService = this.onlineService
 
-    this.contacts = new ContactsManager(
-      this.env,
+    this.contactsService = new ContactsManager(
       this.ctx,
+      this.env,
       this.profileService,
-      this.cl,
+      this.chatListService,
       this.onlineService,
     )
-    this.cl.contacts = this.contacts
-    this.cl.onlineService = this.onlineService
-    await this.cl.initialize()
+    this.chatListService.contacts = this.contactsService
+    this.chatListService.onlineService = this.onlineService
+
+    await this.chatListService.initialize()
   }
 
   async alarm(): Promise<void> {
+    if (!this.#userId) {
+      return
+    }
     await this.wsService.alarm()
   }
 
   async fetch(request: Request) {
     const url = new URL(request.url)
-    const paths = url.pathname
-      .split('/')
-      .filter(p => p)
-      .slice(-4)
+    const paths = url.pathname.split('/').slice(-4)
 
     const [userId, from, type, action] = paths as [string, 'client', 'connect', 'websocket']
-    if (!this.#userId) {
-      await this.setUserId(userId)
-    }
-    console.log(JSON.stringify({ from, type, action }, null, 2))
+    if (!this.#userId) await this.setUserId(userId)
+
     if (type === 'connect' && action === 'websocket') {
       return this.handleWebsocket(request)
     }
@@ -124,19 +127,17 @@ export class MessagingDO extends DebugableDurableObject {
     return new Response(`${url.pathname} ❹０𝟢𝟬𝟎𝟢０❹  `, { status: 404 })
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////
+  // ██╗    ██╗███████╗██████╗ ███████╗ ██████╗  ██████╗██╗  ██╗███████╗████████╗
+  // ██║    ██║██╔════╝██╔══██╗██╔════╝██╔═══██╗██╔════╝██║ ██╔╝██╔════╝╚══██╔══╝
+  // ██║ █╗ ██║█████╗  ██████╔╝███████╗██║   ██║██║     █████╔╝ █████╗     ██║
+  // ██║███╗██║██╔══╝  ██╔══██╗╚════██║██║   ██║██║     ██╔═██╗ ██╔══╝     ██║
+  // ╚███╔███╔╝███████╗██████╔╝███████║╚██████╔╝╚██████╗██║  ██╗███████╗   ██║
 
   private async handleWebsocket(request: Request): Promise<Response> {
-    await this.onlineService.online()
-    this.ctx.blockConcurrencyWhile(async () => {
-      await this.contacts.loadChatList()
-    })
+    this.ctx.waitUntil(this.onlineService.online().then(() => this.contactsService.loadChatList()))
     const response = await this.wsService.acceptWebSocket(request)
     return response
   }
-  ////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     await this.wsService.handlePacket(ws, message, this)
@@ -155,8 +156,7 @@ export class MessagingDO extends DebugableDurableObject {
     await this.wsService.handleError(ws, error)
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////
+  // ┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺┉┉┉╺╺
 
   async wsEvent(type: ClientEventType, event?: ClientEventPayload): Promise<void | Object> {
     switch (type) {
@@ -188,6 +188,9 @@ export class MessagingDO extends DebugableDurableObject {
       case 'chat':
         response = await this.chatRequest(request)
         return response
+      case 'edit':
+        response = await this.editRequest(request as EditMessageRequest)
+        return response
 
       case 'messages':
         response = await this.messagesRequest(request as GetMessagesRequest)
@@ -195,14 +198,19 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
+  // ██████╗ ███████╗ ██████╗ ██╗   ██╗███████╗███████╗████████╗███████╗
+  // ██╔══██╗██╔════╝██╔═══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝
+  // ██████╔╝█████╗  ██║   ██║██║   ██║█████╗  ███████╗   ██║   ███████╗
+  // ██╔══██╗██╔══╝  ██║▄▄ ██║██║   ██║██╔══╝  ╚════██║   ██║   ╚════██║
+  // ██║  ██║███████╗╚██████╔╝╚██████╔╝███████╗███████║   ██║   ███████║
+  // ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ╚══════╝
 
   async chatRequest(request: ClientRequestPayload) {
-    return this.cl.chatRequest(request.chatId, this.#userId)
+    return this.chatListService.chatRequest(request.chatId, this.#userId)
   }
 
   async chatsRequest(payload: GetChatsRequest): Promise<ChatList> {
-    return this.cl.chatList.filter(chat => chat.id !== this.#userId)
+    return this.chatListService.chatList.filter(chat => chat.id !== this.#userId)
   }
 
   async messagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
@@ -225,7 +233,7 @@ export class MessagingDO extends DebugableDurableObject {
     }
 
     const storage = this.chatStorage(chatId)
-    const chatItem = this.cl.chatList.find(chat => chat.id === chatId)
+    const chatItem = this.chatListService.chatList.find(chat => chat.id === chatId)
     let lastSeen = chatItem?.lastSeen
     if (!chatItem) {
       if (!isGroup(chatId)) {
@@ -242,7 +250,7 @@ export class MessagingDO extends DebugableDurableObject {
     )
 
     let dialog = (await storage.chat(this.#userId)) as Dialog | Group
-    dialog = await this.contacts.patchChat(chatId, dialog)
+    dialog = await this.contactsService.patchChat(chatId, dialog)
     let name = dialog.name
 
     const chatChanges: Partial<ChatListItem> = {
@@ -261,10 +269,10 @@ export class MessagingDO extends DebugableDurableObject {
       ...(payload.attachments?.length ? { attachmentType: payload.attachments[0].type } : {}),
     }
 
-    const chat = this.cl.toTop(chatId, chatChanges)
-    this.cl.chatList.unshift(chat)
+    const chat = this.chatListService.toTop(chatId, chatChanges)
+    this.chatListService.chatList.unshift(chat)
 
-    await this.cl.save()
+    await this.chatListService.save()
     if (!chatItem) {
       await this.onlineService.sendOnlineTo(chatId)
     }
@@ -288,10 +296,17 @@ export class MessagingDO extends DebugableDurableObject {
       payload,
       timestamp,
     )) as MarkReadResponse
-    const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
-    this.cl.chatList[i].missed = resp.missed
-    await this.cl.save()
+    const i = this.chatListService.chatList.findIndex(chat => chat.id === chatId)
+    this.chatListService.chatList[i].missed = resp.missed
+    await this.chatListService.save()
     return resp
+  }
+
+  async editRequest(payload: EditMessageRequest) {
+    const chatId = payload.chatId
+    const storage = this.chatStorage(chatId) as DurableObjectStub<DialogsDO>
+    const response = await storage.editMessage(this.#userId, payload)
+    return response
   }
 
   async updateProfileRequest(request: UpdateProfileRequest) {
@@ -301,9 +316,9 @@ export class MessagingDO extends DebugableDurableObject {
   async updateContactsRequest(contacts: Profile[], replace = false) {
     try {
       if (replace) {
-        await this.contacts.replaceContacts(contacts)
+        await this.contactsService.replaceContacts(contacts)
       } else {
-        await this.contacts.updateContacts(contacts)
+        await this.contactsService.updateContacts(contacts)
       }
     } catch (e) {
       await writeErrorLog(e)
@@ -311,14 +326,14 @@ export class MessagingDO extends DebugableDurableObject {
     return new Response()
   }
 
-  async contactsReqest() {
-    const contacts = await this.contacts.bigUsers()
+  async contactsRequest() {
+    const contacts = await this.contactsService.bigUsers()
     return contacts
   }
 
   async setDeviceTokenRequest(request: SetDeviceTokenRequest) {
     const token = request.deviceToken
-    if (token) {
+    if (token && token !== this.#deviceToken) {
       await this.ctx.storage.put('deviceToken', token)
       this.#deviceToken = token
     }
@@ -332,23 +347,28 @@ export class MessagingDO extends DebugableDurableObject {
     return this.onlineService.status()
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
+  // ███████╗██╗   ██╗███████╗███╗   ██╗████████╗███████╗
+  // ██╔════╝██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔════╝
+  // █████╗  ██║   ██║█████╗  ██╔██╗ ██║   ██║   ███████╗
+  // ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ╚════██║
+  // ███████╗ ╚████╔╝ ███████╗██║ ╚████║   ██║   ███████║
+  // ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
 
   async onlineEvent(eventData: OnlineEvent) {
-    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
+    const chatIndex = this.chatListService.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
-      this.cl.chatList[chatIndex].lastSeen = undefined
-      await this.cl.save()
+      this.chatListService.chatList[chatIndex].lastSeen = undefined
+      await this.chatListService.save()
     }
     await this.wsService.toSockets('online', eventData, 1, `${eventData.userId}::status`)
     return this.onlineService.status()
   }
 
   async offlineEvent(eventData: OfflineEvent) {
-    const chatIndex = this.cl.chatList.findIndex(chat => chat.id === eventData.userId)
+    const chatIndex = this.chatListService.chatList.findIndex(chat => chat.id === eventData.userId)
     if (chatIndex >= 0) {
-      this.cl.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
-      await this.cl.save()
+      this.chatListService.chatList[chatIndex].lastSeen = eventData.lastSeen || this.timestamp()
+      await this.chatListService.save()
     }
     this.wsService.toSockets('offline', eventData, 1000, `${eventData.userId}::status`)
     return this.onlineService.status()
@@ -366,20 +386,23 @@ export class MessagingDO extends DebugableDurableObject {
 
   async newEvent(eventData: NewMessageEvent | NewGroupMessageEvent) {
     const chatId = eventData.chatId
-    const chatIndex = this.cl.chatList.findIndex(ch => ch.id === chatId)
+    const chatIndex = this.chatListService.chatList.findIndex(ch => ch.id === chatId)
     let isNew = chatIndex === -1
     let chatData = (await this.chatStorage(chatId).chat(this.#userId)) as Group | Dialog
     let name = chatData.name,
       verified = false
     if (chatType(chatId) === 'dialog') {
-      const contact = await this.contacts.contact(chatId)
+      const contact = await this.contactsService.contact(chatId)
       if (contact) {
         name = displayName(contact)
         verified = contact.verified ?? false
       }
     }
 
-    if (isNew || (this.cl.chatList[chatIndex].lastMessageId ?? -1) < eventData.messageId) {
+    if (
+      isNew ||
+      (this.chatListService.chatList[chatIndex].lastMessageId ?? -1) < eventData.messageId
+    ) {
       const chatChanges: Partial<ChatListItem> = {
         id: eventData.chatId,
         lastMessageStatus: this.onlineService.isOnline() ? 'unread' : 'undelivered',
@@ -396,23 +419,23 @@ export class MessagingDO extends DebugableDurableObject {
         firstMissed: chatData.firstMissed,
         lastMessageTime: chatData.lastMessageTime,
       }
-      const chat = this.cl.toTop(chatId, chatChanges)
+      const chat = this.chatListService.toTop(chatId, chatChanges)
       if (isNew && chat.lastSeen !== undefined) delete chat.lastSeen
-      this.cl.chatList.unshift(chat)
+      this.chatListService.chatList.unshift(chat)
       if (isGroup(chatId)) {
-        const contact = await this.contacts.contact(eventData.sender)
+        const contact = await this.contactsService.contact(eventData.sender)
 
         eventData.senderName = displayName(contact)
       }
 
       this.ctx.waitUntil(this.pushPush(eventData, name, chatData.photoUrl))
-      await this.cl.save()
+      await this.chatListService.save()
     }
 
     let dlvrd = false
     if (this.onlineService.isOnline()) {
       if (isNew) {
-        await this.wsService.toSockets('chats', this.cl.chatList)
+        await this.wsService.toSockets('chats', this.chatListService.chatList)
         await this.onlineService.sendOnlineTo(chatId)
       }
       await this.wsService.toSockets('new', {
@@ -423,63 +446,6 @@ export class MessagingDO extends DebugableDurableObject {
     }
 
     return { success: true, dlvrd }
-  }
-
-  async newChatEvent(event: NewChatEvent) {
-    const { chatId, name, meta } = event
-    const { owner } = meta
-    const chat = this.cl.toTop(chatId, {
-      id: chatId,
-      photoUrl: event.photoUrl,
-      lastMessageStatus: 'undelivered',
-      lastMessageText: 'chat created',
-      lastMessageTime: this.timestamp(),
-      name: name,
-      type: 'group',
-      verified: false,
-      lastMessageAuthor: owner,
-      isMine: owner === this.#userId,
-    })
-    chat.missed = 0
-    this.cl.chatList.unshift(chat)
-    await this.cl.save()
-    await this.chatsEvent(this.cl.chatList)
-  }
-
-  async chatsEvent(chats: ChatList) {
-    
-    await this.wsService.toSockets('chats', this.cl.chatList)
-  }
-
-  async newCallEvent(event: NewCallEvent) {
-    await this.wsService.toSockets('newCall', event)
-  }
-
-  async closeCallEvent(event: CloseCallEvent) {
-    const { chatId } = event
-    const text = callDesription(event)
-    const chat = this.cl.toTop(chatId, {
-      id: chatId,
-      lastMessageStatus: 'undelivered',
-      lastMessageText: text,
-      lastMessageTime: this.timestamp(),
-      lastMessageId: event.messageId,
-      lastMessageAuthor: event.direction === 'incoming' ? chatId : '',
-      isMine: event.direction === 'outgoing',
-      missed: event.missed,
-      firstMissed: event.firstMissed,
-    })
-    chat.missed = 0
-    this.cl.chatList.unshift(chat)
-
-    await this.cl.save()
-    await this.wsService.toSockets('closeCall', event)
-    return new Response()
-  }
-
-  async updateChatEvent(event: UpdateChatInternalEvent) {
-    const chatData = await this.contacts.patchChat(event.chatId!, event as Dialog | Group)
-    this.cl.updateChat(chatData)
   }
 
   async deleteEvent(event: DeleteEvent) {
@@ -496,14 +462,14 @@ export class MessagingDO extends DebugableDurableObject {
     const chatId = event.chatId
 
     console.log(JSON.stringify(event))
-    const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+    const i = this.chatListService.chatList.findIndex(chat => chat.id === chatId)
     if (i === -1) return
     if (
-      !this.cl.chatList[i].lastMessageStatus ||
-      this.cl.chatList[i].lastMessageStatus === 'undelivered'
+      !this.chatListService.chatList[i].lastMessageStatus ||
+      this.chatListService.chatList[i].lastMessageStatus === 'undelivered'
     ) {
-      this.cl.chatList[i].lastMessageStatus = 'unread'
-      await this.cl.save()
+      this.chatListService.chatList[i].lastMessageStatus = 'unread'
+      await this.chatListService.save()
     }
 
     if (this.onlineService.isOnline()) {
@@ -520,15 +486,15 @@ export class MessagingDO extends DebugableDurableObject {
     const counter = await this.chatStorage(chatId).counter()
 
     if (counter - 1 === event.messageId) {
-      const i = this.cl.chatList.findIndex(chat => chat.id === chatId)
+      const i = this.chatListService.chatList.findIndex(chat => chat.id === chatId)
       if (i === -1) return
       if (
-        !this.cl.chatList[i].lastMessageStatus ||
-        this.cl.chatList[i].lastMessageStatus === 'undelivered' ||
-        this.cl.chatList[i].lastMessageStatus === 'unread'
+        !this.chatListService.chatList[i].lastMessageStatus ||
+        this.chatListService.chatList[i].lastMessageStatus === 'undelivered' ||
+        this.chatListService.chatList[i].lastMessageStatus === 'unread'
       ) {
-        this.cl.chatList[i].lastMessageStatus = 'read'
-        await this.cl.save()
+        this.chatListService.chatList[i].lastMessageStatus = 'read'
+        await this.chatListService.save()
       }
     }
 
@@ -538,8 +504,68 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////?
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////?
+  async newChatEvent(event: NewChatEvent) {
+    const { chatId, name, meta } = event
+    const { owner } = meta
+    const chat = this.chatListService.toTop(chatId, {
+      id: chatId,
+      photoUrl: event.photoUrl,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: 'chat created',
+      lastMessageTime: this.timestamp(),
+      name: name,
+      type: 'group',
+      verified: false,
+      lastMessageAuthor: owner,
+      isMine: owner === this.#userId,
+    })
+    chat.missed = 0
+    this.chatListService.chatList.unshift(chat)
+    await this.chatListService.save()
+    await this.chatsEvent(this.chatListService.chatList)
+  }
+
+  async chatsEvent(chats: ChatList) {
+    await this.wsService.toSockets('chats', this.chatListService.chatList)
+  }
+
+  async newCallEvent(event: NewCallEvent) {
+    await this.wsService.toSockets('newCall', event)
+  }
+
+  async closeCallEvent(event: CloseCallEvent) {
+    const { chatId } = event
+    const text = callDesription(event)
+    const chat = this.chatListService.toTop(chatId, {
+      id: chatId,
+      lastMessageStatus: 'undelivered',
+      lastMessageText: text,
+      lastMessageTime: this.timestamp(),
+      lastMessageId: event.messageId,
+      lastMessageAuthor: event.direction === 'incoming' ? chatId : '',
+      isMine: event.direction === 'outgoing',
+      missed: event.missed,
+      firstMissed: event.firstMissed,
+    })
+    chat.missed = 0
+    this.chatListService.chatList.unshift(chat)
+
+    await this.chatListService.save()
+    await this.wsService.toSockets('closeCall', event)
+    return new Response()
+  }
+
+  async updateChatEvent(event: UpdateChatInternalEvent) {
+    const chatData = await this.contactsService.patchChat(event.chatId!, event as Dialog | Group)
+    this.chatListService.updateChat(chatData)
+  }
+
+  // ██╗   ██╗████████╗██╗██╗     ███████╗
+  // ██║   ██║╚══██╔══╝██║██║     ██╔════╝
+  // ██║   ██║   ██║   ██║██║     ███████╗
+  // ██║   ██║   ██║   ██║██║     ╚════██║
+  // ╚██████╔╝   ██║   ██║███████╗███████║
+  //  ╚═════╝    ╚═╝   ╚═╝╚══════╝╚══════╝
 
   private async pushPush(
     eventData: NewGroupMessageEvent | NewMessageEvent,
@@ -550,7 +576,7 @@ export class MessagingDO extends DebugableDurableObject {
     if (!eventData.message) return
 
     // Count the number of chats with missed messages > 0
-    const missedCount = this.cl.chatList.reduce<number>(
+    const missedCount = this.chatListService.chatList.reduce<number>(
       (prev, curr) => prev + Math.max(curr.missed ?? 0, 0),
       0,
     )
@@ -600,7 +626,7 @@ export class MessagingDO extends DebugableDurableObject {
 
   private async sendToFavorites(eventData: NewMessageRequest, timestamp: number) {
     const chatId = this.#userId
-    const chat = this.cl.toTop(chatId, {
+    const chat = this.chatListService.toTop(chatId, {
       id: chatId,
       lastMessageStatus: 'read',
       lastMessageText: eventData.message,
@@ -612,15 +638,14 @@ export class MessagingDO extends DebugableDurableObject {
       isMine: true,
     })
     chat.missed = 0
-    this.cl.chatList.unshift(chat)
-    await this.cl.save()
+    this.chatListService.chatList.unshift(chat)
+    await this.chatListService.save()
     return { clientMessageId: '', messageId: 42, timestamp: this.#timestamp } as NewMessageResponse
   }
 
-  #userId = ''
   async setUserId(id: string) {
     this.#userId = id
-    await this.cl.createAi(this.#userId)
+    await this.chatListService.createAi(this.#userId)
     await this.ctx.storage.put('userId', id)
     await this.onlineService.setUserId(id)
   }

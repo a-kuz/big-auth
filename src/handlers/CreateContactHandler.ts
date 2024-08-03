@@ -1,26 +1,20 @@
 import {
-  OpenAPIRoute,
-  OpenAPIRouteSchema,
-  Str,
-  DataOf,
   Bool,
+  DataOf,
+  jsonResp,
+  Str
 } from '@cloudflare/itty-router-openapi'
-import { Route } from '~/utils/route'
-import { Env } from '../types/Env'
-import { createContact } from '../services/contacts'
-import { errorResponse } from '../utils/error-response'
-import { errorResponses } from '../types/openapi-schemas/error-responses'
-import { fromSnakeToCamel } from '~/utils/name-сases'
-import { newId } from '~/utils/new-id'
 import { z } from 'zod'
-import { serializeError } from 'serialize-error'
-import { writeErrorLog } from '~/utils/serialize-error'
-import { normalize } from 'path'
-import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
-import { profile } from 'console'
-import { ProfileSchema } from '~/types/openapi-schemas/profile'
-import { getUserById } from '~/db/services/get-user'
 import { REGEX_URL_FILTER } from '~/constants'
+import { getUserById } from '~/db/services/get-user'
+import { ProfileSchema } from '~/types/openapi-schemas/profile'
+import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
+import { Route } from '~/utils/route'
+import { writeErrorLog } from '~/utils/serialize-error'
+import { createContact } from '../services/contacts'
+import { Env } from '../types/Env'
+import { errorResponses } from '../types/openapi-schemas/error-responses'
+import { errorResponse } from '../utils/error-response'
 
 export class CreateContactHandler extends Route {
   static schema = {

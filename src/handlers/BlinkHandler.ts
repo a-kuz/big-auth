@@ -1,4 +1,4 @@
-import { OpenAPIRoute } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRoute } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '~/types/Env'

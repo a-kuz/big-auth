@@ -1,19 +1,19 @@
+import { jsonResp } from '@cloudflare/itty-router-openapi'
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import { getUserByToken } from './services/get-user-by-token'
-import { Env } from './types/Env'
+import { getUserById } from './db/services/get-user'
 import {
   chatStorage,
-  dialogStorage,
   groupStorage,
   isGroup as ig,
   userStorageById,
 } from './durable-objects/messaging/utils/get-durable-object'
-import { getUserById } from './db/services/get-user'
-import { digest } from './utils/digest'
 import { NotFoundError } from './errors/NotFoundError'
-import { Group, Dialog, Chat } from './types/Chat'
+import { getUserByToken } from './services/get-user-by-token'
+import { Dialog, Group } from './types/Chat'
+import { Env } from './types/Env'
 import { VoipPushNotification } from './types/queue/PushNotification'
-import { NewCallRequest, CloseCallRequest, CallNewMessageRequest } from './types/ws/client-requests'
+import { CallNewMessageRequest, CloseCallRequest, NewCallRequest } from './types/ws/client-requests'
+import { digest } from './utils/digest'
 
 export class WorkerBigAuth extends WorkerEntrypoint {
   constructor(
@@ -109,13 +109,13 @@ export class WorkerBigAuth extends WorkerEntrypoint {
     const localChatId = ig(chatId) ? chatId : userId
     for (let participant of participants) {
       if (participant.id == userId) continue
-      
-      const chat = (await userStorageById(this.env, participant.id).chatRequest({ chatId: localChatId })) as
-        | Dialog
-        | Group
+
+      const chat = (await userStorageById(this.env, participant.id).chatRequest({
+        chatId: localChatId,
+      })) as Dialog | Group
       const title = chat.name
       const id = VOIP_TOKEN_DO.idFromName(participant.id)
-      const voipTokenDO = await VOIP_TOKEN_DO.get(id, { locationHint: 'weur' })
+      const voipTokenDO = await VOIP_TOKEN_DO.get(id)
       const deviceVoipToken = await voipTokenDO.getToken()
       console.log(`
       participant.id : ${participant.id}

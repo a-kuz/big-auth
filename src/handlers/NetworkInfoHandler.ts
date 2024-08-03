@@ -1,4 +1,4 @@
-import { OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRouteSchema } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
 

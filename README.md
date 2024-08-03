@@ -1,8 +1,31 @@
-# BIG Auth - Cloudflare Workers Implementation
+# Messenger backend on Cloudflare Workers 
+with Durable objects (websockets hibernation api), Queues, KV, D1
 
-<small>text was written by GPT</small>
+Designed to be fast and scalable
 
-This repository hosts the Cloudflare Workers implementation of the BIG Auth application, designed to support authentication and messaging for the BIG Messenger app. Utilizing Cloudflare Workers, Durable Objects, and WebSockets, it provides a scalable and efficient serverless infrastructure instead of relying on Node.js.
+Used:
+- workers native RPC
+- outbox pattern for reliability
+- queues for push notifications
+- D1 for storing users
+- durable objects stores chat data
+- lazy loading messages and other chat data from do storage to memory
+  
+Features:
+- auth with sms code
+- online/offline/last seen statuses
+- dialogs
+- group chats
+- chat with ai
+- uploading phone book
+- message statuses
+- reply, forward, edit, delete messages
+- video calls, including group calls
+- online updates by websocket
+- attachmetns
+
+
+ 
 
 ## Table of Contents
 

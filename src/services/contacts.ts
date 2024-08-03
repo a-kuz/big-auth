@@ -1,12 +1,11 @@
 import { Profile, ProfileWithLastSeen, User, UserDB } from '~/db/models/User'
-import { OnlineStatus, UNKNOWN_LAST_SEEN } from '~/durable-objects/messaging/OnlineStatusService'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
-import { ChatList } from '~/types/ChatList'
+
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '~/types/Env'
+import { PhoneBook, PhoneBookItem } from '~/types/PhoneBook'
 import { digest } from '~/utils/digest'
 import { ObjectSnakeToCamelCase, fromSnakeToCamel } from '~/utils/name-сases'
 import { newId } from '~/utils/new-id'
-import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
 
 export interface ContactDB {
   id: string
@@ -24,16 +23,38 @@ export type Contact = ObjectSnakeToCamelCase<ContactDB>
 type pRow = {
   phone_number1: string
   phone_number2: string
+  row_fingerprint: string
 }
 
-export async function putContacts(
-  user: User,
-  phoneNumbers: string[],
-  contacts: Profile[],
-  env: Env,
-) {
+export async function putContacts(user: User, phoneNumbers: PhoneBook, users: Profile[], env: Env, method: "update" | "replace" = "replace") {
+  const phoneBookWithIds: (Profile & PhoneBookItem)[] = await Promise.all(
+    phoneNumbers
+      .map((pn: PhoneBookItem) => {
+        const user = users.find(c => c.phoneNumber === pn.phoneNumber)
+        if (!user) return undefined
+        return {
+          id: user.id,
+          phoneNumber: pn.phoneNumber,
+          avatarUrl: user.avatarUrl,
+          firstName: pn.firstName,
+          lastName: pn.lastName,
+          username: user.username,
+          verified: user.verified
+        }
+      })
+
+      .filter(e => !!e)
+      .map(async e => ({ ...e, fingerprint: await contactFingerprint(e) })),
+  )
+
+
+  const userMessagingDO = userStorageById(env, user.id)
+  await userMessagingDO.updateContactsRequest(phoneBookWithIds, method === 'replace')
+
+
   const DB = env.DB
-  const query = 'SELECT * FROM phone_numbers WHERE phone_number1 = ?'
+  const query =
+    'SELECT row_fingerprint, phone_number1, phone_number2 FROM phone_numbers pn WHERE pn.phone_number1 = ?'
   let existing: pRow[]
   try {
     existing = (await DB.prepare(query).bind(user.phoneNumber).all<pRow>()).results
@@ -43,24 +64,66 @@ export async function putContacts(
     existing = []
   }
 
-  const newNumbers = phoneNumbers.filter(pn => !existing.find(e => e.phone_number2 === pn))
+  const changedNumbers = phoneBookWithIds.filter(pn =>
+    existing.some(e => e.row_fingerprint !== pn.fingerprint && e.phone_number2 === pn.phoneNumber),
+  )
 
-  const insertQuery = 'INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES (?, ?)'
-  const chunkSize = 20;
+  const newNumbers = phoneBookWithIds.filter(
+    pn => !existing.some(e => e.phone_number2 === pn.phoneNumber),
+  )
+
+  const chunkSize = 10
+  for (let i = 0; i < changedNumbers.length; i += chunkSize) {
+    const chunk = changedNumbers.slice(i, i + chunkSize)
+    const updateQuery = `
+      UPDATE phone_numbers 
+      SET first_name = ?, last_name = ?, row_fingerprint = ?, avatar_url = ?
+      WHERE phone_number1 = ? AND phone_number2 = ?
+    `
+    for (const pn of chunk) {
+      try {
+        await DB.prepare(updateQuery)
+          .bind(
+            pn.firstName ?? '',
+            pn.lastName ?? '',
+            pn.fingerprint ?? '',
+            pn.avatarUrl ?? '',
+            user.phoneNumber,
+            pn.phoneNumber,
+          )
+          .run()
+      } catch (error) {
+        // Handle error
+        console.error(error)
+        throw error
+      }
+    }
+  }
   for (let i = 0; i < newNumbers.length; i += chunkSize) {
-    const chunk = newNumbers.slice(i, i + chunkSize);
-    const values = chunk.map(pn => `('${user.phoneNumber}', '${pn}')`).join(', ');
-    const chunkInsertQuery = `INSERT INTO phone_numbers (phone_number1, phone_number2) VALUES ${values}`;
+    const chunk = newNumbers.slice(i, i + chunkSize)
+    const values = chunk
+      .map(
+        pn =>
+          `('${user.phoneNumber}', '${pn.phoneNumber}', '${pn.firstName ?? ''}', '${pn.lastName ?? ''}', '${pn.fingerprint}', '${pn.avatarUrl ?? ''}')`,
+      )
+      .join(', ')
+
+    const chunkInsertQuery = `
+      INSERT INTO phone_numbers (phone_number1, phone_number2, first_name, last_name, row_fingerprint, avatar_url)
+      VALUES ${values}
+    `
     try {
-      await DB.prepare(chunkInsertQuery).run();
+      await DB.prepare(chunkInsertQuery).run()
     } catch (error) {
       // Handle error
-      console.error(error);
-      throw error;
+      console.error(error)
+      throw error
     }
-
-
   }
+}
+
+async function contactFingerprint(pn: PhoneBookItem) {
+  return digest(pn.phoneNumber + (pn.firstName ?? '') + (pn.lastName ?? '') + (pn.avatarUrl ?? ''))
 }
 
 export async function createContact(env: Env, contact: any) {
@@ -79,6 +142,8 @@ export async function createContact(env: Env, contact: any) {
       cause: 'USER_IS_NOT_REGISTERED',
     })
   }
+
+  await putContacts(env.user, [contact], [new User(userId, phoneNumber).profile()], env, "update")
   const existingContactQuery = 'SELECT * FROM contacts WHERE phone_number = ? AND owner_id = ?'
 
   const existingContact = await env.DB.prepare(existingContactQuery)
@@ -119,137 +184,14 @@ export async function createContact(env: Env, contact: any) {
   return { id, clientId, userId, firstName, lastName, phoneNumber, avatarUrl, username }
 }
 
-export async function getContacts(env: Env, ownerId: string) {
-  const query = 'SELECT * FROM contacts WHERE owner_id = ?'
-  const contacts = await env.DB.prepare(query).bind(ownerId).all()
-  return contacts.results.map(fromSnakeToCamel)
-}
-
 export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
-  const query = `
-    SELECT u.id,
-           CASE WHEN COALESCE(c.first_name, '') = '' THEN u.first_name ELSE c.first_name END AS first_name,
-           CASE WHEN COALESCE(c.last_name, '') = '' THEN u.last_name ELSE c.last_name END AS last_name,
-           CASE WHEN COALESCE(c.avatar_url, '') = '' THEN u.avatar_url ELSE c.avatar_url END AS avatar_url,
-           u.phone_number,
-           u.username,
-           u.created_at,
-           u.verified
-    FROM contacts c
-    JOIN users u ON u.id = c.user_id
-    WHERE c.owner_id = ?
-    UNION
-    SELECT u.id,
-           u.first_name,
-           u.last_name,
-           u.avatar_url,
-           u.phone_number,
-           u.username,
-           u.created_at,
-					 u.verified
-    FROM phone_numbers pn
-    JOIN users u ON pn.phone_number2 = u.phone_number
-    WHERE pn.phone_number1 = ?
-  `
-  const contacts = await env.DB.prepare(query)
-    .bind(env.user.id, env.user.phoneNumber)
-    .all<Required<UserDB>>()
-
-  const userMessagingDO = userStorage(env, env.user.id)
-  const chatListResponse = await userMessagingDO.fetch(
-    new Request(`${env.ORIGIN}/${env.user.id}/client/request/chats`, {
-      method: 'POST',
-      body: '{}',
-    }),
-  )
-
-  const chatList = await chatListResponse.json<ChatList>()
-  const chatListIds = chatList.filter(chat => chat.type === 'dialog').map(chat => chat.id)
-
-  const chatListUsers = { results: [] as Required<UserDB>[] }
-  if (chatListIds.length > 0) {
-    for (let i = 0; i < chatListIds.length; i += 10) {
-      const chunk = chatListIds.slice(i, i + 10)
-      const chatListUsersQuery = `
-        SELECT u.*
-        FROM users u
-        WHERE id IN (${chunk.map(() => '?').join(',')})
-      `
-      const chunkResults = await env.DB.prepare(chatListUsersQuery)
-        .bind(...chunk)
-        .all<Required<UserDB>>()
-      chatListUsers.results.push(...chunkResults.results)
-    }
-  }
-
-  const combinedResults = [...contacts.results, ...chatListUsers.results]
-  type UserDBWithStatus = Required<UserDB> & { status: 'online' | 'offline' | 'unknown' , lastSeen?: number}
-  const uniqueResults: UserDBWithStatus[] = combinedResults.reduce<UserDBWithStatus[]>((acc, current) => {
-    const x = acc.find(item => item.id === current.id)
-    if (!x) {
-      acc.push({...current, status: 'unknown'})
-    }
-    return acc
-  }, [])
-
-  
-  const promises = uniqueResults.filter(u=>u.first_name || u.last_name || u.username).map(async contact => {
-    const contactFromChatList = chatList.find(chat => chat.id === contact.id)
-    if (contactFromChatList) {
-      contact.lastSeen = contactFromChatList.lastSeen
-      contact.status = contactFromChatList.lastSeen ? 'offline' : 'online'
-    } else {
-      const mdo = userStorage(env, contact.id)
-      const lastSeenResponse = await mdo.fetch(
-        new Request(`${env.ORIGIN}/${contact.id}/client/request/lastSeen`, {
-          method: 'POST',
-        }),
-      )
-      const lastSeen = await lastSeenResponse.json<OnlineStatus>()
-      if (lastSeen.status === 'offline') {
-        contact.lastSeen = lastSeen.lastSeen
-        contact.status = lastSeen.status
-      }
-    }
-    return {
-      id: contact.id,
-      phoneNumber: contact.phone_number,
-      firstName: contact.first_name || undefined,
-      lastName: contact.last_name || undefined,
-      username: contact.username || undefined,
-      avatarUrl: contact.avatar_url || undefined,
-      verified: !!(contact.verified || false),
-      lastSeen: contact.lastSeen,
-      status: contact.status,
-    } as ProfileWithLastSeen
-  })
-
-  return Promise.all(promises)
+  return userStorageById(env, env.user.id).contactsRequest();
 }
 
 export async function getContactById(env: Env, id: string, ownerId: string) {
   const query = 'SELECT * FROM contacts WHERE id = ? AND owner_id = ?'
   const contact = await env.DB.prepare(query).bind(id, ownerId).first()
   return contact ? fromSnakeToCamel(contact) : null
-}
-
-export async function updateContact(env: Env, id: string, updates: any, ownerId: string) {
-  const { clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl } = updates
-  const updateQuery = `
-    UPDATE contacts
-    SET client_id = ?, user_id = ?, phone_number = ?, username = ?, first_name = ?, last_name = ?, avatar_url = ?
-    WHERE id = ? AND owner_id = ?
-  `
-  const result = await env.DB.prepare(updateQuery)
-    .bind(clientId, userId, phoneNumber, username, firstName, lastName, avatarUrl, id, ownerId)
-    .run()
-  return result.success ? { id, ...updates } : null
-}
-
-export async function deleteContact(env: Env, id: string, ownerId: string) {
-  const deleteQuery = 'DELETE FROM contacts WHERE id = ? AND owner_id = ?'
-  const result = await env.DB.prepare(deleteQuery).bind(id, ownerId).run()
-  return result.success
 }
 
 export async function findUserByUsername(env: Env, username: string) {

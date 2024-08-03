@@ -5,6 +5,7 @@ import { errorResponse } from '~/utils/error-response'
 import { Route } from '~/utils/route'
 import { getMergedContacts } from '../services/contacts'
 import { Env } from '../types/Env'
+import { jsonResp } from '@cloudflare/itty-router-openapi'
 
 export class GetMergedContactsHandler extends Route {
   static schema = {
@@ -26,9 +27,7 @@ export class GetMergedContactsHandler extends Route {
   async handle(request: Request, env: Env) {
     try {
       const mergedContacts = await getMergedContacts(env)
-      return new Response(JSON.stringify({ contacts: mergedContacts }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return jsonResp({ contacts: mergedContacts })
     } catch (error) {
       return errorResponse(JSON.stringify({ error: (error as Error).message }))
     }

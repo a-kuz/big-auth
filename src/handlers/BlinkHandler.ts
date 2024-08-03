@@ -1,6 +1,6 @@
-import { OpenAPIRoute } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRoute } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '~/types/Env'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 
@@ -13,7 +13,7 @@ export class BlinkHandler extends OpenAPIRoute {
       '200': { description: 'ok', schema: z.object({}) },
     },
     ...errorResponses,
-		security: [
+    security: [
       {
         BearerAuth: [],
       },
@@ -21,20 +21,9 @@ export class BlinkHandler extends OpenAPIRoute {
   }
 
   async handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const userMessagingDO = userStorage(env, env.user.id)
+    const userMessagingDO = userStorageById(env, env.user.id)
 
-    ctx.waitUntil(
-      userMessagingDO
-        .fetch(
-          new Request(`${env.ORIGIN}/${env.user.id}/client/request/blink`, {
-            method: 'POST',
-            body: '{}',
-          }),
-        )
-        .then(response => {
-          return response
-        }),
-    )
-    return new Response()
+    ctx.waitUntil(userMessagingDO.blinkRequest())
+    return jsonResp({})
   }
 }

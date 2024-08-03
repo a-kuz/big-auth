@@ -12,7 +12,7 @@ export interface EditMessageResponse {
   timestamp: number
 }
 
-export interface DeleteMessageResponse {
+export interface DeleteResponse {
   messageId: number
   timestamp: number
 }

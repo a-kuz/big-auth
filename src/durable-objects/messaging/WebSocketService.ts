@@ -13,10 +13,12 @@ import { newId } from '~/utils/new-id'
 const SEVEN_DAYS = 604800000
 const PING = String.fromCharCode(0x9)
 
+const NO_BUFFERED_EVENT_TYPES: ServerEventType[] = ['typing']
+
 export class WebSocketGod {
   onlineService!: OnlineStatusService // dp)
 
-  #eventBuffer = new Map<string, ServerEvent>()
+  #eventBuffer = new Map<string, ServerEvent & { key?: string }>()
   #lastCheck: number = 0
   #lastPing: number = 0
   #clientRequestsIds: string[] = []
@@ -55,15 +57,15 @@ export class WebSocketGod {
       return new Response('Expected WebSocket Upgrade', { status: 426 })
     }
     const webSocketPair = new WebSocketPair()
-    
+
     const [client, server] = Object.values(webSocketPair)
-    
+
     this.state.acceptWebSocket(server, ['user'])
-    
+
     this.refreshPing()
     this.clearBuffer()
 
-    await this.state.storage.setAlarm(Date.now() + 1)
+    await this.state.storage.setAlarm(Date.now() + 2000)
     return new Response(null, { status: 101, webSocket: client })
   }
 
@@ -139,7 +141,7 @@ export class WebSocketGod {
   async handleClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     console.log(JSON.stringify({ f: 'webSocketClose', code, reason, wasClean }))
 
-    await this.onlineService.offline()
+    this.state.waitUntil(this.onlineService.offline())
   }
 
   async handleError(ws: WebSocket, error: unknown): Promise<void> {
@@ -166,8 +168,14 @@ export class WebSocketGod {
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
   }
 
-  async toBuffer(eventType: ServerEventType, event: ServerEventPayload, after = 100) {
+  async toSockets(
+    eventType: ServerEventType,
+    event: ServerEventPayload,
+    after = 100,
+    key?: string,
+  ) {
     if (!this.onlineService.isOnline()) return
+
     const id = newId(10)
 
     const packet: ServerEvent = {
@@ -177,7 +185,18 @@ export class WebSocketGod {
       type: 'event',
       id,
     }
-    this.#eventBuffer.set(id, packet)
+    if (NO_BUFFERED_EVENT_TYPES.includes(eventType)) {
+      this.sendPacket(packet)
+      return
+    }
+
+    setTimeout(
+      () => {
+        this.#eventBuffer.set(id, { ...packet, ...(key ? { key } : {}) })
+      },
+      Math.max(0, after - 50),
+    ) // #costile against iOS chatlist doubling chats (race condition)
+
     const alarm = await this.state.storage.getAlarm()
     if (!alarm || alarm > Date.now() + after)
       await this.state.storage.setAlarm(Date.now() + after, {
@@ -185,7 +204,8 @@ export class WebSocketGod {
         allowUnconfirmed: true,
       })
   }
-  private sendPacket(packet: ServerEvent) {
+
+  sendPacket(packet: ServerEvent) {
     const sockets = this.state.getWebSockets()
     for (const ws of sockets.filter(ws => ws.readyState === WebSocket.OPEN)) {
       ws.send(JSON.stringify(packet))
@@ -193,7 +213,11 @@ export class WebSocketGod {
   }
 
   private sendBuffer() {
-    for (const event of this.#eventBuffer.values()) {
+    let events = [...this.#eventBuffer.values()]
+    events.sort((a, b) => b.timestamp - a.timestamp)
+    events = events.filter(event => !event.key || events.find(e => e.key === event.key) === event)
+
+    for (const event of events) {
       this.sendPacket(event)
     }
   }

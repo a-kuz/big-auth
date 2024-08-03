@@ -9,15 +9,15 @@ export interface ChatListItem {
   id: string
   photoUrl?: string // необязательное поле
   name: string
-  lastMessageId: number
+  lastMessageId?: number
   lastMessageText?: string
-  lastMessageTime: number
+  lastMessageTime?: number
   lastMessageAuthor?: string
-  lastMessageStatus: MessageStatus
+  lastMessageStatus?: MessageStatus
   missed: number
   firstMissed?: string
   verified?: boolean
-  isMine: boolean
+  isMine?: boolean
   attachmentType?: AttachmentType
 	lastSeen?: number
 	

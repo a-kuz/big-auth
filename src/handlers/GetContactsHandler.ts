@@ -1,4 +1,4 @@
-import { Arr, Bool, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, Bool, jsonResp, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { getContacts } from '../services/contacts'
 import { Env } from '../types/Env'
@@ -36,12 +36,7 @@ export class GetContactsHandler extends Route {
     try {
       const ownerId = env.user.id
       const contacts = await getContacts(env, ownerId)
-      return new Response(JSON.stringify({ contacts }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp({ contacts })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to retrieve contacts', 500)

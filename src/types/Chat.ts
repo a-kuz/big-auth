@@ -9,7 +9,7 @@ export interface Chat<T extends ChatType> {
   photoUrl?: string
   type: ChatType
   name: string
-  lastMessageId: T extends 'dialog' ? number : T extends 'group' ? number | undefined : never
+  lastMessageId?: number
   lastMessageText?: string
   lastMessageTime?: number
   lastMessageAuthor?: string
@@ -19,6 +19,7 @@ export interface Chat<T extends ChatType> {
   isMine?: boolean
   call?: Call
   attachmentType?: AttachmentType
+  lastSeen?: number
   meta: T extends 'dialog'
     ? DialogMeta
     : T extends 'group'
@@ -60,7 +61,7 @@ export interface GroupMeta {
   name: string
   owner: string
 	verified?: boolean
-  participants: Profile[] | string[] // TODO
+  participants: Profile[]  // TODO
   createdAt: number
 }
 

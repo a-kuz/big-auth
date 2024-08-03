@@ -43,16 +43,11 @@ durable_objects = { bindings = [
 workers_dev = false
 route = "https://stage.iambig.ai/*"
 
-migrations = [
-	{ tag = "v60", new_classes = [
-		"UserMessagingDO",
-		"DialogsDO",
-		"GroupChatsDO",
-		"ChatGptDO",
-		"PushDO",
-	] },
-]
 
+d1_databases = [
+	{ binding = "DB", database_name = "iambig-stage", database_id = "3140a7dc-6938-4399-8f0c-1ce2a934e8c6", migrations_table = "migrations", migrations_dir = "src/db/migrations" },
+]
+vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0", DLVRD_BASE_URL = "https://stage.dlvrd.iambig.ai/" }
 queues = { producers = [
 	{ binding = "PUSH_QUEUE", queue = "push-queue-stage" },
 ] }
@@ -64,8 +59,13 @@ durable_objects = { bindings = [
 	{ name = "GPT_DO", class_name = "ChatGptDO" },
 	{ name = "PUSH_TOKEN_DO", class_name = "PushDO" },
 	{ name = "VOIP_TOKEN_DO", class_name = "VoipTokenDO" },
+], migrations = [
+	{ tag = "v1011", deleted_classes = [
+
+		"UserMessagingDO",
+
+	] },
 ] }
-vars = { ENV = "stage", ORIGIN = "https://stage.iambig.ai", TWILIO_SERVICE_SID = 'VA57c51729f8befa0fd3f10073bc2edc1c', AI_AVATAR_URL = "https://dev.iambig.ai/public/9397b96ad3d94615bff457beaa0fffb84ffa801c3d19a632bcf69a6b46b566e0" }
 kv_namespaces = [
 	{ binding = "FILES_KV", id = "f6c5cd0496ad436d84882f01db59ef76", preview_id = "52a4091c72f743fc9b1c3cfe6f647277" },
 ]
@@ -73,17 +73,6 @@ r2_buckets = [
 	{ binding = "USER_FILES", bucket_name = "user-files", preview_bucket_name = "user-files-preview" },
 ]
 tail_consumers = [{ service = "big-auth-tail" }]
-
-
 [[migrations]]
-tag = "v1"                                                                  # Should be unique for each entry
+tag = "v2"                                                                  # Should be unique for each entry
 new_classes = ["GroupChatsDO", "UserMessagingDO", "DialogsDO", "ChatGptDO"]
-[[migrations]]
-tag = "v2"                   # Should be unique for each entry
-deleted_classes = ["PushDO"]
-[[migrations]]
-tag = "v3"               # Should be unique for each entry
-new_classes = ["PushDO"]
-[[migrations]]
-tag = "v4"                    # Should be unique for each entry
-new_classes = ["VoipTokenDO"]

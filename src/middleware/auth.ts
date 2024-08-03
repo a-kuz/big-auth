@@ -1,7 +1,7 @@
 import { User } from '~/db/models/User'
 import { getUserByToken } from '~/services/get-user-by-token'
 import { Env } from '~/types/Env'
-import { errorResponse } from '~/utils/error-response'
+import { errorResponse, unauthorized } from '~/utils/error-response'
 
 export function getBearer(request: Request): null | string {
   const authHeader = request.headers.get('Authorization')
@@ -16,7 +16,7 @@ export async function authenticateUser(request: Request, env: Env, context: any)
   let user: User
 
   if (!token) {
-    return errorResponse('Authorization required', 401)
+    return unauthorized()
   }
 
   // Implement your own token validation here
@@ -28,7 +28,7 @@ export async function authenticateUser(request: Request, env: Env, context: any)
   }
 
   if (!user) {
-    return errorResponse('user not exist', 401)
+    return unauthorized()
   }
 
   // set the user_id for endpoint routes to be able to reference it

@@ -1,24 +1,39 @@
 import { Env } from '~/types/Env'
-import { DebugWrapper } from './DebugWrapper'
+import { DebugableDurableObject } from './DebugableDurableObject'
 export type TokenType = 'ios-notification' | 'ios-voip'
-export class PushDO extends DebugWrapper {
+export class PushDO extends DebugableDurableObject {
   constructor(
-    readonly state: DurableObjectState,
+    readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
-    super(state, env)
+    super(ctx, env)
+    ctx.blockConcurrencyWhile(()=>this.initialize())
   }
 
-  async setToken(fingerprint: string, tokenType: TokenType, deviceToken: string) {
-    await this.ctx.storage.put(`token-${tokenType}`, deviceToken)
+  
+  #tokens: {[K in TokenType]?: string } = {}
+  #userId?: string
+
+  async initialize() {
+    const all = await this.ctx.storage.list<string>();
+    this.#userId = all.get("userId")
+    this.#tokens['ios-notification'] = all.get("token-ios-notification")
+    this.#tokens['ios-voip'] = all.get("token-ios-voip")
   }
-  async setUserId(userId: string) {
-    await this.ctx.storage.put('userId', userId);
+
+  async setTokenAndGetUserId(tokenType: TokenType, deviceToken: string) {
+    if (this.#tokens[tokenType] !== deviceToken) {
+      this.#tokens[tokenType] = deviceToken
+      await this.ctx.storage.put(`token-${tokenType}`, deviceToken)
+    }
+    return this.#userId
   }
-  async getUserId() {
-    await this.ctx.storage.get<string>('userId');
+
+  async setUserIdAndGetTokens(userId: string) {
+    if (this.#userId !== userId) {
+      await this.ctx.storage.put('userId', userId);
+    }    
+    return this.#tokens
   }
-  async getToken(tokenType: TokenType = 'ios-notification') {
-    return this.ctx.storage.get<string>(`token-${tokenType}`)
-  }
+
 }

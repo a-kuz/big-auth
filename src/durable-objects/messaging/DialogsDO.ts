@@ -4,8 +4,10 @@ import { NotFoundError } from '~/errors/NotFoundError'
 import { displayName } from '~/services/display-name'
 import { Dialog } from '~/types/Chat'
 import { MessageStatus } from '~/types/ChatList'
-import { DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
+import { CallOnMessage, CallPayload, DialogMessage, StoredDialogMessage } from '~/types/ChatMessage'
+import { ServerEventType } from '~/types/ws'
 import {
+  CallNewMessageRequest,
   DeleteRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -14,7 +16,9 @@ import {
   NewMessageRequest,
   ReplyTo,
 } from '~/types/ws/client-requests'
+import { dlt } from '~/types/ws/event-literals'
 import {
+  CloseCallEvent,
   MarkDeliveredInternalEvent,
   MarkReadInternalEvent,
   MessageId,
@@ -22,23 +26,27 @@ import {
   UpdateChatInternalEvent,
   UserId,
 } from '~/types/ws/internal'
+import { ServerEventPayload } from '~/types/ws/payload-types'
 import {
-  DeleteMessageResponse,
+  DeleteResponse,
   MarkDlvrdResponse,
   MarkReadResponse,
   NewMessageResponse,
 } from '~/types/ws/responses'
 import { DeleteEvent, NewMessageEvent } from '~/types/ws/server-events'
+import { callDesription } from '~/utils/call-description'
 import { newId } from '~/utils/new-id'
 import { splitArray } from '~/utils/split-array'
 import { Env } from '../../types/Env'
 import { Mark, MarkPointer, Marks } from '../../types/Marks'
-import { DebugWrapper } from '../DebugWrapper'
+import { DebugableDurableObject } from '../DebugableDurableObject'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
-import { userStorage } from './utils/mdo'
+import { userStorageById } from './utils/get-durable-object'
+import { messagePreview } from './utils/message-preview'
+import { UserMessagingDO } from '~/index'
 
-export type Missed = { missed: number; first?: string }
-export class DialogsDO extends DebugWrapper {
+export type Missed = { missed: number; firstMissed?: string }
+export class DialogsDO extends DebugableDurableObject {
   #timestamp = Date.now()
   #messages: StoredDialogMessage[] = []
   #users?: [Profile, Profile]
@@ -60,7 +68,13 @@ export class DialogsDO extends DebugWrapper {
     console.log('Dialog constructor')
     this.#storage = ctx.storage
     this.ctx.setHibernatableWebSocketEventTimeout(1000 * 60 * 60 * 24)
-    this.ctx.blockConcurrencyWhile(async () => this.initialize())
+    this.initialize()
+  }
+
+  private async initialize() {
+    await this.ctx.blockConcurrencyWhile(async () => {
+      await this.loadInitialData()
+    })
   }
 
   async loadMarks(
@@ -125,7 +139,7 @@ export class DialogsDO extends DebugWrapper {
     return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
   }
 
-  debugInfo() {
+  async debugInfo() {
     if (this.#users) {
       return `in memory:
 messages: ${this.#messages.filter(e => !!e).length},
@@ -139,6 +153,8 @@ messages: ${this.#messages.filter(e => !!e).length},
 messages in storage: ${this.#counter},
 
 		`
+    } else {
+      return 'O'
     }
   }
 
@@ -148,11 +164,21 @@ messages in storage: ${this.#counter},
     this.#id = `${user1Id}:${user2Id}`
 
     const user1 = (
-      await getUserById(this.env.DB, user1Id, new NotFoundError(`user ${user1Id} is not exists`))
+      await getUserById(
+        this.env.DB,
+        user1Id,
+        new NotFoundError(`user ${user1Id} is not exists (from dialog)`),
+        
+      )
     ).profile()
 
     const user2 = (
-      await getUserById(this.env.DB, user2Id, new NotFoundError(`user ${user2Id} is not exists`))
+      await getUserById(
+        this.env.DB,
+        user2Id,
+        new NotFoundError(`user ${user2Id} is not exists (from dialog)`),
+        "Dialog-2"
+      )
     ).profile()
 
     this.#users = [user1, user2]
@@ -187,7 +213,7 @@ messages in storage: ${this.#counter},
       type: 'dialog',
       meta: user2,
       ...(await this.missedFor(userId)),
-      lastMessageText: this.#lastMessage?.message,
+      lastMessageText: messagePreview(this.#lastMessage?.message),
       lastMessageTime: this.#lastMessage?.createdAt,
       lastMessageAuthor: this.#lastMessage?.sender,
       lastMessageStatus,
@@ -208,78 +234,66 @@ messages in storage: ${this.#counter},
     return this.#counter - 1
   }
 
+  private prepareStoredMessage(message: StoredDialogMessage, userId: string): DialogMessage {
+    if (message.type != 'call') return message as DialogMessage
+    if (message.payload) {
+      const payload: CallPayload = message.payload as CallPayload
+      const call: CallOnMessage = {
+        callType: payload.callType,
+        status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
+        direction: payload.caller == userId ? 'outgoing' : 'incoming',
+      }
+      message.message = callDesription(call)
+      const preparadMessageOnCall: DialogMessage = {
+        ...message,
+        payload: call,
+      }
+      return preparadMessageOnCall
+    }
+    return message as DialogMessage
+  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
       const endIndex = payload.endId || this.#messages.length
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = endIndex >= portion ? endIndex - portion + 1 : 0
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m =>
+        this.prepareStoredMessage(m, userId),
+      )
       return { messages, authors: [] }
     } else {
       const portion = payload.count ? Math.min(MAX_PORTION, payload.count) : DEFAULT_PORTION
       const startIndex = payload.startId
       const endIndex = startIndex + portion - 1
-      const messages = await this.loadMessages(startIndex, endIndex, userId)
+      const messages = (await this.loadMessages(startIndex, endIndex, userId)).map(m =>
+        this.prepareStoredMessage(m, userId),
+      )
       return { messages, authors: [] }
     }
   }
   async loadMessages(startId: number, endId: number, userId: string) {
     const secondUserId = this.chatIdFor(userId)
-    const missedIds = []
-    for (let i = startId; i <= endId; i++) {
-      if (!this.#messages[i]) {
-        missedIds.push(i)
-      }
-    }
+    const missedIds = this.getMissedMessageIds(startId, endId)
     const keys = missedIds.map(i => `message-${i}`)
     const keyChunks = splitArray(keys, 128)
 
-    for (const chunk of keyChunks) {
-      const messagesChunk = await this.#storage.get<StoredDialogMessage>(chunk)
-      for (const key of messagesChunk.keys()) {
-        const i = keys.indexOf(key)
-        const message = messagesChunk.get(key)
-        if (message) {
-          this.#messages[message.messageId] = message
-        }
-      }
-    }
+    await this.loadMessagesFromStorage(keyChunks, keys)
+
     const messages = this.#messages.slice(startId, endId + 1).filter(m => !!m)
 
     if (messages.length === 0) {
       return messages
     }
 
-    // Find the mark for the lowest messageId
+    await this.loadMarks(startId, endId, secondUserId)
 
-    const { readMarks, dlvrdMarks } = await this.loadMarks(startId, endId, secondUserId)
-    let readMark = readMarks.length ? readMarks[0] : undefined
-    let dlvrdMark = dlvrdMarks.length ? dlvrdMarks[0] : undefined
-    // Use cached #readMarks and #dlvrdMarks
-    for (const message of messages as DialogMessage[]) {
-      message.read = undefined
-      message.dlvrd = undefined
-      // if (message.sender !== userId) continue
-      message.status = this.messageStatus(message, message.sender)
-      message.read = message.status === 'read' ? 1 : undefined
-      message.dlvrd = message.status === 'read' || message.status === 'unread' ? 1 : undefined
-
-      // if (readMark) {
-      //   if (readMark[0] < message.messageId) {
-      //     readMark = readMarks[readMarks.indexOf(readMark) + 1] ?? undefined
-      //   }
-      // }
-      // if (dlvrdMark) {
-      //   if (dlvrdMark[0] < message.messageId) {
-      //     dlvrdMark = dlvrdMarks[dlvrdMarks.indexOf(dlvrdMark) + 1] ?? undefined
-      //   }
-      // }
-
-      // message.read = readMark ? readMark[1] : undefined
-      // message.dlvrd = dlvrdMark ? dlvrdMark[1] : undefined
-    }
-    return messages
+    return messages.map(message => {
+      const status = this.messageStatus(message, message.sender)
+      const read = status === 'read' ? 1 : undefined
+      const dlvrd = read || status === 'unread' ? 1 : undefined
+      return { ...message, status, read, dlvrd }
+    })
   }
 
   async #message(messageId: number) {
@@ -294,7 +308,7 @@ messages in storage: ${this.#counter},
     return message
   }
 
-  async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteMessageResponse> {
+  async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteResponse> {
     const { originalMessageId, chatId } = request
     const message = await this.#message(originalMessageId)
     if (!message) {
@@ -318,14 +332,16 @@ messages in storage: ${this.#counter},
 
     this.#messages[serviceMessage.messageId] = serviceMessage
     await this.#storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+    const receiverId = chatId
+    const receiverChatId = this.chatIdFor(receiverId) // = sender ^)
 
     const deleteMessageEvent: DeleteEvent = {
       originalMessageId,
-      chatId,
+      chatId: receiverChatId,
       messageId,
     }
 
-    await this.sendEventToReceiver(request.chatId, deleteMessageEvent, message.deletedAt)
+    await this.sendEventToReceiver<dlt>(receiverId, 'delete', deleteMessageEvent)
 
     return { messageId, timestamp: message.deletedAt }
   }
@@ -354,11 +370,12 @@ messages in storage: ${this.#counter},
       attachments: request.attachments,
       clientMessageId: request.clientMessageId,
       replyTo,
+      forwarded: request.forwarded,
     }
     this.#messages[messageId] = message
     const prevMessage = this.#lastMessage
     this.#lastMessage = message
-    await this.#storage.put<DialogMessage>(`message-${messageId}`, message)
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
     if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
       await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
       this.#lastMessageOfPreviousAuthor = prevMessage
@@ -366,6 +383,54 @@ messages in storage: ${this.#counter},
     await this.sendNewEventToReceiver(request.chatId, message, timestamp)
 
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
+
+  async closeCall(
+    sender: string,
+    request: CallNewMessageRequest,
+  ): Promise<NewMessageResponse | void> {
+    console.log(sender, request)
+    const timestamp = this.timestamp()
+    const messageId = await this.newId()
+    const message: StoredDialogMessage = {
+      createdAt: timestamp,
+      messageId,
+      sender: sender,
+      clientMessageId: newId(),
+      type: 'call',
+      payload: request.payload,
+    }
+    this.#messages[messageId] = message
+    const prevMessage = this.#lastMessage
+    this.#lastMessage = message
+
+    await this.#storage.put<StoredDialogMessage>(`message-${messageId}`, message)
+
+    if (messageId > 0 && prevMessage && prevMessage.sender !== sender) {
+      await this.read(sender, { chatId: request.chatId, messageId: messageId - 1 }, timestamp)
+      this.#lastMessageOfPreviousAuthor = prevMessage
+    }
+    if (request.payload.participants) {
+      await Promise.all([
+        this.sendCloseCallToReceiver(request.payload.caller, request.payload, messageId),
+        this.sendCloseCallToReceiver(request.chatId, request.payload, messageId),
+      ])
+    }
+    return { messageId, timestamp, clientMessageId: message.clientMessageId }
+  }
+  async sendCloseCallToReceiver(receiverId: string, payload: CallPayload, messageId: number) {
+    const senderId = this.chatIdFor(receiverId)
+    const event: CloseCallEvent = {
+      chatId: senderId,
+      callId: payload.callId,
+      callType: payload.callType,
+      status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
+      direction: payload.caller == receiverId ? 'outgoing' : 'incoming',
+      messageId,
+      ...(await this.missedFor(receiverId)),
+    }
+
+    await this.sendEventToReceiver(receiverId, 'closeCall', event)
   }
 
   async dlvrd(
@@ -399,7 +464,18 @@ messages in storage: ${this.#counter},
       throw new Error(`messageId is not exists`)
     }
 
-    const messageId: MessageId = request.messageId ?? this.#lastMessage?.messageId ?? 0
+    const messageId: MessageId = request.messageId ?? this.#lastMessage?.messageId ?? -1
+    if (messageId < 0) {
+      return {
+        messageId,
+        timestamp,
+        chatId: request.chatId,
+        clientMessageId: messageId.toString(),
+        missed: 0,
+        // @ts-ignore
+        err: 'shlem read v pustoy chat',
+      }
+    }
     const message = (await this.#message(messageId))!
     const clientMessageId = message.clientMessageId
     const readMark = await this.findMark(sender, messageId, 'read')
@@ -486,7 +562,7 @@ messages in storage: ${this.#counter},
     message: StoredDialogMessage,
     timestamp: number,
   ) {
-    const receiverDO = userStorage(this.env, receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
 
     // Create an event object with message details and timestamp
     const event: MarkDeliveredInternalEvent = {
@@ -496,52 +572,38 @@ messages in storage: ${this.#counter},
       timestamp,
     }
 
-    const body = JSON.stringify(event)
-
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/dlvrd`, {
-        method: 'POST',
-        body,
-      }),
-    )
-
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      throw new Error("Couldn't send event")
-    }
+    await receiverDO.dlvrdEvent(event)
   }
 
   private chatIdFor(userId: string): string {
     return this.#id.replace(userId, '').replace(':', '')
   }
 
-  private async sendEventToReceiver(receiverId: string, event: DeleteEvent, timestamp: number) {
-    const receiverDO = userStorage(this.env, receiverId)
-    const senderId = this.chatIdFor(receiverId)
-    // Create an event object with message details and timestamp
-
-    const body = JSON.stringify(event)
-
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/delete`, {
-        method: 'POST',
-        body,
-      }),
-    )
-
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      throw new Error("Couldn't send event")
+  private async sendEventToReceiver<T extends ServerEventType>(
+    receiverId: string,
+    eventType: T,
+    event: ServerEventPayload,
+  ) {
+    const receiverDO = userStorageById(this.env, receiverId)
+    switch (eventType as ServerEventType) {
+      case 'delete':
+        await receiverDO.deleteEvent(event as DeleteEvent)
+        return
+      case 'closeCall':
+        await receiverDO.closeCallEvent(event as CloseCallEvent)
+        return
+      default:
+        //@ts-ignore
+        receiverDO[`${eventType}Event`](event)
     }
   }
   private async sendReadEventToAuthor(
     receiverId: string,
-    message: DialogMessage,
+    message: StoredDialogMessage,
     timestamp: number,
   ) {
-    const receiverDO = userStorage(this.env, receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
     const senderId = this.chatIdFor(receiverId)
-    // Create an event object with message details and timestamp
     const event: MarkReadInternalEvent = {
       chatId: senderId,
       messageId: message.messageId,
@@ -549,27 +611,15 @@ messages in storage: ${this.#counter},
       timestamp,
     }
 
-    const body = JSON.stringify(event)
-
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/read`, {
-        method: 'POST',
-        body,
-      }),
-    )
-
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      throw new Error("Couldn't send event")
-    }
+    await receiverDO.readEvent(event)
   }
 
   private async sendNewEventToReceiver(
     receiverId: string,
-    message: DialogMessage,
+    message: StoredDialogMessage,
     timestamp: number,
   ) {
-    const receiverDO = userStorage(this.env, receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
     const senderId = this.chatIdFor(receiverId)
 
     const event: NewMessageEvent = {
@@ -580,34 +630,23 @@ messages in storage: ${this.#counter},
       attachments: message.attachments,
       clientMessageId: message.clientMessageId,
       timestamp,
-
       ...(await this.missedFor(receiverId)),
       replyTo: message.replyTo,
-      forwardedFrom: message.forwardedFrom,
+      forwarded: message.forwarded,
     }
-    const body = JSON.stringify(event)
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/new`, {
-        method: 'POST',
-        body,
-      }),
-    )
-    if (resp.status !== 200) {
-      console.error(await resp.text())
-      console.error("couldn't send event")
-      throw new Error("Couldn't send event")
-    } else {
-      const { dlvrd = false } = await resp.json<{ dlvrd?: boolean }>()
-      if (dlvrd) {
-        this.dlvrd(receiverId, { chatId: senderId, messageId: message.messageId }, this.timestamp())
-      }
+
+    const resp = await receiverDO.newEvent(event)
+
+    const { dlvrd = false } = await resp
+    if (dlvrd) {
+      this.dlvrd(receiverId, { chatId: senderId, messageId: message.messageId }, this.timestamp())
     }
   }
 
   private async missedFor(userId: string): Promise<Missed> {
     const missed = this.missedCountFor(userId)
     if (!missed || !this.#lastMessage) {
-      return { missed: 0 }
+      return { missed: 0, firstMissed: undefined }
     }
 
     const i = this.#lastMessage.messageId - missed + 1
@@ -615,11 +654,13 @@ messages in storage: ${this.#counter},
 
     return { missed, firstMissed }
   }
+
   private missedCountFor(userId: string): number {
     if (this.#lastMessage?.sender === userId) {
       return 0
     }
     const lastReadMark = this.#lastReadMark?.get(userId)
+    if (!lastReadMark && !this.#lastMessageOfPreviousAuthor) return this.#counter
     let currentBlockOfMessagesOfOneAuthorLength = this.#lastMessage?.messageId
       ? this.#lastMessage.messageId
       : 1
@@ -635,7 +676,7 @@ messages in storage: ${this.#counter},
       : currentBlockOfMessagesOfOneAuthorLength
   }
 
-  private async initialize() {
+  private async loadInitialData() {
     if (!this.#users || !this.#users.length) {
       this.#users = await this.#storage.get('users')
     }
@@ -688,6 +729,7 @@ messages in storage: ${this.#counter},
       }
     }
   }
+
   private messageStatus(message: StoredDialogMessage, userId: string): MessageStatus {
     const id = this.chatIdFor(message.sender)
 
@@ -701,15 +743,15 @@ messages in storage: ${this.#counter},
     return 'undelivered'
   }
 
-  private async getLastMessage(index: number): Promise<DialogMessage | null> {
-    let lastMessage: DialogMessage | null = null
+  private async getLastMessage(index: number): Promise<StoredDialogMessage | null> {
+    let lastMessage: StoredDialogMessage | null = null
     const keys = []
     while (index >= 0 && keys.length < 128) {
       keys.push(`message-${index}`)
       index--
     }
     let maxIndex = -1
-    const messagesChunk = await this.#storage.get<DialogMessage>(keys)
+    const messagesChunk = await this.#storage.get<StoredDialogMessage>(keys)
     for (const [key, message] of messagesChunk.entries()) {
       const messageIndex = parseInt(key.split('-')[1])
       this.#messages[messageIndex] = message
@@ -744,16 +786,32 @@ messages in storage: ${this.#counter},
     await this.ctx.storage.put('users', this.#users)
     const index2 = (index - 1) * -1
     const receiverId = this.#users[index2].id
-    const receiverDO = userStorage(this.env, receiverId)
     const event: UpdateChatInternalEvent = await this.chat(receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
 
-    const reqBody = JSON.stringify(event)
+    await receiverDO.updateChatEvent(event)
+  }
 
-    const resp = await receiverDO.fetch(
-      new Request(`${this.env.ORIGIN}/${receiverId}/dialog/event/updateChat`, {
-        method: 'POST',
-        body: reqBody,
-      }),
-    )
+  private getMissedMessageIds(startId: number, endId: number): number[] {
+    const missedIds = []
+    for (let i = startId; i <= endId; i++) {
+      if (!this.#messages[i]) {
+        missedIds.push(i)
+      }
+    }
+    return missedIds
+  }
+
+  private async loadMessagesFromStorage(keyChunks: string[][], keys: string[]) {
+    for (const chunk of keyChunks) {
+      const messagesChunk = await this.#storage.get<StoredDialogMessage>(chunk)
+      for (const key of messagesChunk.keys()) {
+        const i = keys.indexOf(key)
+        const message = messagesChunk.get(key)
+        if (message) {
+          this.#messages[message.messageId] = message
+        }
+      }
+    }
   }
 }

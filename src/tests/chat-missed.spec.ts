@@ -22,9 +22,9 @@ async function delay(ms: number) {
 
   return new Promise(resolve => setTimeout(resolve, ms))
 }
-const s = 's'
-// const domain = 'localhost:8787'
-const domain = 'dev.iambig.ai'
+const s = ''
+const domain = 'localhost:8787'
+//const domain = 'dev.iambig.ai'
 const baseUrl = `http${s}://${domain}`
 const wsUrl = `ws${s}://${domain}/websocket`
 
@@ -74,21 +74,24 @@ describe('Chat Missed Tests', { timeout: 30000 }, () => {
     'should correctly update missed message count',
     { timeout: 600000, concurrent: true },
     async () => {
-      await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #0')
       expect((await getChatList(user1Jwt)).find(chat => chat.id === user2Id)?.missed).toBe(0)
-
-      await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(1)
 
-      await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #1')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(2)
-
-      await sendMessage(user1Jwt, user2Id, 'Hello, User2!')
+      
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #2')
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(3)
-
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #3')
+      expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(4)
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #4')
+      expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(5)
+      await sendMessage(user1Jwt, user2Id, 'U1=>U2, #5')
+      expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(6)
+      
       read(ws2, user1Id)
-      await delay(2000)
-
+      delay(1500)
       expect((await getChatList(user2Jwt)).find(chat => chat.id === user1Id)?.missed).toBe(0)
 
       await sendMessage(user2Jwt, user1Id, 'Hello, User1!')
@@ -165,4 +168,5 @@ async function sendMessage(jwt: string, chatId: string, message: string) {
   })
 
   const data = await response.json()
+  console.log(data)
 }

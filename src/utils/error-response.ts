@@ -1,22 +1,10 @@
-export function errorResponse(message: string, status = 500): Response {
-  // Constructing the error object with additional details
-  const errorDetails = {
+import { jsonResp } from '@cloudflare/itty-router-openapi'
+
+export const errorResponse = (message: string, status = 500): Response =>
+  jsonResp({
     error: message,
     timestamp: Date.now(),
     status,
-  }
-
-  return new Response(JSON.stringify(errorDetails), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
   })
-}
 
-export function unauthorized(): Response {
-  // Define the error message and status for unauthorized access
-  const message = 'Unauthorized access'
-  const status = 401
-
-  // Call the errorResponse function with the unauthorized message and status
-  return errorResponse(message, status)
-}
+export const unauthorized = (message = 'Unauthorized'): Response => errorResponse(message, 401)

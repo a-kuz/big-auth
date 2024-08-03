@@ -1,6 +1,7 @@
 import {
-	DataOf,
-	Str
+  DataOf,
+  jsonResp,
+  Str
 } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
@@ -41,12 +42,7 @@ export class FindUserByUsernameHandler extends Route {
       if (!user) {
         return errorResponse('User not found', 404)
       }
-      return new Response(JSON.stringify(user), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(user)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to find user', 500)

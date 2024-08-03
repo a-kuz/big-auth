@@ -1,4 +1,4 @@
-import { Arr, DataOf, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { Arr, DataOf, jsonResp, OpenAPIRoute, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { getContacts, getMergedContacts } from '../services/contacts'
 import { getUserByToken } from '../services/get-user-by-token'
@@ -10,7 +10,8 @@ import { digest } from '~/utils/digest'
 import { normalizePhoneNumber } from '~/utils/normalize-phone-number'
 import { putContacts } from '~/services/contacts'
 import { UserMessagingDO } from '..'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
+import { writeErrorLog } from '~/utils/serialize-error'
 
 export class OnlinesHandler extends Route {
   static schema = {
@@ -52,33 +53,19 @@ export class OnlinesHandler extends Route {
       const onlineContacts = []
 
       for (const contact of contacts) {
-        const contactStorage = userStorage(env, contact.id as string)
-        const response = await contactStorage.fetch(
-          new Request(`${env.ORIGIN}/${contact.id}/messaging/event/online`, {
-            method: 'POST',
-            body: JSON.stringify({
-              userId: ownerId,
-            }),
-          }),
+        const contactStorage = userStorageById(env, contact.id as string)
+        const response = await contactStorage.onlineStatusRequest()
+
+        console.log(
+          `${contact.id} : ${response.status}${response.lastSeen ? `, last seen: ${response.lastSeen}` : ''}`,
         )
 
-        if (response.ok) {
-          const resp = await response.text()
-          console.log(`${contact.id} : ${resp}`)
-          if (resp === 'online') {
-            onlineContacts.push(contact)
-          }
-        }
+        onlineContacts.push({ contact, ...response })
       }
 
-      return new Response(JSON.stringify({ users: onlineContacts }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp ({ users: onlineContacts })
     } catch (error) {
-      console.error(error)
+      await writeErrorLog(error)
       return errorResponse('Failed to find contacts')
     }
   }

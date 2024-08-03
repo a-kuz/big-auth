@@ -1,4 +1,4 @@
-import { DataOf, Path, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Path, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { Route } from '~/utils/route'
 import { updateContact } from '../services/contacts'
@@ -48,12 +48,7 @@ export class UpdateContactHandler extends Route {
       if (!updatedContact) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify(updatedContact), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(updatedContact)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to update contact', 500)

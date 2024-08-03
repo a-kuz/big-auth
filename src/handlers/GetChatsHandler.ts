@@ -2,6 +2,7 @@ import {
   Arr,
   Bool,
   Enumeration,
+  jsonResp,
   Num,
   Obj,
   OpenAPIRoute,
@@ -9,7 +10,7 @@ import {
   Str,
 } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
-import { userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
@@ -54,9 +55,7 @@ export class GetChatsHandler extends Route {
           ),
         },
       },
-      '401': {
-        description: 'Unauthorized',
-      },
+
       ...errorResponses,
     },
     security: [{ BearerAuth: [] }],
@@ -64,19 +63,10 @@ export class GetChatsHandler extends Route {
 
   async handle(request: Request, env: Env): Promise<Response> {
     try {
-      const userMessagingDO = userStorage(env, env.user.id)
+      const userMessagingDO = userStorageById(env, env.user.id)
 
-      const url = new URL(request.url)
-
-      return userMessagingDO.fetch(
-        new Request(`${url.origin}/${env.user.id}/client/request/chats`, {
-          method: 'POST',
-          body: '{}',
-        }),
-      ).then(response => {
-
-        return response
-      })
+      const chats = await userMessagingDO.chatsRequest({})
+      return jsonResp(chats)
     } catch (error: unknown) {
       // Handle any errors
       writeErrorLog(error)

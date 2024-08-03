@@ -1,5 +1,6 @@
 import {
 	DataOf,
+	jsonResp,
 	OpenAPIRouteSchema,
 	Path,
 	Str
@@ -50,12 +51,7 @@ export class GetContactHandler extends Route {
       if (!contact) {
         return errorResponse('Contact not found', 404)
       }
-      return new Response(JSON.stringify(contact), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(contact)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to retrieve contact', 500)

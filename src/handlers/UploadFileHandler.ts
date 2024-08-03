@@ -1,4 +1,4 @@
-import { OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
+import { jsonResp, OpenAPIRouteSchema, Str } from '@cloudflare/itty-router-openapi'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { Route } from '~/utils/route'
 import { Env } from '../types/Env'
@@ -50,15 +50,9 @@ export class UploadFileHandler extends Route {
           }),
         )
 
-        return new Response(
-          JSON.stringify({
-            url: `${new URL(request.url).origin}/public/${id}`,
-          }),
-          {
-						headers: {'Content-Type': 'application/json'},
-            status: 200,
-          },
-        )
+        return jsonResp({
+          url: `${new URL(request.url).origin}/public/${id}`,
+        })
       } catch (error) {
         console.error('Error uploading file:', error)
         return errorResponse('Failed to upload file')

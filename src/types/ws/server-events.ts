@@ -1,6 +1,6 @@
 import { ServerEventType } from '.'
 import { Attachment, AttachmentType } from '../Attachment'
-import { ForwardedFrom, ReplyTo } from './client-requests'
+import { ReplyTo } from './client-requests'
 import { ServerEventPayload } from './payload-types'
 
 export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
@@ -11,7 +11,7 @@ export interface ServerEvent<Event extends ServerEventType = ServerEventType> {
   payload: ServerEventPayload
 }
 
-export interface EditMessageEvent {
+export interface EditEvent {
   chatId: string
   userId?: string
   messageId: number
@@ -38,13 +38,14 @@ export interface OfflineEvent {
 export interface TypingServerEvent {
   userId?: string
   chatId: string
+  stop?: boolean
 }
 
 export interface NewMessageEvent<A extends AttachmentType | never = never> {
   chatId: string
   sender: string
   replyTo?: ReplyTo
-  forwardedFrom?: ForwardedFrom
+  forwarded?: boolean
 
   message?: string
   senderName?: string
@@ -62,8 +63,8 @@ export interface NewVOIPEvent<A extends AttachmentType | never = never> {
   uid: number
   token?: string
   title: string
-  isVideo: boolean
-  isGroup: boolean
+  isVideo: number
+  isGroup: number
   type: string
 }
 export interface MarkDeliveredEvent {

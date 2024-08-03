@@ -1,8 +1,10 @@
-import { DialogsDO } from '~/durable-objects/messaging'
-import { chatStorage, userStorage } from '~/durable-objects/messaging/utils/mdo'
+import { DialogsDO, MessagingDO } from '~/durable-objects/messaging'
+import { chatStorage, userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { Env } from '../types/Env'
 import { errorResponse } from '../utils/error-response'
 import { domainToASCII } from 'url'
+import { DebugableDurableObject } from '~/durable-objects/DebugableDurableObject'
+import { RefreshTokenDO } from '~/durable-objects/RefreshTokenDO'
 
 export const DebugListKeysHandler = async (request: Request, env: Env, ..._args: any[]) => {
   try {
@@ -13,31 +15,32 @@ export const DebugListKeysHandler = async (request: Request, env: Env, ..._args:
       | 'user'
       | 'chat'
       | 'PUSH_TOKEN_DO'
-      | 'REFRESH_TOKEN_DO'
       | 'VOIP_TOKEN_DO'
+      | 'GPT_DO'
     const name = parts[2]
     const prefix = parts[3]
 
-    let stub //: DurableObjectStub<DebugWrapper>
+    let stub : DurableObjectStub<DebugableDurableObject|MessagingDO>
     if (doType === 'user') {
-      stub = userStorage(env, userId)
-      return stub.fetch(`http://www.ru/${userId}/client/request/debug`)
+      stub = userStorageById(env, userId)
+      return new Response(JSON.stringify(await stub.debugInfo()))
     } else if (doType === 'chat') {
       stub = chatStorage(env, name, userId)
       return new Response(await stub.listKeys({ prefix }), {
         headers: { 'Content-Type': 'application/json' },
       })
     } else {
-      let doNamespace
-      switch (doType) {
+      let doNamespace: DurableObjectNamespace<DebugableDurableObject>
+      switch (doType as 'PUSH_TOKEN_DO' | 'VOIP_TOKEN_DO' | 'GPT_DO') {
         case 'PUSH_TOKEN_DO':
           doNamespace = env.PUSH_TOKEN_DO
           break
-        case 'REFRESH_TOKEN_DO':
-          doNamespace = env.REFRESH_TOKEN_DO
-          break
+      
         case 'VOIP_TOKEN_DO':
           doNamespace = env.VOIP_TOKEN_DO
+          break
+        case 'GPT_DO':
+          doNamespace = env.GPT_DO
           break
         default:
           doNamespace = env[doType]
@@ -63,6 +66,26 @@ export const DebugMemoryHandler = async (request: Request, env: Env, ..._args: a
     const stub = chatStorage(env, chatId, userId) as DurableObjectStub<DialogsDO>
 
     return new Response(await stub.debugInfo(), { headers: { 'Content-Type': 'application/json' } })
+  } catch (error) {
+    console.error(error)
+    return errorResponse('Something went wrong')
+  }
+}
+export const DebugClearStorageHandler = async (request: Request, env: Env, ..._args: any[]) => {
+  try {
+    const url = request.url.replace(/.*rNAs9NggcY8L6pQhymboC\/?/g, '')
+    const parts = url.split('/')
+    const userId = parts[0]
+    const doType = parts[1] as
+      | 'PUSH_TOKEN_DO'
+      | 'VOIP_TOKEN_DO'
+      | 'GPT_DO'
+    const name = parts[2]
+    const prefix = parts[3]
+    const  doNamespace: DurableObjectNamespace<DebugableDurableObject> = env[doType]
+    const stub = doNamespace.get(doNamespace.idFromName(name))
+    await stub.deleteAll()
+    return new Response("", { headers: { 'Content-Type': 'application/json' } })
   } catch (error) {
     console.error(error)
     return errorResponse('Something went wrong')

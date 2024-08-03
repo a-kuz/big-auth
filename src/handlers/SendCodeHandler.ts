@@ -1,4 +1,4 @@
-import { DataOf, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, OpenAPIRoute, Str } from '@cloudflare/itty-router-openapi'
 import { Route } from '~/utils/route'
 import { TEST_NUMBERS, TWILIO_BASE_URL } from '../constants'
 import { Env } from '../types/Env'
@@ -62,7 +62,7 @@ export class SendCodeHandler extends Route {
 
       if (response.status - 200 < 100) {
         // If the request was successful, return a success response
-        return new Response('{}', { status: 200 })
+        return jsonResp({})
       } else {
         return errorResponse((await response.text()) as string, response.status)
       }

@@ -1,7 +1,7 @@
 import { NewMessageEvent, NewVOIPEvent } from '../ws/server-events'
 
 export interface PushNotification {
-  event: NewMessageEvent
+  event: NewMessageEvent & {userId: string, confirmationUrl:string}
   title: string
   body: string
   deviceToken: string
@@ -12,6 +12,7 @@ export interface PushNotification {
   threadId?: string
   lastMessageId?: number
   imgUrl?: string
+  
 }
 export interface VoipPushNotification {
   voip: boolean,

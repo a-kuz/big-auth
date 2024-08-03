@@ -1,4 +1,4 @@
-import { DataOf, Path, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Path, Str } from '@cloudflare/itty-router-openapi'
 import { getUserById } from '~/db/services/get-user'
 import { NotFoundError } from '~/errors/NotFoundError'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
@@ -30,19 +30,15 @@ export class GetProfileHandler extends Route {
     data: DataOf<typeof GetProfileHandler.schema>,
   ) {
     try {
-      const user = await getUserById(env.DB, data.params.id, new NotFoundError())
+      
+      const user = env.user.id === data.params.id ? env.user : await getUserById(env.DB, data.params.id, new NotFoundError(), 'get-profile-handler')
       if (!user) {
         return errorResponse('User not found', 404)
       }
 
       const userProfile = user.profile()
 
-      return new Response(JSON.stringify(userProfile), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      return jsonResp(userProfile)
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to fetch profile', 500)

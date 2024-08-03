@@ -1,4 +1,4 @@
-import { DataOf, Str } from '@cloudflare/itty-router-openapi'
+import { DataOf, jsonResp, Str } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
 import { ProfileSchema } from '~/types/openapi-schemas/profile'
 import { Route } from '~/utils/route'
@@ -8,6 +8,7 @@ import { generateAccessToken, generateRefreshToken } from '../services/jwt'
 import { Env } from '../types/Env'
 import { errorResponses } from '../types/openapi-schemas/error-responses'
 import { errorResponse } from '../utils/error-response'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 
 export interface VerifyOTPRequestBody {
   phoneNumber: string
@@ -90,19 +91,13 @@ export class VerifyCodeHandler extends Route {
         }),
       )
 
-      return new Response(
-        JSON.stringify({
-          accessToken,
-          refreshToken,
-          profile: user.profile(),
-        }),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      )
+      await userStorageById(env, user.id).setUserId(user.id)
+
+      return jsonResp({
+        accessToken,
+        refreshToken,
+        profile: user.profile(),
+      })
     } catch (error) {
       console.error(error)
       return errorResponse('Failed to verify OTP', 500)

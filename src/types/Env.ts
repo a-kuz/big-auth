@@ -4,6 +4,7 @@ import { PushDO } from '~/durable-objects/PushDO'
 import { ChatGptDO, DialogsDO, GroupChatsDO, UserMessagingDO } from '..'
 import { PushNotification, VoipPushNotification } from './queue/PushNotification'
 import { VoipTokenDO } from '~/durable-objects/VoipTokenDO'
+import { PhoneNumberDO } from '~/durable-objects/PhoneNumberDO'
 
 export interface Env {
   readonly TWILIO_ACCOUNT_SID: string
@@ -24,11 +25,14 @@ export interface Env {
   readonly GPT_DO: DurableObjectNamespace<ChatGptDO>
   readonly PUSH_TOKEN_DO: DurableObjectNamespace<PushDO>
   readonly VOIP_TOKEN_DO: DurableObjectNamespace<VoipTokenDO>
+  readonly PN_DO: DurableObjectNamespace<PhoneNumberDO  >
 
   readonly PUSH_QUEUE: Queue<PushNotification | VoipPushNotification>
 
   readonly AI_AVATAR_URL: string
   readonly ORIGIN: string
+  readonly DLVRD_BASE_URL: string
   readonly TASK_MANAGER: TaskManager
   user: User
+  userId?: string
 }

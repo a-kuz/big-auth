@@ -38,6 +38,7 @@ export class GetAvatarHandler extends Route {
     data: { params: { userId: string } },
   ): Promise<Response> {
     let { userId } = data.params
+    userId = userId.split(".")[0]
 
     try {
       // Fetch user details

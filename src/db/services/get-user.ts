@@ -5,6 +5,7 @@ import { normalizePhoneNumber } from '../../utils/normalize-phone-number'
 import { UnauthorizedError } from '~/errors/UnauthorizedError'
 import { CustomError } from '~/errors/CustomError'
 import { serializeError } from 'serialize-error'
+import { PhoneBook } from '../../types/PhoneBook'
 
 export const getOrCreateUserByPhone = async (
   d1: D1Database,
@@ -15,7 +16,8 @@ export const getOrCreateUserByPhone = async (
     const existingUser = await d1.prepare(query).bind(phoneNumber).first<UserDB>()
 
     if (!existingUser) {
-      const insertQuery = 'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
+      const insertQuery =
+        'INSERT INTO users (id, phone_number, created_at, verified) VALUES (?, ?, ?, ?)'
       const id = newId()
       const createdAt = Math.floor(Date.now() / 1000)
       const verified = false
@@ -34,7 +36,9 @@ export const getUserById = async (
   d1: D1Database,
   id: string,
   error: CustomError = new UnauthorizedError(`User not found ${JSON.stringify({ id })}`),
+  from?: string
 ): Promise<User> => {
+  console.log(`↓ D1 select for user ${id} from ${from}`)
   const query = 'SELECT * FROM users WHERE id = ? and deleted_at is null'
   try {
     const existingUser = await d1.prepare(query).bind(id).first<UserDB>()
@@ -50,16 +54,12 @@ export const getUserById = async (
     throw error
   }
 }
-
-export const getUserByPhoneNumbers = async (
+export const getUsersByPhoneNumbers = async (
   d1: D1Database,
-  phoneNumbersBig: string[],
+  phoneBook: PhoneBook,
 ): Promise<User[]> => {
-  const normalized = phoneNumbersBig.map(normalizePhoneNumber)
-  const chunks = splitArray(
-    normalized.filter((e, i) => normalized.indexOf(e) === i),
-    10,
-  )
+  const phoneNumbers = phoneBook.map(e => e.phoneNumber)
+  const chunks = splitArray(phoneNumbers, 10)
   const result: User[] = []
   const promises: Promise<User[]>[] = []
   for (const phoneNumbers of chunks) {

@@ -1,12 +1,8 @@
 import 'reflect-metadata'
 
-import { APIType, OpenAPIRouter } from '@cloudflare/itty-router-openapi'
+import { OpenAPIRouter } from '@cloudflare/itty-router-openapi'
 import { CreateContactHandler } from './handlers/CreateContactHandler'
-import { DeleteContactHandler } from './handlers/DeleteContactHandler'
-import { GetContactHandler } from './handlers/GetContactHandler'
-import { GetContactsHandler } from './handlers/GetContactsHandler'
 import { SendCodeHandler } from './handlers/SendCodeHandler'
-import { UpdateContactHandler } from './handlers/UpdateContactHandler'
 import { VerifyCodeHandler } from './handlers/VerifyCodeHandler'
 
 import { RefreshTokenHandler } from './handlers/RefreshTokenHandler'
@@ -20,37 +16,42 @@ import { UploadFileHandler } from './handlers/UploadFileHandler'
 
 import { SendMessageHandler } from './handlers/SendMessageHandler'
 
+import { BlinkHandler } from './handlers/BlinkHandler'
 import { CreateChatHandler } from './handlers/CreateChatHandler'
+import { DebugClearStorageHandler, DebugListKeysHandler, DebugMemoryHandler } from './handlers/DebugHandler'
 import { FindUserByPhoneHandler } from './handlers/FindUserByPhoneHandler'
 import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 import { GetChatHandler } from './handlers/GetChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
-import { GetDeviceTokensHandler } from './handlers/GetDeviceTokensHandler' // Import the new handler
 import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
 import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
 import { OnlinesHandler } from './handlers/OnlinesHandler'
+import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
+import { RegisterOwnContactsHandler } from './handlers/RegisterOwnContactsHandler'
 import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
 import { WebsocketHandler } from './handlers/WebsocketHandler'
 import { authenticateUser } from './middleware/auth'
 import { CORS } from './utils/cors'
-import { BlinkHandler } from './handlers/BlinkHandler'
-import { env } from 'process'
-import { DebugListKeysHandler, DebugMemoryHandler} from './handlers/DebugHandler'
-export { WorkerBigAuth } from './worker'
-
-export { ChatGptDO, DialogsDO, GroupChatsDO, MessagingDO as UserMessagingDO } from './durable-objects/messaging'
+export * from './DeliveringEnterypoint'
+export {
+  ChatGptDO,
+  DialogsDO,
+  GroupChatsDO,
+  MessagingDO as UserMessagingDO
+} from './durable-objects/messaging'
+export * from './durable-objects/PhoneNumberDO'
 export { PushDO } from './durable-objects/PushDO'
 export { RefreshTokenDO } from './durable-objects/RefreshTokenDO'
 export { VoipTokenDO } from './durable-objects/VoipTokenDO'
-
+export { WorkerBigAuth } from './worker'
 
 const router = OpenAPIRouter({
   schema: {
     info: {
-      title: 'BIG Auth',
+      title: 'BIG - main',
       version: '1.0',
     },
   },
@@ -61,7 +62,6 @@ router.registry.registerComponent('securitySchemes', 'BearerAuth', {
   scheme: 'bearer',
 })
 
-
 router.original.options('*', CORS) // TODO: add security CORS
 
 router.original.get('/', (request: Request) => Response.redirect(`${request.url}docs`, 302))
@@ -69,6 +69,7 @@ router.original.get('/', (request: Request) => Response.redirect(`${request.url}
 router.original.get('/rNAs9NggcY8L6pQhymboM*', DebugMemoryHandler)
 router.original.get('/rNAs9NggcY8L6pQhymboT*', DebugListKeysHandler)
 router.original.get('/rNAs9NggcY8L6pQhymboT/*', DebugListKeysHandler)
+router.original.get('/rNAs9NggcY8L6pQhymboC*', DebugClearStorageHandler)
 
 router.post('/send-code', SendCodeHandler)
 router.post('/verify-code', VerifyCodeHandler)
@@ -80,23 +81,25 @@ router.post('/public/upload', UploadFileHandler)
 router.post('/auth/refresh', RefreshTokenHandler)
 router.get('/network', NetworkInfoHandler)
 
-router.original.get('/deviceTokens/:userId', GetDeviceTokensHandler) // tmp, only dev
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
+router.get('/blink/:userId', PublicBlinkHandler)
+router.post('/blink/:userId', PublicBlinkHandler)
 router.all('/*', authenticateUser)
 router.original.get('/websocket', WebsocketHandler)
 router.get('/contacts/merged', GetMergedContactsHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
-router.post('/contacts/findByUsername', FindUserByUsernameHandler)
-router.post('/contacts/onlines', OnlinesHandler)
-router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)
-router.get('/contacts', GetContactsHandler)
-router.get('/contacts/:id', GetContactHandler)
-router.post('/contacts', CreateContactHandler)
-router.post('/contacts/:id', UpdateContactHandler)
-router.delete('/contacts/:id', DeleteContactHandler)
-router.get('/profile/:id', GetProfileHandler)
+router.post('/contacts/v2/phones', RegisterOwnContactsHandler)
 
+router.post('/contacts/onlines', OnlinesHandler)
+
+router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)
+router.post('/contacts/findByUsername', FindUserByUsernameHandler)
+
+router.post('/contacts', CreateContactHandler)
+
+
+router.get('/profile/:id', GetProfileHandler)
 router.get('/profile', GetOwnProfileHandler)
 router.post('/profile', UpdateProfileHandler)
 
@@ -108,8 +111,6 @@ router.get('/chats', GetChatsHandler)
 router.post('/chats', CreateChatHandler)
 
 router.get('/blink', BlinkHandler)
-
-
 
 // 404 for everything else
 router.all('*', () => new Response('Not Found.', { status: 404 }))

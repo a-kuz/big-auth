@@ -3,8 +3,9 @@ import { UserId } from '~/types/ws/internal'
 import { GROUP_ID_LENGTH } from '../constants'
 
 
-export const userStorage = ({ USER_MESSAGING_DO }: Env, userId: UserId) => {
+export const userStorageById = ({ USER_MESSAGING_DO }: Env, userId: UserId) => {
   const id = USER_MESSAGING_DO.idFromName(userId)
+  
   return USER_MESSAGING_DO.get(id)
 }
 
@@ -24,7 +25,7 @@ export const gptStorage = ({ GPT_DO }: Env, name: string) => {
 }
 export const fingerprintDO = ({ PUSH_TOKEN_DO }: Env, name: string) => {
   const id = PUSH_TOKEN_DO.idFromName(name)
-  return PUSH_TOKEN_DO.get(id, { locationHint: 'weur' })
+  return PUSH_TOKEN_DO.get(id)
 }
 
 export const chatStorage = (env: Env, chatId: string, userId: string) => {
@@ -39,6 +40,6 @@ export const chatStorage = (env: Env, chatId: string, userId: string) => {
 }
 
 export const chatType = (id: string) =>
-  id === 'AI' ? 'ai' : id.length === GROUP_ID_LENGTH ? 'group' : 'dialog'
+  id === 'AI' || id === 'ai' ? 'ai' : id.length === GROUP_ID_LENGTH ? 'group' : 'dialog'
 
 export const isGroup = (id: string): boolean => chatType(id) === 'group'

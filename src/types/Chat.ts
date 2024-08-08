@@ -11,7 +11,7 @@ export interface Chat<T extends ChatType> {
   name: string
   lastMessageId?: number
   lastMessageText?: string
-  lastMessageTime?: number
+  lastMessageTime: number
   lastMessageAuthor?: string
   lastMessageStatus?: MessageStatus
   missed: number
@@ -60,8 +60,8 @@ export interface AiMeta {
 export interface GroupMeta {
   name: string
   owner: string
-	verified?: boolean
-  participants: Profile[]  // TODO
+  verified?: boolean
+  participants: Profile[] // TODO
   createdAt: number
 }
 

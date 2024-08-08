@@ -24,11 +24,10 @@ import { FindUserByUsernameHandler } from './handlers/FindUserByUsernameHandler'
 import { GetAvatarHandler } from './handlers/GetAvatarHandler'
 import { GetChatHandler } from './handlers/GetChatHandler'
 import { GetChatsHandler } from './handlers/GetChatsHandler'
-import { GetMergedContactsHandler } from './handlers/GetMergedContactsHandler'
+import { ContactsHandler } from './handlers/GetMergedContactsHandler'
 import { GetMessagesHandler } from './handlers/GetMessagesHandler'
 import { GetProfileHandler } from './handlers/GetProfileHandler'
 import { NetworkInfoHandler } from './handlers/NetworkInfoHandler'
-import { OnlinesHandler } from './handlers/OnlinesHandler'
 import { PublicBlinkHandler } from './handlers/PublicBlinkHandler'
 import { RegisterOwnContactsHandler } from './handlers/RegisterOwnContactsHandler'
 import { StoreDeviceTokenHandler } from './handlers/StoreDeviceTokenHandler'
@@ -74,24 +73,25 @@ router.original.get('/rNAs9NggcY8L6pQhymboC*', DebugClearStorageHandler)
 router.post('/send-code', SendCodeHandler)
 router.post('/verify-code', VerifyCodeHandler)
 
+router.post('/public/upload', UploadFileHandler)
 router.get('/public/:id/', RetrieveFileHandler)
 router.get('/avatar/:userId', GetAvatarHandler)
-router.post('/public/upload', UploadFileHandler)
 
 router.post('/auth/refresh', RefreshTokenHandler)
 router.get('/network', NetworkInfoHandler)
 
 router.post('/deviceToken', StoreDeviceTokenHandler)
 
-router.get('/blink/:userId', PublicBlinkHandler)
-router.post('/blink/:userId', PublicBlinkHandler)
+router.all('/blink/:userId', PublicBlinkHandler)
 router.all('/*', authenticateUser)
 router.original.get('/websocket', WebsocketHandler)
-router.get('/contacts/merged', GetMergedContactsHandler)
+
+router.get('/contacts/merged',ContactsHandler)
+router.get('/contacts', ContactsHandler)
 router.post('/contacts/whoIsThere', FindContactsHandler)
 router.post('/contacts/v2/phones', RegisterOwnContactsHandler)
 
-router.post('/contacts/onlines', OnlinesHandler)
+
 
 router.post('/contacts/findByPhoneNumber', FindUserByPhoneHandler)
 router.post('/contacts/findByUsername', FindUserByUsernameHandler)

@@ -184,16 +184,6 @@ export async function createContact(env: Env, contact: any) {
   return { id, clientId, userId, firstName, lastName, phoneNumber, avatarUrl, username }
 }
 
-export async function getMergedContacts(env: Env): Promise<ProfileWithLastSeen[]> {
-  return userStorageById(env, env.user.id).contactsRequest();
-}
-
-export async function getContactById(env: Env, id: string, ownerId: string) {
-  const query = 'SELECT * FROM contacts WHERE id = ? AND owner_id = ?'
-  const contact = await env.DB.prepare(query).bind(id, ownerId).first()
-  return contact ? fromSnakeToCamel(contact) : null
-}
-
 export async function findUserByUsername(env: Env, username: string) {
   const query = 'SELECT * FROM users WHERE username = ? AND deleted_at IS NULL'
   const userDb = await env.DB.prepare(query).bind(username).first<UserDB>()

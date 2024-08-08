@@ -21,6 +21,7 @@ export class CreateChatHandler extends Route {
       name: z.string(),
       imgUrl: z
         .string()
+        .min(1)
         .regex(REGEX_URL_FILTER, { message: 'url must be at iambig.ai' })
         .optional(),
       participants: z.array(z.string()),

@@ -82,14 +82,22 @@ export class ContactsManager {
       firstName: contact ? contact.firstName : profile.firstName,
       lastName: contact ? contact.lastName : profile.lastName,
       username: contact.username || profile.username,
-      avatarUrl: contact.avatarUrl || profile.avatarUrl,
+      avatarUrl: profile.avatarUrl,
       verified: profile.verified,
     }
   }
 
-  invalidateCache(userId: string) {
+  invalidateCache(userId: string, avatarUrl?: string) {
     this.#usersCache.delete(userId)
     this.#profileCache.delete(userId)
+    if (avatarUrl !== undefined) {
+      const existing = this.#contacts.find(c => c.id === userId)
+      if (existing && existing.avatarUrl !== avatarUrl) {
+        const contact = { ...existing }
+        contact.avatarUrl = avatarUrl
+        this.updateContacts([contact])
+      }
+    }
   }
 
   async patchProfile(profile: Profile) {
@@ -147,7 +155,7 @@ export class ContactsManager {
           ...(contact || prevContact),
           firstName: contact.firstName ?? '',
           lastName: contact.lastName ?? '',
-          avatarUrl: contact.avatarUrl ?? '',
+          avatarUrl: contact.avatarUrl,
           id: prevContact?.id || contact.id,
           verified: contact.verified,
         }
@@ -161,6 +169,7 @@ export class ContactsManager {
             name: displayName(contact),
             meta: contact,
             type: 'dialog',
+            photoUrl: contact.avatarUrl
           },
           true,
         )
@@ -208,13 +217,9 @@ export class ContactsManager {
     })
   }
 
-  async bigUsers(withChatList = false) {
-    if (!withChatList)
-      return this.#contacts.map(c => ({
-        ...c,
-        firstName: c.firstName ? c.firstName : c.lastName,
-        lastName: c.firstName ? c.lastName : '',
-      }))
+  async bigUsers(includeChatlist = false) {
+    if (!includeChatlist)
+      return this.#contacts
     return Promise.all(
       [
         ...this.#contacts,

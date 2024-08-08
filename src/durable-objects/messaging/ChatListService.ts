@@ -28,9 +28,21 @@ export class ChatListService {
 
   async initialize() {
     this.chatList = (await this.#storage.get<ChatList>('chatList')) || []
-    this.chatList = this.chatList.filter(chat => chat.id)
+    this.fillRequiredFields()
     await this.contacts.initialize()
     await this.contacts.loadChatList()
+  }
+
+  private fillRequiredFields() {
+    this.chatList = this.chatList.filter(chat => chat.id)
+    for (const chat of this.chatList) {
+      if (!chat.lastMessageTime) {
+        chat.lastMessageTime = Date.now()
+      }
+      if (!chat.isMine) {
+        chat.isMine = false
+      }
+    }
   }
 
   async createAi(userId: string) {
@@ -44,9 +56,15 @@ export class ChatListService {
         id: chat.chatId,
         type: 'ai',
         verified: true,
+        lastMessageTime: Date.now(),
+        isMine: false,
       }
+
       this.chatList.unshift(chatListItem)
-      await this.save()
+    } else if (ai.isMine === undefined) {
+      ai.isMine = false
+    } else if (!ai.lastMessageTime) {
+      ai.lastMessageTime = Date.now()
     }
   }
 
@@ -77,6 +95,7 @@ export class ChatListService {
     if (!chatId) {
       return
     }
+
     let name = eventData.name!
     const index = this.chatList.findIndex(chat => chat.id === chatId)
     if (index === -1) return
@@ -112,6 +131,8 @@ export class ChatListService {
         name: displayName(patchedUser),
         photoUrl: user.avatarUrl,
         missed: 0,
+        lastMessageTime: Date.now(),
+        isMine: false,
 
         meta: {
           ...patchedUser,

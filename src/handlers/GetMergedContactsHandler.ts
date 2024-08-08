@@ -1,17 +1,21 @@
+import { Bool, DataOf, jsonResp, Query } from '@cloudflare/itty-router-openapi'
 import { z } from 'zod'
+import { userStorageById } from '~/durable-objects/messaging/utils/get-durable-object'
 import { errorResponses } from '~/types/openapi-schemas/error-responses'
 import { ProfileWithLastSeenSchema } from '~/types/openapi-schemas/profile'
 import { errorResponse } from '~/utils/error-response'
 import { Route } from '~/utils/route'
-import { getMergedContacts } from '../services/contacts'
+import { writeErrorLog } from '~/utils/serialize-error'
 import { Env } from '../types/Env'
-import { jsonResp } from '@cloudflare/itty-router-openapi'
 
-export class GetMergedContactsHandler extends Route {
+export class ContactsHandler extends Route {
   static schema = {
     tags: ['contacts'],
     summary: 'Get Merged Contacts',
     description: 'Fetches and merges contacts from various sources.',
+    parameters: {
+      includeChatList: Query(Bool, { default: true }),
+    },
     security: [{ BearerAuth: [] }],
     responses: {
       '200': {
@@ -24,11 +28,19 @@ export class GetMergedContactsHandler extends Route {
     },
   }
 
-  async handle(request: Request, env: Env) {
+  async handle(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+    data: DataOf<typeof ContactsHandler.schema>,
+  ) {
     try {
-      const mergedContacts = await getMergedContacts(env)
-      return jsonResp({ contacts: mergedContacts })
+      const contacts = await userStorageById(env, env.user.id).contactsRequest(
+        !(data.query.includeChatList === false),
+      )
+      return jsonResp({ contacts })
     } catch (error) {
+      await writeErrorLog(error)
       return errorResponse(JSON.stringify({ error: (error as Error).message }))
     }
   }

@@ -26,7 +26,7 @@ export class CreateContactHandler extends Route {
       username: new Str({ required: false }),
       firstName: new Str({ required: false }),
       lastName: new Str({ required: false }),
-      avatarUrl: z.string().regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
+      avatarUrl: z.string().min(1).regex(REGEX_URL_FILTER, {message: "url must be at iambig.ai"}).optional(),
     }),
     responses: {
       '200': {

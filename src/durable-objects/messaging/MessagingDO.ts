@@ -1,7 +1,9 @@
 import { ClientEventType, ClientRequestType } from '~/types/ws'
 import {
+  ClientRequest,
   DeleteRequest,
   EditMessageRequest,
+  GetChatRequest,
   GetChatsRequest,
   GetMessagesRequest,
   GetMessagesResponse,
@@ -13,9 +15,7 @@ import {
   UpdateProfileRequest,
 } from '~/types/ws/client-requests'
 import {
-  ClientEventPayload,
-  ClientRequestPayload,
-  ServerResponsePayload,
+  ClientEventPayload
 } from '~/types/ws/payload-types'
 import {
   DeleteEvent,
@@ -167,50 +167,41 @@ export class MessagingDO extends DebugableDurableObject {
     }
   }
 
-  async wsRequest(type: ClientRequestType, request: ClientRequestPayload): Promise<void | Object> {
-    let response: ServerResponsePayload = {}
-
+  async wsRequest<T extends ClientRequestType>(
+    type: T,
+    request: ClientRequest<T>['payload'],
+  ): Promise<void | Object> {
     switch (type) {
       case 'new':
-        response = await this.newRequest(request as NewMessageRequest)
-        return response
+        return this.newRequest(request as NewMessageRequest)
       case 'dlvrd':
-        return this.dlvrdRequest(request as MarkDeliveredRequest, this.timestamp())
+        return this.dlvrdRequest(request as MarkDeliveredRequest)
       case 'read':
-        response = await this.readRequest(request as MarkReadRequest, this.timestamp())
-        return response
+        return this.readRequest(request as MarkReadRequest)
       case 'delete':
-        response = await this.deleteRequest(request as DeleteRequest)
-        return response
+        return this.deleteRequest(request as DeleteRequest)
       case 'chats':
-        response = await this.chatsRequest(request as GetChatsRequest)
-        return response
+        return this.chatsRequest(request)
       case 'chat':
-        response = await this.chatRequest(request)
-        return response
-      case 'edit':
-        response = await this.editRequest(request as EditMessageRequest)
-        return response
-
+        return this.chatRequest(request)
       case 'messages':
-        response = await this.messagesRequest(request as GetMessagesRequest)
-        return response
+        return this.messagesRequest(request as GetMessagesRequest)
     }
   }
 
-  // ██████╗ ███████╗ ██████╗ ██╗   ██╗███████╗███████╗████████╗███████╗
-  // ██╔══██╗██╔════╝██╔═══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝
-  // ██████╔╝█████╗  ██║   ██║██║   ██║█████╗  ███████╗   ██║   ███████╗
-  // ██╔══██╗██╔══╝  ██║▄▄ ██║██║   ██║██╔══╝  ╚════██║   ██║   ╚════██║
-  // ██║  ██║███████╗╚██████╔╝╚██████╔╝███████╗███████║   ██║   ███████║
-  // ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ╚══════╝
-
-  async chatRequest(request: ClientRequestPayload) {
-    return this.chatListService.chatRequest(request.chatId, this.#userId)
-  }
+  // ██████╗   ███████╗   ██████╗   ██╗   ██╗  ███████╗  ███████╗  ████████╗  ███████╗
+  // ██╔══██╗  ██╔════╝  ██╔═══██╗  ██║   ██║  ██╔════╝  ██╔════╝  ╚══██╔══╝  ██╔════╝
+  // ██████╔╝  █████╗    ██║   ██║  ██║   ██║  █████╗    ███████╗     ██║     ███████╗
+  // ██╔══██╗  ██╔══╝    ██║▄▄ ██║  ██║   ██║  ██╔══╝    ╚════██║     ██║     ╚════██║
+  // ██║  ██║  ███████╗  ╚██████╔╝  ╚██████╔╝  ███████╗  ███████║     ██║     ███████║
+  // ╚═╝  ╚═╝  ╚══════╝   ╚══▀▀═╝    ╚═════╝   ╚══════╝  ╚══════╝     ╚═╝     ╚══════╝
 
   async chatsRequest(payload: GetChatsRequest): Promise<ChatList> {
     return this.chatListService.chatList.filter(chat => chat.id !== this.#userId)
+  }
+
+  async chatRequest(request: GetChatRequest) {
+    return this.chatListService.chatRequest(request.chatId, this.#userId)
   }
 
   async messagesRequest(payload: GetMessagesRequest): Promise<GetMessagesResponse> {
@@ -280,33 +271,33 @@ export class MessagingDO extends DebugableDurableObject {
     return { messageId, timestamp, clientMessageId }
   }
 
-  async dlvrdRequest(payload: MarkDeliveredRequest, timestamp: number) {
-    return this.chatStorage(payload.chatId).dlvrd(this.#userId, payload, timestamp)
+  async editRequest(payload: EditMessageRequest) {
+    const chatId = payload.chatId
+    const storage = this.chatStorage(chatId) as DurableObjectStub<DialogsDO>
+    const response = await storage.editMessage(this.#userId, payload)
+    return response
   }
 
   async deleteRequest(payload: DeleteRequest) {
     return this.chatStorage(payload.chatId).deleteMessage(this.#userId, payload)
   }
 
-  async readRequest(payload: MarkReadRequest, timestamp: number) {
+  async dlvrdRequest(payload: MarkDeliveredRequest) {
+    return this.chatStorage(payload.chatId).dlvrd(this.#userId, payload, this.timestamp())
+  }
+
+  async readRequest(payload: MarkReadRequest) {
     const chatId = payload.chatId
 
     const resp = (await this.chatStorage(chatId).read(
       this.#userId,
       payload,
-      timestamp,
+      this.timestamp(),
     )) as MarkReadResponse
     const i = this.chatListService.chatList.findIndex(chat => chat.id === chatId)
     this.chatListService.chatList[i].missed = resp.missed
     await this.chatListService.save()
     return resp
-  }
-
-  async editRequest(payload: EditMessageRequest) {
-    const chatId = payload.chatId
-    const storage = this.chatStorage(chatId) as DurableObjectStub<DialogsDO>
-    const response = await storage.editMessage(this.#userId, payload)
-    return response
   }
 
   async updateProfileRequest(request: UpdateProfileRequest) {
@@ -326,8 +317,8 @@ export class MessagingDO extends DebugableDurableObject {
     return new Response()
   }
 
-  async contactsRequest() {
-    const contacts = await this.contactsService.bigUsers()
+  async contactsRequest(includeChatlist = false, includeGroupsParticipants = false) {
+    const contacts = await this.contactsService.bigUsers(includeChatlist)
     return contacts
   }
 
@@ -347,12 +338,12 @@ export class MessagingDO extends DebugableDurableObject {
     return this.onlineService.status()
   }
 
-  // ███████╗██╗   ██╗███████╗███╗   ██╗████████╗███████╗
-  // ██╔════╝██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔════╝
-  // █████╗  ██║   ██║█████╗  ██╔██╗ ██║   ██║   ███████╗
-  // ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ╚════██║
-  // ███████╗ ╚████╔╝ ███████╗██║ ╚████║   ██║   ███████║
-  // ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
+  // ███████╗  ██╗   ██╗  ███████╗  ███╗   ██╗  ████████╗  ███████╗
+  // ██╔════╝  ██║   ██║  ██╔════╝  ████╗  ██║  ╚══██╔══╝  ██╔════╝
+  // █████╗    ██║   ██║  █████╗    ██╔██╗ ██║     ██║     ███████╗
+  // ██╔══╝    ╚██╗ ██╔╝  ██╔══╝    ██║╚██╗██║     ██║     ╚════██║
+  // ███████╗   ╚████╔╝   ███████╗  ██║ ╚████║     ██║     ███████║
+  // ╚══════╝    ╚═══╝    ╚══════╝  ╚═╝  ╚═══╝     ╚═╝     ╚══════╝
 
   async onlineEvent(eventData: OnlineEvent) {
     const chatIndex = this.chatListService.chatList.findIndex(chat => chat.id === eventData.userId)
@@ -454,7 +445,7 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async editEvent(event: EditEvent) {
-    //await this.wsService.toSockets('delete', event)
+    await this.wsService.toSockets('edit', event)
     return {}
   }
 
@@ -506,14 +497,14 @@ export class MessagingDO extends DebugableDurableObject {
 
   async newChatEvent(event: NewChatEvent) {
     const { chatId, name, meta } = event
-    const { owner } = meta
+    const { owner, createdAt } = meta
     const chat = this.chatListService.toTop(chatId, {
       id: chatId,
       photoUrl: event.photoUrl,
       lastMessageStatus: 'undelivered',
       lastMessageText: 'chat created',
-      lastMessageTime: this.timestamp(),
-      name: name,
+      lastMessageTime: createdAt,
+      name,
       type: 'group',
       verified: false,
       lastMessageAuthor: owner,
@@ -556,16 +547,19 @@ export class MessagingDO extends DebugableDurableObject {
   }
 
   async updateChatEvent(event: UpdateChatInternalEvent) {
+    if (event.type === 'dialog' && event.chatId) {
+      this.contactsService.invalidateCache(event.chatId, ((event as Dialog).photoUrl || (event as Dialog).meta.avatarUrl) ?? '')
+    }
     const chatData = await this.contactsService.patchChat(event.chatId!, event as Dialog | Group)
     this.chatListService.updateChat(chatData)
   }
 
-  // ██╗   ██╗████████╗██╗██╗     ███████╗
-  // ██║   ██║╚══██╔══╝██║██║     ██╔════╝
-  // ██║   ██║   ██║   ██║██║     ███████╗
-  // ██║   ██║   ██║   ██║██║     ╚════██║
-  // ╚██████╔╝   ██║   ██║███████╗███████║
-  //  ╚═════╝    ╚═╝   ╚═╝╚══════╝╚══════╝
+  // ██╗   ██╗  ████████╗  ██╗  ██╗       ███████╗
+  // ██║   ██║  ╚══██╔══╝  ██║  ██║       ██╔════╝
+  // ██║   ██║     ██║     ██║  ██║       ███████╗
+  // ██║   ██║     ██║     ██║  ██║       ╚════██║
+  // ╚██████╔╝     ██║     ██║  ███████╗  ███████║
+  //  ╚═════╝      ╚═╝     ╚═╝  ╚══════╝  ╚══════╝
 
   private async pushPush(
     eventData: NewGroupMessageEvent | NewMessageEvent,
@@ -646,7 +640,6 @@ export class MessagingDO extends DebugableDurableObject {
   async setUserId(id: string) {
     this.#userId = id
     await this.chatListService.createAi(this.#userId)
-    await this.ctx.storage.put('userId', id)
     await this.onlineService.setUserId(id)
   }
 }

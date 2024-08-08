@@ -285,7 +285,7 @@ export class GroupChatsDO extends DebugableDurableObject {
       meta: this.group.meta,
       ...this.missedFor(userId),
       lastMessageText: lastMessage?.message,
-      lastMessageTime: lastMessage?.createdAt,
+      lastMessageTime: lastMessage?.createdAt || this.group.meta.createdAt,
       lastMessageAuthor: lastMessage?.sender,
       lastMessageStatus: this.messageStatus(lastMessage),
       isMine: userId === lastMessage?.sender,
@@ -679,6 +679,7 @@ export class GroupChatsDO extends DebugableDurableObject {
     }
     this.group = {
       chatId: id,
+      lastMessageTime: Date.now(),
       lastMessageId: 0,
       photoUrl: imgUrl,
       type: 'group',

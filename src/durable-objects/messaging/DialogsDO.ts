@@ -9,6 +9,7 @@ import { ServerEventType } from '~/types/ws'
 import {
   CallNewMessageRequest,
   DeleteRequest,
+  EditMessageRequest,
   GetMessagesRequest,
   GetMessagesResponse,
   MarkDeliveredRequest,
@@ -16,7 +17,7 @@ import {
   NewMessageRequest,
   ReplyTo,
 } from '~/types/ws/client-requests'
-import { dlt } from '~/types/ws/event-literals'
+import { dlt, edit } from '~/types/ws/event-literals'
 import {
   CloseCallEvent,
   MarkDeliveredInternalEvent,
@@ -33,7 +34,7 @@ import {
   MarkReadResponse,
   NewMessageResponse,
 } from '~/types/ws/responses'
-import { DeleteEvent, NewMessageEvent } from '~/types/ws/server-events'
+import { DeleteEvent, EditEvent, NewMessageEvent } from '~/types/ws/server-events'
 import { callDesription } from '~/utils/call-description'
 import { newId } from '~/utils/new-id'
 import { splitArray } from '~/utils/split-array'
@@ -43,7 +44,6 @@ import { DebugableDurableObject } from '../DebugableDurableObject'
 import { DEFAULT_PORTION, MAX_PORTION } from './constants'
 import { userStorageById } from './utils/get-durable-object'
 import { messagePreview } from './utils/message-preview'
-import { UserMessagingDO } from '~/index'
 
 export type Missed = { missed: number; firstMissed?: string }
 export class DialogsDO extends DebugableDurableObject {
@@ -52,10 +52,10 @@ export class DialogsDO extends DebugableDurableObject {
   #users?: [Profile, Profile]
   #id: string = ''
   #counter = 0
-  #readMarks: Marks = {} // TODO: using in getMessages method – filling 'read' field in messages dynamically
-  #dlvrdMarks: Marks = {} // TODO: using in getMessages method – filling 'dlvrd' field in messages dynamically
+  #readMarks: Marks = {}
+  #dlvrdMarks: Marks = {}
   #lastReadMark = new Map<string, MarkPointer>()
-  #lastDlvrdMark = new Map<string, MarkPointer>() // TODO: initialization, storing at reading in dlvrd, read methods; using in dlvrd, read, getMessages methods
+  #lastDlvrdMark = new Map<string, MarkPointer>()
   #storage!: DurableObjectStorage
   #lastMessageOfPreviousAuthor?: StoredDialogMessage
   #lastMessage?: StoredDialogMessage
@@ -75,68 +75,6 @@ export class DialogsDO extends DebugableDurableObject {
     await this.ctx.blockConcurrencyWhile(async () => {
       await this.loadInitialData()
     })
-  }
-
-  async loadMarks(
-    startIndex: number,
-    endIndex: number,
-    userId: string,
-  ): Promise<{ readMarks: Mark[]; dlvrdMarks: Mark[] }> {
-    const readKeys = []
-    const dlvrdKeys = []
-    for (let i = startIndex; i <= endIndex; i++) {
-      readKeys.push(`read-${userId}-${i}`)
-      dlvrdKeys.push(`dlvrd-${userId}-${i}`)
-    }
-
-    const readMarks = new Map<string, Mark>()
-    const dlvrdMarks = new Map<string, Mark>()
-
-    const readKeyChunks = splitArray(readKeys, 128)
-    const dlvrdKeyChunks = splitArray(dlvrdKeys, 128)
-
-    for (const chunk of readKeyChunks) {
-      const marksChunk = await this.#storage.get<Mark>(chunk)
-      for (const [key, value] of marksChunk.entries()) {
-        readMarks.set(key, value)
-      }
-    }
-
-    for (const chunk of dlvrdKeyChunks) {
-      const marksChunk = await this.#storage.get<Mark>(chunk)
-      for (const [key, value] of marksChunk.entries()) {
-        dlvrdMarks.set(key, value)
-      }
-    }
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const readMark = readMarks.get(`read-${userId}-${i}`)
-      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
-      if (readMark) {
-        this.#readMarks[userId][i] = readMark
-      }
-      if (dlvrdMark) {
-        this.#dlvrdMarks[userId][i] = dlvrdMark
-      }
-    }
-
-    const readMarksArray: Mark[] = []
-    const dlvrdMarksArray: Mark[] = []
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const readMark = readMarks.get(`read-${userId}-${i}`)
-      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
-      if (readMark) {
-        this.#readMarks[userId][i] = readMark
-        readMarksArray.push(readMark)
-      }
-      if (dlvrdMark) {
-        this.#dlvrdMarks[userId][i] = dlvrdMark
-        dlvrdMarksArray.push(dlvrdMark)
-      }
-    }
-
-    return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
   }
 
   async debugInfo() {
@@ -168,7 +106,6 @@ messages in storage: ${this.#counter},
         this.env.DB,
         user1Id,
         new NotFoundError(`user ${user1Id} is not exists (from dialog)`),
-        
       )
     ).profile()
 
@@ -177,7 +114,7 @@ messages in storage: ${this.#counter},
         this.env.DB,
         user2Id,
         new NotFoundError(`user ${user2Id} is not exists (from dialog)`),
-        "Dialog-2"
+        'Dialog-2',
       )
     ).profile()
 
@@ -214,7 +151,7 @@ messages in storage: ${this.#counter},
       meta: user2,
       ...(await this.missedFor(userId)),
       lastMessageText: messagePreview(this.#lastMessage?.message),
-      lastMessageTime: this.#lastMessage?.createdAt,
+      lastMessageTime: this.#lastMessage?.createdAt || await this.#storage.get('createdAt') || 0,
       lastMessageAuthor: this.#lastMessage?.sender,
       lastMessageStatus,
       isMine,
@@ -228,30 +165,6 @@ messages in storage: ${this.#counter},
     return this.#counter
   }
 
-  private newId() {
-    this.#counter++
-    this.#storage.put('counter', this.#counter, {})
-    return this.#counter - 1
-  }
-
-  private prepareStoredMessage(message: StoredDialogMessage, userId: string): DialogMessage {
-    if (message.type != 'call') return message as DialogMessage
-    if (message.payload) {
-      const payload: CallPayload = message.payload as CallPayload
-      const call: CallOnMessage = {
-        callType: payload.callType,
-        status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
-        direction: payload.caller == userId ? 'outgoing' : 'incoming',
-      }
-      message.message = callDesription(call)
-      const preparadMessageOnCall: DialogMessage = {
-        ...message,
-        payload: call,
-      }
-      return preparadMessageOnCall
-    }
-    return message as DialogMessage
-  }
   async getMessages(payload: GetMessagesRequest, userId: string): Promise<GetMessagesResponse> {
     if (!this.#messages) return { messages: [], authors: [] }
     if (!payload.startId) {
@@ -272,45 +185,10 @@ messages in storage: ${this.#counter},
       return { messages, authors: [] }
     }
   }
-  async loadMessages(startId: number, endId: number, userId: string) {
-    const secondUserId = this.chatIdFor(userId)
-    const missedIds = this.getMissedMessageIds(startId, endId)
-    const keys = missedIds.map(i => `message-${i}`)
-    const keyChunks = splitArray(keys, 128)
-
-    await this.loadMessagesFromStorage(keyChunks, keys)
-
-    const messages = this.#messages.slice(startId, endId + 1).filter(m => !!m)
-
-    if (messages.length === 0) {
-      return messages
-    }
-
-    await this.loadMarks(startId, endId, secondUserId)
-
-    return messages.map(message => {
-      const status = this.messageStatus(message, message.sender)
-      const read = status === 'read' ? 1 : undefined
-      const dlvrd = read || status === 'unread' ? 1 : undefined
-      return { ...message, status, read, dlvrd }
-    })
-  }
-
-  async #message(messageId: number) {
-    let message: StoredDialogMessage | undefined = this.#messages[messageId]
-    if (message) {
-      return message
-    }
-    message = await this.#storage.get<StoredDialogMessage>(`message-${messageId}`)
-    if (message) {
-      this.#messages[messageId] = message
-    }
-    return message
-  }
 
   async deleteMessage(sender: UserId, request: DeleteRequest): Promise<DeleteResponse> {
     const { originalMessageId, chatId } = request
-    const message = await this.#message(originalMessageId)
+    const message = await this.message(originalMessageId)
     if (!message) {
       throw new Error(`Message with ID ${originalMessageId} does not exist`)
     }
@@ -351,7 +229,7 @@ messages in storage: ${this.#counter},
     const messageId = await this.newId()
     let replyTo: ReplyTo | undefined
     if (request.replyTo) {
-      const replyToMessage = await this.#message(request.replyTo)
+      const replyToMessage = await this.message(request.replyTo)
       if (replyToMessage) {
         replyTo = {
           clientMessageId: replyToMessage.clientMessageId,
@@ -418,6 +296,7 @@ messages in storage: ${this.#counter},
     }
     return { messageId, timestamp, clientMessageId: message.clientMessageId }
   }
+
   async sendCloseCallToReceiver(receiverId: string, payload: CallPayload, messageId: number) {
     const senderId = this.chatIdFor(receiverId)
     const event: CloseCallEvent = {
@@ -439,7 +318,7 @@ messages in storage: ${this.#counter},
     timestamp: number,
   ): Promise<MarkDlvrdResponse> {
     const messageId = request.messageId ?? this.#counter - 1
-    const message = await this.#message(messageId)
+    const message = await this.message(messageId)
     if (!message) {
       throw new Error(`messageId is not exists`)
     }
@@ -476,7 +355,7 @@ messages in storage: ${this.#counter},
         err: 'shlem read v pustoy chat',
       }
     }
-    const message = (await this.#message(messageId))!
+    const message = (await this.message(messageId))!
     const clientMessageId = message.clientMessageId
     const readMark = await this.findMark(sender, messageId, 'read')
     const read = readMark ? readMark.timestamp : 0
@@ -513,6 +392,121 @@ messages in storage: ${this.#counter},
       timestamp,
       ...(await this.missedFor(sender)),
     }
+  }
+
+  async updateProfile(profile: Profile) {
+    if (!this.#users) return
+    const index = this.#users.findIndex(user => user.id === profile.id)
+    if (index >= 0) {
+      this.#users[index] = profile
+    }
+    await this.ctx.storage.put('users', this.#users)
+    const index2 = (index - 1) * -1
+    const receiverId = this.#users[index2].id
+    const event: UpdateChatInternalEvent = await this.chat(receiverId)
+    const receiverDO = userStorageById(this.env, receiverId)
+
+    await receiverDO.updateChatEvent(event)
+  }
+
+  async editMessage(sender: string, payload: EditMessageRequest) {
+    const { chatId, originalMessageId, message, attachments } = payload
+    const timestamp = this.timestamp()
+    const messageToEdit = await this.message(originalMessageId)
+    if (!messageToEdit) {
+      throw new Error(`Message with ID ${originalMessageId} does not exist`)
+    }
+    messageToEdit.message = message
+    messageToEdit.attachments = attachments
+    messageToEdit.updatedAt = timestamp
+    await this.#storage.put(`message-${originalMessageId}`, messageToEdit)
+
+    const messageId = this.newId()
+    const clientMessageId = `edit-${messageId}-${newId(10)}`
+    const serviceMessage: StoredDialogMessage = {
+      messageId,
+      clientMessageId,
+      sender,
+      type: 'edit',
+      payload: { originalMessageId },
+      createdAt: timestamp,
+      message,
+    }
+
+    this.#messages[serviceMessage.messageId] = serviceMessage
+    await this.#storage.put(`message-${serviceMessage.messageId}`, serviceMessage)
+
+    const editMessageEvent: EditEvent = {
+      chatId: sender,
+      userId: this.chatIdFor(sender),
+      messageId: originalMessageId,
+      message,
+    }
+
+    await this.sendEventToReceiver<edit>(this.chatIdFor(sender), 'edit', editMessageEvent)
+
+    return { messageId, timestamp }
+  }
+
+  private newId() {
+    this.#counter++
+    this.#storage.put('counter', this.#counter, {})
+    return this.#counter - 1
+  }
+
+  private prepareStoredMessage(message: StoredDialogMessage, userId: string): DialogMessage {
+    if (message.type != 'call') return message as DialogMessage
+    if (message.payload) {
+      const payload: CallPayload = message.payload as CallPayload
+      const call: CallOnMessage = {
+        callType: payload.callType,
+        status: payload.participants && payload.participants.length > 1 ? 'received' : 'missed',
+        direction: payload.caller == userId ? 'outgoing' : 'incoming',
+      }
+      message.message = callDesription(call)
+      const preparadMessageOnCall: DialogMessage = {
+        ...message,
+        payload: call,
+      }
+      return preparadMessageOnCall
+    }
+    return message as DialogMessage
+  }
+
+  private async loadMessages(startId: number, endId: number, userId: string) {
+    const secondUserId = this.chatIdFor(userId)
+    const missedIds = this.getMissedMessageIds(startId, endId)
+    const keys = missedIds.map(i => `message-${i}`)
+    const keyChunks = splitArray(keys, 128)
+
+    await this.loadMessagesFromStorage(keyChunks, keys)
+
+    const messages = this.#messages.slice(startId, endId + 1).filter(m => !!m)
+
+    if (messages.length === 0) {
+      return messages
+    }
+
+    await this.loadMarks(startId, endId, secondUserId)
+
+    return messages.map(message => {
+      const status = this.messageStatus(message, message.sender)
+      const read = status === 'read' ? 1 : undefined
+      const dlvrd = read || status === 'unread' ? 1 : undefined
+      return { ...message, status, read, dlvrd }
+    })
+  }
+
+  private async message(messageId: number) {
+    let message: StoredDialogMessage | undefined = this.#messages[messageId]
+    if (message) {
+      return message
+    }
+    message = await this.#storage.get<StoredDialogMessage>(`message-${messageId}`)
+    if (message) {
+      this.#messages[messageId] = message
+    }
+    return message
   }
 
   private async findMark(
@@ -597,6 +591,7 @@ messages in storage: ${this.#counter},
         receiverDO[`${eventType}Event`](event)
     }
   }
+
   private async sendReadEventToAuthor(
     receiverId: string,
     message: StoredDialogMessage,
@@ -644,23 +639,27 @@ messages in storage: ${this.#counter},
   }
 
   private async missedFor(userId: string): Promise<Missed> {
-    const missed = this.missedCountFor(userId)
+    const { missed, visibleMissed } = await this.missedCountFor(userId)
     if (!missed || !this.#lastMessage) {
       return { missed: 0, firstMissed: undefined }
     }
 
     const i = this.#lastMessage.messageId - missed + 1
-    const firstMissed = (await this.#message(i))?.clientMessageId
+    const firstMissed = (await this.message(i))?.clientMessageId
 
-    return { missed, firstMissed }
+    return { missed: visibleMissed, firstMissed }
   }
 
-  private missedCountFor(userId: string): number {
+  private async missedCountFor(userId: string) {
     if (this.#lastMessage?.sender === userId) {
-      return 0
+      return { missed: 0, visibleMissed: 0 }
     }
     const lastReadMark = this.#lastReadMark?.get(userId)
-    if (!lastReadMark && !this.#lastMessageOfPreviousAuthor) return this.#counter
+    if (!lastReadMark && !this.#lastMessageOfPreviousAuthor)
+      return {
+        missed: this.#counter,
+        visibleMissed: this.#counter - (await this.serviceMessagesCount(this.#counter, userId)),
+      }
     let currentBlockOfMessagesOfOneAuthorLength = this.#lastMessage?.messageId
       ? this.#lastMessage.messageId
       : 1
@@ -668,12 +667,29 @@ messages in storage: ${this.#counter},
       currentBlockOfMessagesOfOneAuthorLength -= this.#lastMessageOfPreviousAuthor.messageId
     }
 
-    return lastReadMark
+    const missed = lastReadMark
       ? Math.min(
           this.#counter - lastReadMark.messageId - 1,
           currentBlockOfMessagesOfOneAuthorLength,
         )
       : currentBlockOfMessagesOfOneAuthorLength
+    const visibleMissed = missed - (await this.serviceMessagesCount(missed, userId))
+    return { missed, visibleMissed }
+  }
+
+  private async serviceMessagesCount(missed: number, userId: string) {
+    if (this.#lastMessage) {
+      const messages = await this.loadMessages(
+        this.#lastMessage.messageId - missed + 1,
+        this.#lastMessage.messageId,
+        userId,
+      )
+      const serviceMessagesCount = messages.filter(
+        m => m.type === 'delete' || m.type === 'edit',
+      ).length
+      return serviceMessagesCount
+    }
+    return 0
   }
 
   private async loadInitialData() {
@@ -720,7 +736,7 @@ messages in storage: ${this.#counter},
     if (this.#lastMessage) {
       let i = this.#lastMessage.messageId - 1
       while (i >= 0) {
-        const message = await this.#message(i)
+        const message = await this.message(i)
         if (message && message.sender !== this.#lastMessage.sender) {
           this.#lastMessageOfPreviousAuthor = message
           break
@@ -766,6 +782,69 @@ messages in storage: ${this.#counter},
     }
     return lastMessage
   }
+
+  private async loadMarks(
+    startIndex: number,
+    endIndex: number,
+    userId: string,
+  ): Promise<{ readMarks: Mark[]; dlvrdMarks: Mark[] }> {
+    const readKeys = []
+    const dlvrdKeys = []
+    for (let i = startIndex; i <= endIndex; i++) {
+      readKeys.push(`read-${userId}-${i}`)
+      dlvrdKeys.push(`dlvrd-${userId}-${i}`)
+    }
+
+    const readMarks = new Map<string, Mark>()
+    const dlvrdMarks = new Map<string, Mark>()
+
+    const readKeyChunks = splitArray(readKeys, 128)
+    const dlvrdKeyChunks = splitArray(dlvrdKeys, 128)
+
+    for (const chunk of readKeyChunks) {
+      const marksChunk = await this.#storage.get<Mark>(chunk)
+      for (const [key, value] of marksChunk.entries()) {
+        readMarks.set(key, value)
+      }
+    }
+
+    for (const chunk of dlvrdKeyChunks) {
+      const marksChunk = await this.#storage.get<Mark>(chunk)
+      for (const [key, value] of marksChunk.entries()) {
+        dlvrdMarks.set(key, value)
+      }
+    }
+
+    for (let i = startIndex; i <= endIndex; i++) {
+      const readMark = readMarks.get(`read-${userId}-${i}`)
+      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
+      if (readMark) {
+        this.#readMarks[userId][i] = readMark
+      }
+      if (dlvrdMark) {
+        this.#dlvrdMarks[userId][i] = dlvrdMark
+      }
+    }
+
+    const readMarksArray: Mark[] = []
+    const dlvrdMarksArray: Mark[] = []
+
+    for (let i = startIndex; i <= endIndex; i++) {
+      const readMark = readMarks.get(`read-${userId}-${i}`)
+      const dlvrdMark = dlvrdMarks.get(`dlvrd-${userId}-${i}`)
+      if (readMark) {
+        this.#readMarks[userId][i] = readMark
+        readMarksArray.push(readMark)
+      }
+      if (dlvrdMark) {
+        this.#dlvrdMarks[userId][i] = dlvrdMark
+        dlvrdMarksArray.push(dlvrdMark)
+      }
+    }
+
+    return { readMarks: readMarksArray, dlvrdMarks: dlvrdMarksArray }
+  }
+
   private isMarked(messageId: number, userId: string, markType: 'read' | 'dlvrd'): boolean {
     const lastMark = (markType === 'read' ? this.#lastReadMark : this.#lastDlvrdMark).get(userId)
     if (!lastMark) return false
@@ -775,21 +854,6 @@ messages in storage: ${this.#counter},
   private timestamp() {
     const current = performance.now()
     return (this.#timestamp = current > this.#timestamp ? current : ++this.#timestamp)
-  }
-
-  async updateProfile(profile: Profile) {
-    if (!this.#users) return
-    const index = this.#users.findIndex(user => user.id === profile.id)
-    if (index >= 0) {
-      this.#users[index] = profile
-    }
-    await this.ctx.storage.put('users', this.#users)
-    const index2 = (index - 1) * -1
-    const receiverId = this.#users[index2].id
-    const event: UpdateChatInternalEvent = await this.chat(receiverId)
-    const receiverDO = userStorageById(this.env, receiverId)
-
-    await receiverDO.updateChatEvent(event)
   }
 
   private getMissedMessageIds(startId: number, endId: number): number[] {

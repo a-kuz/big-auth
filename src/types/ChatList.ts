@@ -7,17 +7,17 @@ export type MessageStatus = 'read' | 'unread' | 'undelivered' | 'deleted'
 export interface ChatListItem {
   type: ChatType
   id: string
-  photoUrl?: string // необязательное поле
   name: string
+  lastMessageTime: number
+  photoUrl?: string 
   lastMessageId?: number
   lastMessageText?: string
-  lastMessageTime?: number
   lastMessageAuthor?: string
   lastMessageStatus?: MessageStatus
   missed: number
   firstMissed?: string
   verified?: boolean
-  isMine?: boolean
+  isMine: boolean
   attachmentType?: AttachmentType
 	lastSeen?: number
 	

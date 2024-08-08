@@ -24,7 +24,11 @@ export interface ClientRequest<Type extends ClientRequestType = ClientRequestTyp
             ? MarkReadRequest
             : Type extends updateProfile
               ? UpdateProfileRequest
-              : never
+              : Type extends edit
+                ? EditMessageRequest
+                : Type extends dlt
+                  ? DeleteRequest
+                  : never
 }
 
 export interface ClientEvent<Type extends ClientEventType = ClientEventType> {

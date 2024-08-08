@@ -41,6 +41,10 @@ export class User {
     return plainToClass(User, fromSnakeToCamel(userRow))
   }
 
+  static fromProfile(profile: Profile) {
+    return plainToClass(User, profile)
+  }
+
   constructor(id: string, phoneNumber: string) {
     this.id = id
     this.phoneNumber = phoneNumber
